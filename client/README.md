@@ -25,6 +25,14 @@ In the output, you'll find options to open the app in a
 
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
+## Configure API URL
+
+Create a `.env` file at the project root and set your server URL (or set it in shell):
+
+```
+EXPO_PUBLIC_API_URL=http://localhost:4000
+```
+
 ## Get a fresh project
 
 When you're ready, run:

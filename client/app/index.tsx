@@ -1,11 +1,14 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Image } from 'expo-image';
 import { SafeAreaView, View, Text, Animated, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 
 import { styles } from '@/components/styles/welcome-styles';
 import Login from '@/components/login';
+import { loginApi } from '@/api/auth';
 
 export default function WelcomeScreen() {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const headerTranslateY = useRef(new Animated.Value(0)).current;
   const headerScale = useRef(new Animated.Value(1)).current;
   const loginOpacity = useRef(new Animated.Value(0)).current;
@@ -71,7 +74,26 @@ export default function WelcomeScreen() {
             </Animated.View>
 
             <Animated.View style={[styles.loginContainer, { opacity: loginOpacity, transform: [{ translateY: loginTranslateY }] }]}>
-              <Login onRegisterPress={() => {}} onForgotPasswordPress={() => {}} />
+              <Login
+                onSubmit={async ({ username, password }) => {
+                  setErrorMessage(null);
+                  setIsSubmitting(true);
+                  try {
+                    const { token, user } = await loginApi({ username, password });
+                    // TODO: store token (e.g., SecureStore/AsyncStorage) and navigate
+                    console.log('Logged in:', user.username, token.substring(0, 12) + '...');
+                  } catch (err: any) {
+                    const msg = err?.response?.data?.message || 'Login failed';
+                    setErrorMessage(msg);
+                  } finally {
+                    setIsSubmitting(false);
+                  }
+                }}
+                onRegisterPress={() => {}}
+                onForgotPasswordPress={() => {}}
+                isSubmitting={isSubmitting}
+                errorMessage={errorMessage}
+              />
             </Animated.View>
           </View>
         </ScrollView>

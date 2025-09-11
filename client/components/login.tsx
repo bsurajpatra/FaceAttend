@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, Pressable, ActivityIndicator } from 'react-native';
 import { styles } from '@/components/styles/login-styles';
+import { loginApi } from '@/api/auth';
 
 type LoginProps = {
   onSubmit?: (credentials: { username: string; password: string }) => Promise<void> | void;
@@ -13,9 +14,26 @@ type LoginProps = {
 export default function Login({ onSubmit, onRegisterPress, onForgotPasswordPress, isSubmitting = false, errorMessage = null }: LoginProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [localSubmitting, setLocalSubmitting] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
 
-  const handleSubmit = () => {
-    onSubmit?.({ username, password });
+  const handleSubmit = async () => {
+    if (onSubmit) {
+      onSubmit({ username, password });
+      return;
+    }
+
+    try {
+      setLocalError(null);
+      setLocalSubmitting(true);
+      const { token, user } = await loginApi({ username, password });
+      console.log('Logged in:', user.username, token.substring(0, 12) + '...');
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || 'Login failed';
+      setLocalError(msg);
+    } finally {
+      setLocalSubmitting(false);
+    }
   };
 
   return (
@@ -31,7 +49,7 @@ export default function Login({ onSubmit, onRegisterPress, onForgotPasswordPress
           autoCapitalize="none"
           autoCorrect={false}
           style={styles.input}
-          editable={!isSubmitting}
+          editable={!(isSubmitting || localSubmitting)}
           returnKeyType="next"
         />
       </View>
@@ -44,22 +62,23 @@ export default function Login({ onSubmit, onRegisterPress, onForgotPasswordPress
           placeholder="Enter password"
           secureTextEntry
           style={styles.input}
-          editable={!isSubmitting}
+          editable={!(isSubmitting || localSubmitting)}
           returnKeyType="done"
           onSubmitEditing={handleSubmit}
         />
       </View>
 
       {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
+      {!errorMessage && localError ? <Text style={styles.error}>{localError}</Text> : null}
 
       <Pressable
         onPress={handleSubmit}
         style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
-        disabled={isSubmitting}
+        disabled={isSubmitting || localSubmitting}
         accessibilityRole="button"
         accessibilityLabel="Login"
       >
-        {isSubmitting ? (
+        {isSubmitting || localSubmitting ? (
           <ActivityIndicator color="#ffffff" />
         ) : (
           <Text style={styles.buttonText}>Login</Text>
