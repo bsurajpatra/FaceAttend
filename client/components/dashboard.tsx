@@ -32,18 +32,20 @@ type DashboardProps = {
   onTimetablePress?: () => void;
 };
 
+// College time slots (11 working hours)
+// Added normalized start/end minutes to correctly compare with current time (24h)
 const TIME_SLOTS = [
-  { hour: 1, time: '7:10 - 8:00' },
-  { hour: 2, time: '8:00 - 8:50' },
-  { hour: 3, time: '9:20 - 10:10' },
-  { hour: 4, time: '10:10 - 11:00' },
-  { hour: 5, time: '11:10 - 12:00' },
-  { hour: 6, time: '12:00 - 12:50' },
-  { hour: 7, time: '12:55 - 1:45' },
-  { hour: 8, time: '1:50 - 2:40' },
-  { hour: 9, time: '2:40 - 3:30' },
-  { hour: 10, time: '3:50 - 4:40' },
-  { hour: 11, time: '4:40 - 5:30' },
+  { hour: 1, time: '7:10 - 8:00', startMinutes: 7 * 60 + 10, endMinutes: 8 * 60 + 0 },
+  { hour: 2, time: '8:00 - 8:50', startMinutes: 8 * 60 + 0, endMinutes: 8 * 60 + 50 },
+  { hour: 3, time: '9:20 - 10:10', startMinutes: 9 * 60 + 20, endMinutes: 10 * 60 + 10 },
+  { hour: 4, time: '10:10 - 11:00', startMinutes: 10 * 60 + 10, endMinutes: 11 * 60 + 0 },
+  { hour: 5, time: '11:10 - 12:00', startMinutes: 11 * 60 + 10, endMinutes: 12 * 60 + 0 },
+  { hour: 6, time: '12:00 - 12:50', startMinutes: 12 * 60 + 0, endMinutes: 12 * 60 + 50 },
+  { hour: 7, time: '12:55 - 1:45', startMinutes: 12 * 60 + 55, endMinutes: 13 * 60 + 45 },
+  { hour: 8, time: '1:50 - 2:40', startMinutes: 13 * 60 + 50, endMinutes: 14 * 60 + 40 },
+  { hour: 9, time: '2:40 - 3:30', startMinutes: 14 * 60 + 40, endMinutes: 15 * 60 + 30 },
+  { hour: 10, time: '3:50 - 4:40', startMinutes: 15 * 60 + 50, endMinutes: 16 * 60 + 40 },
+  { hour: 11, time: '4:40 - 5:30', startMinutes: 16 * 60 + 40, endMinutes: 17 * 60 + 30 },
 ];
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -67,14 +69,7 @@ export default function Dashboard({
     const todaySchedule = timetable.find(day => day.day === currentDay);
     if (!todaySchedule) return null;
 
-    // Helper function to convert time string to minutes since midnight
-    const timeToMinutes = (timeStr: string) => {
-      const [start] = timeStr.split(' - ');
-      const [hours, minutes] = start.split(':').map(Number);
-      return hours * 60 + minutes;
-    };
-
-    // Current time in minutes since midnight
+    // Current time in minutes since midnight (24h)
     const currentTimeInMinutes = currentHour * 60 + currentMinute;
 
     // Find current session
@@ -87,12 +82,11 @@ export default function Dashboard({
       const lastSlot = timeSlots[timeSlots.length - 1];
       if (!firstSlot || !lastSlot) continue;
 
-      const sessionStartTime = timeToMinutes(firstSlot.time);
-      const [, endTime] = lastSlot.time.split(' - ');
-      const [endHour, endMinute] = endTime.split(':').map(Number);
-      const sessionEndTime = endHour * 60 + endMinute;
+      const sessionStartTime = firstSlot.startMinutes as number;
+      const sessionEndTime = lastSlot.endMinutes as number;
 
       if (currentTimeInMinutes >= sessionStartTime && currentTimeInMinutes <= sessionEndTime) {
+        const [, endTime] = lastSlot.time.split(' - ');
         const timeRange = `${firstSlot.time.split(' - ')[0]} - ${endTime}`;
         return {
           ...session,
