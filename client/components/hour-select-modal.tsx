@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, Pressable, Modal } from 'react-native';
 import { StyleSheet } from 'react-native';
+import { useRouter } from 'expo-router';
 
 type HourSelectModalProps = {
   visible: boolean;
@@ -8,9 +9,10 @@ type HourSelectModalProps = {
   onSelectHour: (hours: number[]) => void;
   hours: number[];
   timeSlots: Array<{ hour: number; time: string; }>;
+  subjectCode: string;
 };
 
-export function HourSelectModal({ visible, onClose, onSelectHour, hours, timeSlots }: HourSelectModalProps) {
+export function HourSelectModal({ visible, onClose, onSelectHour, hours, timeSlots, subjectCode }: HourSelectModalProps) {
   const [selectedHours, setSelectedHours] = useState<number[]>([]);
 
   const toggleHour = (hour: number) => {
@@ -21,9 +23,18 @@ export function HourSelectModal({ visible, onClose, onSelectHour, hours, timeSlo
     );
   };
 
-  const handleSubmit = () => {
+  const router = useRouter();
+  
+  const handleSubmit = async () => {
     if (selectedHours.length > 0) {
-      onSelectHour(selectedHours);
+      await router.push({
+        pathname: '/take-attendance',
+        params: {
+          hours: JSON.stringify(selectedHours),
+          subject: subjectCode
+        }
+      });
+      onClose();
     }
   };
 

@@ -25,6 +25,12 @@ type TimetableSetupProps = {
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const SESSION_TYPES = ['Lecture', 'Tutorial', 'Practical', 'Skill'] as const;
 
+// Common section patterns (numbers only)
+const COMMON_SECTIONS = [
+  '1', '2', '3', '4', '5', '6', '7', '8', '9', '10',
+  '11', '12', '13', '14', '15', '16', '17', '18', '19', '20'
+];
+
 
 // College time slots (11 working hours)
 const TIME_SLOTS = [

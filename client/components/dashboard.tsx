@@ -12,6 +12,7 @@ type User = {
 
 type Session = {
   subject: string;
+  subjectCode: string;
   sessionType: 'Lecture' | 'Tutorial' | 'Practical' | 'Skill';
   section: string;
   roomNumber: string;
@@ -168,12 +169,13 @@ export default function Dashboard({
                   <HourSelectModal
                     visible={isHoursModalVisible}
                     onClose={() => setHoursModalVisible(false)}
-                    onSelectHour={(hour) => {
+                    onSelectHour={(hours) => {
                       setHoursModalVisible(false);
-                      onTakeAttendance && onTakeAttendance(hour);
+                      onTakeAttendance && onTakeAttendance(hours);
                     }}
                     hours={currentSession.hours}
                     timeSlots={TIME_SLOTS}
+                    subjectCode={currentSession.subjectCode}
                   />
                 )}
               </View>

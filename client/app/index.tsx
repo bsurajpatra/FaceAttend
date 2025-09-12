@@ -161,8 +161,9 @@ export default function WelcomeScreen() {
             setUser(null);
             setErrorMessage(null);
           }}
-          onTakeAttendance={() => {
-            console.log('Take Attendance pressed');
+          onTakeAttendance={(hours) => {
+            console.log('Take Attendance pressed for hours:', hours);
+            // The HourSelectModal will handle navigation to camera
           }}
           onTimetablePress={async () => {
             try {
