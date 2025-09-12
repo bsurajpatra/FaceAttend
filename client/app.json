@@ -20,7 +20,8 @@
       },
       "softwareKeyboardLayoutMode": "resize",
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.anonymous.faceattend"
     },
     "web": {
       "output": "static",
@@ -44,6 +45,9 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "cli": {
+      "requireConfigFile": false
     }
   }
 }
