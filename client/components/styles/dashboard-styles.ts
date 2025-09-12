@@ -1,6 +1,111 @@
 import { StyleSheet } from 'react-native';
 
 export const styles = StyleSheet.create({
+  // Welcome Styles
+  welcomeContainer: {
+    marginBottom: 24,
+    paddingHorizontal: 16,
+  },
+  welcomeGreeting: {
+    fontSize: 16,
+    color: '#6B7280',
+    marginBottom: 4,
+  },
+  welcomeName: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#111827',
+  },
+
+  // Current Session Styles
+  currentSessionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  currentSessionLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 8,
+    fontWeight: '500',
+  },
+  currentSessionContent: {
+    gap: 12,
+  },
+  sessionMainInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  subjectText: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111827',
+    flex: 1,
+  },
+  sessionTypeBadge: {
+    backgroundColor: '#EF4444',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  sessionTypeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  sessionDetails: {
+    backgroundColor: '#F9FAFB',
+    padding: 12,
+    borderRadius: 8,
+    gap: 4,
+  },
+  detailText: {
+    fontSize: 14,
+    color: '#374151',
+  },
+  takeAttendanceButton: {
+    backgroundColor: '#059669',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  takeAttendanceButtonPressed: {
+    opacity: 0.9,
+  },
+  takeAttendanceButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  noSessionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    marginBottom: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  noSessionText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 4,
+  },
+  noSessionSubtext: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F9FAFB',

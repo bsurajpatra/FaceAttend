@@ -152,6 +152,7 @@ export default function WelcomeScreen() {
       <SafeAreaView style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
         <Dashboard
           user={user}
+          timetable={timetable}
           onLogout={async () => {
             // Clear saved login state
             await AsyncStorage.removeItem('user');
