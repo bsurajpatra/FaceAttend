@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
-import { User } from '../models/User';
+import { Faculty } from '../models/Faculty';
 import { env } from '../config/env';
 
 function signToken(userId: string): string {
@@ -9,25 +9,40 @@ function signToken(userId: string): string {
 
 export async function register(req: Request, res: Response): Promise<void> {
   try {
-    const { name, username, password } = req.body as { name: string; username: string; password: string };
-    if (!name || !username || !password) {
-      res.status(400).json({ message: 'name, username, password are required' });
+    const { name, email, username, password } = req.body as { 
+      name: string; 
+      email: string; 
+      username: string; 
+      password: string; 
+    };
+    
+    if (!name || !email || !username || !password) {
+      res.status(400).json({ message: 'name, email, username, password are required' });
       return;
     }
 
-    const existing = await User.findOne({ username });
-    if (existing) {
+    // Check if email already exists
+    const existingEmail = await Faculty.findOne({ email });
+    if (existingEmail) {
+      res.status(409).json({ message: 'Email already registered' });
+      return;
+    }
+
+    // Check if username already exists
+    const existingUsername = await Faculty.findOne({ username });
+    if (existingUsername) {
       res.status(409).json({ message: 'Username already taken' });
       return;
     }
 
-    const user = await User.create({ name, username, password });
-    const token = signToken(user.id);
+    const faculty = await Faculty.create({ name, email, username, password });
+    const token = signToken(faculty.id);
     res.status(201).json({
-      user: { id: user.id, name: user.name, username: user.username },
+      user: { id: faculty.id, name: faculty.name, username: faculty.username },
       token,
     });
   } catch (error) {
+    console.error('Registration error:', error);
     res.status(500).json({ message: 'Registration failed' });
   }
 }
@@ -40,21 +55,22 @@ export async function login(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    const user = await User.findOne({ username });
-    if (!user) {
+    const faculty = await Faculty.findOne({ username });
+    if (!faculty) {
       res.status(401).json({ message: 'Invalid credentials' });
       return;
     }
 
-    const isMatch = await user.comparePassword(password);
+    const isMatch = await faculty.comparePassword(password);
     if (!isMatch) {
       res.status(401).json({ message: 'Invalid credentials' });
       return;
     }
 
-    const token = signToken(user.id);
-    res.json({ user: { id: user.id, name: user.name, username: user.username }, token });
+    const token = signToken(faculty.id);
+    res.json({ user: { id: faculty.id, name: faculty.name, username: faculty.username }, token });
   } catch (error) {
+    console.error('Login error:', error);
     res.status(500).json({ message: 'Login failed' });
   }
 }

@@ -5,8 +5,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { styles } from '@/components/styles/welcome-styles';
 import Login from '@/components/login';
+import Register from '@/components/register';
+import TimetableSetup from '@/components/timetable-setup';
 import Dashboard from '@/components/dashboard';
-import { loginApi } from '@/api/auth';
+import { loginApi, registerApi } from '@/api/auth';
 
 export default function WelcomeScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -14,6 +16,8 @@ export default function WelcomeScreen() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [user, setUser] = useState<{ id: string; name: string; username: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [showRegister, setShowRegister] = useState(false);
+  const [showTimetableSetup, setShowTimetableSetup] = useState(false);
   const headerTranslateY = useRef(new Animated.Value(0)).current;
   const headerScale = useRef(new Animated.Value(1)).current;
   const loginOpacity = useRef(new Animated.Value(0)).current;
@@ -79,6 +83,30 @@ export default function WelcomeScreen() {
     );
   }
 
+  if (showTimetableSetup && user) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
+        <TimetableSetup
+          onSubmit={async (timetable) => {
+            try {
+              // TODO: Call API to save timetable
+              console.log('Saving timetable:', timetable);
+              setShowTimetableSetup(false);
+              setIsLoggedIn(true);
+            } catch (error) {
+              console.error('Failed to save timetable:', error);
+            }
+          }}
+          onSkip={() => {
+            setShowTimetableSetup(false);
+            setIsLoggedIn(true);
+          }}
+          isSubmitting={isSubmitting}
+        />
+      </SafeAreaView>
+    );
+  }
+
   if (isLoggedIn && user) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
@@ -134,30 +162,60 @@ export default function WelcomeScreen() {
             </Animated.View>
 
             <Animated.View style={[styles.loginContainer, { opacity: loginOpacity, transform: [{ translateY: loginTranslateY }] }]}>
-              <Login
-                onSubmit={async ({ username, password }) => {
-                  setErrorMessage(null);
-                  setIsSubmitting(true);
-                  try {
-                    const { token, user } = await loginApi({ username, password });
-                    // Save login state to AsyncStorage
-                    await AsyncStorage.setItem('user', JSON.stringify(user));
-                    await AsyncStorage.setItem('token', token);
-                    console.log('Logged in:', user.username, token.substring(0, 12) + '...');
-                    setUser(user);
-                    setIsLoggedIn(true);
-                  } catch (err: any) {
-                    const msg = err?.response?.data?.message || 'Login failed';
-                    setErrorMessage(msg);
-                  } finally {
-                    setIsSubmitting(false);
-                  }
-                }}
-                onRegisterPress={() => {}}
-                onForgotPasswordPress={() => {}}
-                isSubmitting={isSubmitting}
-                errorMessage={errorMessage}
-              />
+              {showRegister ? (
+                <Register
+                  onSubmit={async ({ name, email, username, password, confirmPassword }) => {
+                    setErrorMessage(null);
+                    setIsSubmitting(true);
+                    try {
+                      if (password !== confirmPassword) {
+                        setErrorMessage('Passwords do not match');
+                        return;
+                      }
+                      const { token, user } = await registerApi({ name, email, username, password });
+                      // Save login state to AsyncStorage
+                      await AsyncStorage.setItem('user', JSON.stringify(user));
+                      await AsyncStorage.setItem('token', token);
+                      console.log('Registered and logged in:', user.username, token.substring(0, 12) + '...');
+                      setUser(user);
+                      setIsLoggedIn(true);
+                    } catch (err: any) {
+                      const msg = err?.response?.data?.message || 'Registration failed';
+                      setErrorMessage(msg);
+                    } finally {
+                      setIsSubmitting(false);
+                    }
+                  }}
+                  onLoginPress={() => setShowRegister(false)}
+                  isSubmitting={isSubmitting}
+                  errorMessage={errorMessage}
+                />
+              ) : (
+                <Login
+                  onSubmit={async ({ username, password }) => {
+                    setErrorMessage(null);
+                    setIsSubmitting(true);
+                    try {
+                      const { token, user } = await loginApi({ username, password });
+                      // Save login state to AsyncStorage
+                      await AsyncStorage.setItem('user', JSON.stringify(user));
+                      await AsyncStorage.setItem('token', token);
+                      console.log('Logged in:', user.username, token.substring(0, 12) + '...');
+                      setUser(user);
+                      setIsLoggedIn(true);
+                    } catch (err: any) {
+                      const msg = err?.response?.data?.message || 'Login failed';
+                      setErrorMessage(msg);
+                    } finally {
+                      setIsSubmitting(false);
+                    }
+                  }}
+                  onRegisterPress={() => setShowRegister(true)}
+                  onForgotPasswordPress={() => {}}
+                  isSubmitting={isSubmitting}
+                  errorMessage={errorMessage}
+                />
+              )}
             </Animated.View>
           </View>
         </ScrollView>

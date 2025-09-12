@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 
 import { authRouter } from './routes/auth.routes';
+import { timetableRouter } from './routes/timetable.routes';
 import { env } from './config/env';
 
 export function createApp(): Application {
@@ -35,6 +36,7 @@ export function createApp(): Application {
   });
 
   app.use('/api/auth', authRouter);
+  app.use('/api/timetable', timetableRouter);
 
   // 404 handler
   app.use((_req, res) => {

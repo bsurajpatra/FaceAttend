@@ -49,7 +49,6 @@ export default function Dashboard({
         <View style={styles.welcomeSection}>
           <Text style={styles.welcome}>Welcome back!</Text>
           <Text style={styles.userName}>{user.name}</Text>
-          <Text style={styles.userEmail}>@{user.username}</Text>
         </View>
 
       <View style={styles.statsContainer}>
