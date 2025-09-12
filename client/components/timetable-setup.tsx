@@ -6,6 +6,7 @@ type Session = {
   subject: string;
   sessionType: 'Lecture' | 'Tutorial' | 'Practical' | 'Skill';
   section: string;
+  roomNumber: string;
   hours: number[];
 };
 
@@ -15,6 +16,7 @@ type TimetableDay = {
 };
 
 type TimetableSetupProps = {
+  existingTimetable?: TimetableDay[];
   onSubmit?: (timetable: TimetableDay[]) => Promise<void> | void;
   onSkip?: () => void;
   isSubmitting?: boolean;
@@ -22,6 +24,7 @@ type TimetableSetupProps = {
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const SESSION_TYPES = ['Lecture', 'Tutorial', 'Practical', 'Skill'] as const;
+
 
 // College time slots (11 working hours)
 const TIME_SLOTS = [
@@ -38,18 +41,36 @@ const TIME_SLOTS = [
   { hour: 11, time: '4:40 - 5:30', duration: '50 mins' },
 ];
 
-export default function TimetableSetup({ onSubmit, onSkip, isSubmitting = false }: TimetableSetupProps) {
-  const [timetable, setTimetable] = useState<TimetableDay[]>(
-    DAYS.map(day => ({ day, sessions: [] }))
-  );
+export default function TimetableSetup({ existingTimetable, onSubmit, onSkip, isSubmitting = false }: TimetableSetupProps) {
+  const [expandedSessions, setExpandedSessions] = useState<{[key: string]: boolean}>({});
+  const [timetable, setTimetable] = useState<TimetableDay[]>(() => {
+    if (existingTimetable) {
+      // Make sure all fields exist in the existing timetable
+      return existingTimetable.map(day => ({
+        day: day.day,
+        sessions: day.sessions.map(session => ({
+          subject: session.subject || '',
+          sessionType: session.sessionType || 'Lecture',
+          section: session.section || '',
+          roomNumber: session.roomNumber || '',
+          hours: session.hours || []
+        }))
+      }));
+    }
+    // Initialize empty timetable
+    return DAYS.map(day => ({ day, sessions: [] }));
+  });
+
+  const createEmptySession = (): Session => ({
+    subject: '',
+    sessionType: 'Lecture',
+    section: '',
+    roomNumber: '',
+    hours: []
+  });
 
   const addSession = (dayIndex: number) => {
-    const newSession: Session = {
-      subject: '',
-      sessionType: 'Lecture',
-      section: '',
-      hours: []
-    };
+    const newSession = createEmptySession();
     
     const updatedTimetable = [...timetable];
     updatedTimetable[dayIndex].sessions.push(newSession);
@@ -58,8 +79,9 @@ export default function TimetableSetup({ onSubmit, onSkip, isSubmitting = false 
 
   const updateSession = (dayIndex: number, sessionIndex: number, field: keyof Session, value: any) => {
     const updatedTimetable = [...timetable];
+    const currentSession = updatedTimetable[dayIndex].sessions[sessionIndex] || createEmptySession();
     updatedTimetable[dayIndex].sessions[sessionIndex] = {
-      ...updatedTimetable[dayIndex].sessions[sessionIndex],
+      ...currentSession,
       [field]: value
     };
     setTimetable(updatedTimetable);
@@ -109,26 +131,81 @@ export default function TimetableSetup({ onSubmit, onSkip, isSubmitting = false 
     return '';
   };
 
-  const handleSubmit = () => {
-    if (onSubmit) {
-      onSubmit(timetable);
-      return;
-    }
+  const toggleSessionExpand = (dayIndex: number, sessionIndex: number) => {
+    const key = `${dayIndex}-${sessionIndex}`;
+    setExpandedSessions(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  };
 
-    // Basic validation
-    const hasSessions = timetable.some(day => day.sessions.length > 0);
-    if (!hasSessions) {
-      Alert.alert('No Sessions', 'Please add at least one session to your timetable.');
-      return;
-    }
+  const isSessionExpanded = (dayIndex: number, sessionIndex: number) => {
+    const key = `${dayIndex}-${sessionIndex}`;
+    return expandedSessions[key] || false;
+  };
 
-    console.log('Timetable data:', timetable);
+  const handleSubmit = async () => {
+    try {
+      // Basic validation
+      const hasSessions = timetable.some(day => day.sessions.length > 0);
+      if (!hasSessions) {
+        Alert.alert('No Sessions', 'Please add at least one session to your timetable.');
+        return;
+      }
+
+      // Validate all required fields
+      let hasEmptyFields = false;
+      let dayWithError = '';
+      let sessionNumber = 0;
+
+      for (const day of timetable) {
+        for (let i = 0; i < day.sessions.length; i++) {
+          const session = day.sessions[i];
+          if (!session?.subject?.trim() || !session?.section?.trim() || !session?.roomNumber?.trim() || !session?.hours?.length) {
+            hasEmptyFields = true;
+            dayWithError = day.day;
+            sessionNumber = i + 1;
+            break;
+          }
+        }
+        if (hasEmptyFields) break;
+      }
+
+      if (hasEmptyFields) {
+        Alert.alert(
+          'Incomplete Session',
+          `Please fill in all required fields (Subject, Section, Room Number, and Time Slots) for Session ${sessionNumber} on ${dayWithError}.`
+        );
+        return;
+      }
+
+      // Validate consecutive hours
+      const hasInvalidHours = timetable.some(day => 
+        day.sessions.some(session => !validateConsecutiveHours(session.hours))
+      );
+      if (hasInvalidHours) {
+        Alert.alert('Invalid Hours', 'Please make sure all sessions have consecutive hours.');
+        return;
+      }
+
+      if (onSubmit) {
+        await onSubmit(timetable);
+      } else {
+        console.log('Timetable data:', timetable);
+      }
+    } catch (error) {
+      Alert.alert(
+        'Error',
+        'Failed to save timetable. Please make sure all required fields are filled.'
+      );
+      console.error('Failed to save timetable:', error);
+    }
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Set Up Your Timetable</Text>
-      <Text style={styles.subtitle}>Add your teaching sessions for each day</Text>
+      <Text style={styles.title}>{existingTimetable ? 'Edit Your Timetable' : 'Set Up Your Timetable'}</Text>
+      <Text style={styles.subtitle}>{existingTimetable ? 'Modify your teaching sessions' : 'Add your teaching sessions for each day'}</Text>
 
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
         {timetable.map((day, dayIndex) => (
@@ -146,11 +223,29 @@ export default function TimetableSetup({ onSubmit, onSkip, isSubmitting = false 
             </View>
 
             {day.sessions.map((session, sessionIndex) => (
-              <View key={sessionIndex} style={styles.sessionContainer}>
+              <Pressable
+                key={sessionIndex}
+                onPress={() => toggleSessionExpand(dayIndex, sessionIndex)}
+                style={({ pressed }) => [
+                  styles.sessionContainer,
+                  !isSessionExpanded(dayIndex, sessionIndex) && styles.sessionContainerCollapsed,
+                  pressed && styles.sessionContainerPressed
+                ]}
+              >
                 <View style={styles.sessionHeader}>
-                  <Text style={styles.sessionNumber}>Session {sessionIndex + 1}</Text>
+                  <View style={styles.sessionTitleContainer}>
+                    <Text style={styles.sessionNumber}>Session {sessionIndex + 1}</Text>
+                    {!isSessionExpanded(dayIndex, sessionIndex) && (
+                      <Text style={styles.sessionSummary}>
+                        {session.subject || 'No subject'} • {session.section || 'No section'} • {getTimeRange(session.hours) || 'No time'}
+                      </Text>
+                    )}
+                  </View>
                   <Pressable
-                    onPress={() => removeSession(dayIndex, sessionIndex)}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      removeSession(dayIndex, sessionIndex);
+                    }}
                     style={({ pressed }) => [styles.removeButton, pressed && styles.removeButtonPressed]}
                     accessibilityRole="button"
                     accessibilityLabel="Remove session"
@@ -159,109 +254,123 @@ export default function TimetableSetup({ onSubmit, onSkip, isSubmitting = false 
                   </Pressable>
                 </View>
 
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.label}>Subject</Text>
-                  <TextInput
-                    value={session.subject}
-                    onChangeText={(value) => updateSession(dayIndex, sessionIndex, 'subject', value)}
-                    placeholder="e.g., Mathematics"
-                    style={styles.input}
-                    editable={!isSubmitting}
-                  />
-                </View>
+                {isSessionExpanded(dayIndex, sessionIndex) && (
+                  <View style={styles.sessionDetails}>
+                    <View style={styles.fieldGroup}>
+                      <Text style={styles.label}>Subject <Text style={styles.requiredStar}>*</Text></Text>
+                      <TextInput
+                        value={session.subject}
+                        onChangeText={(value) => updateSession(dayIndex, sessionIndex, 'subject', value)}
+                        placeholder="e.g., Mathematics"
+                        style={[styles.input, !session.subject?.trim() && styles.inputRequired]}
+                        editable={!isSubmitting}
+                      />
+                    </View>
 
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.label}>Session Type</Text>
-                  <View style={styles.sessionTypeContainer}>
-                    {SESSION_TYPES.map((type) => (
-                      <Pressable
-                        key={type}
-                        onPress={() => updateSession(dayIndex, sessionIndex, 'sessionType', type)}
-                        style={({ pressed }) => [
-                          styles.sessionTypeButton,
-                          session.sessionType === type && styles.sessionTypeButtonSelected,
-                          pressed && styles.sessionTypeButtonPressed
-                        ]}
-                        accessibilityRole="button"
-                        accessibilityLabel={type}
-                      >
-                        <Text style={[
-                          styles.sessionTypeText,
-                          session.sessionType === type && styles.sessionTypeTextSelected
-                        ]}>
-                          {type}
+                    <View style={styles.fieldGroup}>
+                      <Text style={styles.label}>Session Type</Text>
+                      <View style={styles.sessionTypeContainer}>
+                        {SESSION_TYPES.map((type) => (
+                          <Pressable
+                            key={type}
+                            onPress={() => updateSession(dayIndex, sessionIndex, 'sessionType', type)}
+                            style={({ pressed }) => [
+                              styles.sessionTypeButton,
+                              session.sessionType === type && styles.sessionTypeButtonSelected,
+                              pressed && styles.sessionTypeButtonPressed
+                            ]}
+                          >
+                            <Text style={[
+                              styles.sessionTypeText,
+                              session.sessionType === type && styles.sessionTypeTextSelected
+                            ]}>
+                              {type}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    </View>
+
+                    <View style={styles.fieldGroup}>
+                      <Text style={styles.label}>Section <Text style={styles.requiredStar}>*</Text></Text>
+                      <TextInput
+                        value={session.section}
+                        onChangeText={(value) => updateSession(dayIndex, sessionIndex, 'section', value)}
+                        placeholder="e.g., S11, S24, S101, or custom"
+                        style={[styles.input, !session.section?.trim() && styles.inputRequired]}
+                        editable={!isSubmitting}
+                        autoCapitalize="characters"
+                      />
+                    </View>
+
+                    <View style={styles.fieldGroup}>
+                      <Text style={styles.label}>Room Number <Text style={styles.requiredStar}>*</Text></Text>
+                      <TextInput
+                        value={session.roomNumber}
+                        onChangeText={(value) => updateSession(dayIndex, sessionIndex, 'roomNumber', value)}
+                        placeholder="e.g., 101, Lab-1, Smart Class 3"
+                        style={[styles.input, !session.roomNumber?.trim() && styles.inputRequired]}
+                        editable={!isSubmitting}
+                      />
+                    </View>
+
+                    <View style={styles.fieldGroup}>
+                      <Text style={styles.label}>Time Slots (Select consecutive hours)</Text>
+                      <Text style={styles.durationText}>
+                        Duration: {getSessionDuration(session.hours)}
+                        {session.hours.length > 0 && ` • ${getTimeRange(session.hours)}`}
+                      </Text>
+                      {session.hours.length > 0 && !validateConsecutiveHours(session.hours) && (
+                        <Text style={styles.warningText}>
+                          ⚠️ Please select consecutive hours only
                         </Text>
-                      </Pressable>
-                    ))}
+                      )}
+                      <View style={styles.hoursContainer}>
+                        {TIME_SLOTS.map((slot) => (
+                          <Pressable
+                            key={slot.hour}
+                            onPress={() => toggleHour(dayIndex, sessionIndex, slot.hour)}
+                            style={({ pressed }) => [
+                              styles.hourButton,
+                              session.hours.includes(slot.hour) && styles.hourButtonSelected,
+                              pressed && styles.hourButtonPressed
+                            ]}
+                          >
+                            <Text style={[
+                              styles.hourText,
+                              session.hours.includes(slot.hour) && styles.hourTextSelected
+                            ]}>
+                              {slot.hour}
+                            </Text>
+                            <Text style={[
+                              styles.timeText,
+                              session.hours.includes(slot.hour) && styles.timeTextSelected
+                            ]}>
+                              {slot.time}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    </View>
                   </View>
-                </View>
-
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.label}>Section</Text>
-                  <TextInput
-                    value={session.section}
-                    onChangeText={(value) => updateSession(dayIndex, sessionIndex, 'section', value)}
-                    placeholder="e.g., A, B, C"
-                    style={styles.input}
-                    editable={!isSubmitting}
-                  />
-                </View>
-
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.label}>Time Slots (Select consecutive hours)</Text>
-                  <Text style={styles.durationText}>
-                    Duration: {getSessionDuration(session.hours)}
-                    {session.hours.length > 0 && ` • ${getTimeRange(session.hours)}`}
-                  </Text>
-                  {session.hours.length > 0 && !validateConsecutiveHours(session.hours) && (
-                    <Text style={styles.warningText}>
-                      ⚠️ Please select consecutive hours only
-                    </Text>
-                  )}
-                  <View style={styles.hoursContainer}>
-                    {TIME_SLOTS.map((slot) => (
-                      <Pressable
-                        key={slot.hour}
-                        onPress={() => toggleHour(dayIndex, sessionIndex, slot.hour)}
-                        style={({ pressed }) => [
-                          styles.hourButton,
-                          session.hours.includes(slot.hour) && styles.hourButtonSelected,
-                          pressed && styles.hourButtonPressed
-                        ]}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Hour ${slot.hour}: ${slot.time}`}
-                      >
-                        <Text style={[
-                          styles.hourText,
-                          session.hours.includes(slot.hour) && styles.hourTextSelected
-                        ]}>
-                          {slot.hour}
-                        </Text>
-                        <Text style={[
-                          styles.timeText,
-                          session.hours.includes(slot.hour) && styles.timeTextSelected
-                        ]}>
-                          {slot.time}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                </View>
-              </View>
+                )}
+              </Pressable>
             ))}
           </View>
         ))}
       </ScrollView>
 
       <View style={styles.buttonContainer}>
-        <Pressable
-          onPress={onSkip}
-          style={({ pressed }) => [styles.skipButton, pressed && styles.skipButtonPressed]}
-          accessibilityRole="button"
-          accessibilityLabel="Skip timetable setup"
-        >
-          <Text style={styles.skipButtonText}>Skip for Now</Text>
-        </Pressable>
+        {!existingTimetable && (
+          <Pressable
+            onPress={onSkip}
+            style={({ pressed }) => [styles.skipButton, pressed && styles.skipButtonPressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Skip timetable setup"
+          >
+            <Text style={styles.skipButtonText}>Skip for Now</Text>
+          </Pressable>
+        )}
 
         <Pressable
           onPress={handleSubmit}
@@ -270,7 +379,7 @@ export default function TimetableSetup({ onSubmit, onSkip, isSubmitting = false 
           accessibilityRole="button"
           accessibilityLabel="Save timetable"
         >
-          <Text style={styles.submitButtonText}>Save Timetable</Text>
+          <Text style={styles.submitButtonText}>{existingTimetable ? 'Update Timetable' : 'Save Timetable'}</Text>
         </Pressable>
       </View>
     </View>

@@ -7,8 +7,10 @@ import { styles } from '@/components/styles/welcome-styles';
 import Login from '@/components/login';
 import Register from '@/components/register';
 import TimetableSetup from '@/components/timetable-setup';
+import TimetableView from '@/components/timetable-view';
 import Dashboard from '@/components/dashboard';
 import { loginApi, registerApi } from '@/api/auth';
+import { getTimetableApi, updateTimetableApi, TimetableDay } from '@/api/timetable';
 
 export default function WelcomeScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -18,6 +20,8 @@ export default function WelcomeScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [showRegister, setShowRegister] = useState(false);
   const [showTimetableSetup, setShowTimetableSetup] = useState(false);
+  const [showTimetableView, setShowTimetableView] = useState(false);
+  const [timetable, setTimetable] = useState<TimetableDay[]>([]);
   const headerTranslateY = useRef(new Animated.Value(0)).current;
   const headerScale = useRef(new Animated.Value(1)).current;
   const loginOpacity = useRef(new Animated.Value(0)).current;
@@ -31,8 +35,17 @@ export default function WelcomeScreen() {
         const savedToken = await AsyncStorage.getItem('token');
         
         if (savedUser && savedToken) {
-          setUser(JSON.parse(savedUser));
+          const parsedUser = JSON.parse(savedUser);
+          setUser(parsedUser);
           setIsLoggedIn(true);
+          
+          // Fetch timetable data
+          try {
+            const response = await getTimetableApi(parsedUser.id);
+            setTimetable(response.timetable);
+          } catch (error) {
+            console.error('Error fetching timetable:', error);
+          }
         }
       } catch (error) {
         console.log('Error loading saved login state:', error);
@@ -83,22 +96,49 @@ export default function WelcomeScreen() {
     );
   }
 
+  if (showTimetableView && user) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
+        <TimetableView
+          timetable={timetable}
+          onBack={() => setShowTimetableView(false)}
+          onAdd={() => {
+            setShowTimetableView(false);
+            setShowTimetableSetup(true);
+          }}
+          onEdit={() => {
+            setShowTimetableView(false);
+            setShowTimetableSetup(true);
+          }}
+        />
+      </SafeAreaView>
+    );
+  }
+
   if (showTimetableSetup && user) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
         <TimetableSetup
-          onSubmit={async (timetable) => {
+          existingTimetable={timetable}
+          onSubmit={async (timetableData) => {
             try {
-              // TODO: Call API to save timetable
-              console.log('Saving timetable:', timetable);
+              setIsSubmitting(true);
+              if (user) {
+                await updateTimetableApi(user.id, timetableData);
+                setTimetable(timetableData);
+                console.log('Timetable saved successfully');
+              }
               setShowTimetableSetup(false);
-              setIsLoggedIn(true);
+              setShowTimetableView(true);
             } catch (error) {
               console.error('Failed to save timetable:', error);
+            } finally {
+              setIsSubmitting(false);
             }
           }}
           onSkip={() => {
             setShowTimetableSetup(false);
+            setShowTimetableView(timetable.length > 0);
             setIsLoggedIn(true);
           }}
           isSubmitting={isSubmitting}
@@ -122,6 +162,19 @@ export default function WelcomeScreen() {
           }}
           onTakeAttendance={() => {
             console.log('Take Attendance pressed');
+          }}
+          onTimetablePress={async () => {
+            try {
+              if (user) {
+                const response = await getTimetableApi(user.id);
+                setTimetable(response.timetable);
+                setShowTimetableView(true);
+              }
+            } catch (error) {
+              console.error('Failed to load timetable:', error);
+              // Still show timetable view (will show empty state)
+              setShowTimetableView(true);
+            }
           }}
           onViewReports={() => {
             console.log('View Reports pressed');

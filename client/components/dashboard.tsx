@@ -13,6 +13,7 @@ type DashboardProps = {
   user: User;
   onLogout?: () => void;
   onTakeAttendance?: () => void;
+  onTimetablePress?: () => void;
   onViewReports?: () => void;
 };
 
@@ -20,6 +21,7 @@ export default function Dashboard({
   user, 
   onLogout, 
   onTakeAttendance, 
+  onTimetablePress,
   onViewReports 
 }: DashboardProps) {
   return (
@@ -70,6 +72,15 @@ export default function Dashboard({
           accessibilityLabel="Take Attendance"
         >
           <Text style={styles.actionButtonText}>Take Attendance</Text>
+        </Pressable>
+
+        <Pressable
+          onPress={onTimetablePress}
+          style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
+          accessibilityRole="button"
+          accessibilityLabel="Timetable"
+        >
+          <Text style={styles.actionButtonText}>Timetable</Text>
         </Pressable>
 
         <Pressable

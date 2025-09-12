@@ -6,6 +6,31 @@ export const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
     paddingTop: 50,
   },
+  requiredStar: {
+    color: '#DC2626',
+    fontSize: 14,
+  },
+  inputRequired: {
+    borderColor: '#DC2626',
+  },
+  sessionContainerCollapsed: {
+    minHeight: 60,
+  },
+  sessionContainerPressed: {
+    opacity: 0.8,
+  },
+  sessionTitleContainer: {
+    flex: 1,
+    flexDirection: 'column',
+  },
+  sessionSummary: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginTop: 4,
+  },
+  sessionDetails: {
+    marginTop: 12,
+  },
   title: {
     fontSize: 24,
     fontWeight: '700',
@@ -62,10 +87,17 @@ export const styles = StyleSheet.create({
     fontWeight: '600',
   },
   sessionContainer: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#FFFFFF',
     borderRadius: 8,
     padding: 12,
     marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   sessionHeader: {
     flexDirection: 'row',
@@ -112,6 +144,41 @@ export const styles = StyleSheet.create({
     fontSize: 14,
     color: '#111827',
     backgroundColor: '#FFFFFF',
+  },
+  helpText: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  sectionButtonsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 8,
+  },
+  sectionButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#FFFFFF',
+  },
+  sectionButtonSelected: {
+    backgroundColor: '#EF4444',
+    borderColor: '#EF4444',
+  },
+  sectionButtonPressed: {
+    opacity: 0.8,
+  },
+  sectionButtonText: {
+    fontSize: 11,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  sectionButtonTextSelected: {
+    color: '#FFFFFF',
   },
   sessionTypeContainer: {
     flexDirection: 'row',

@@ -5,6 +5,7 @@ export interface Session {
   subject: string;
   sessionType: 'Lecture' | 'Tutorial' | 'Practical' | 'Skill';
   section: string;
+  roomNumber: string;
   hours: number[];
 }
 
@@ -30,6 +31,7 @@ const SessionSchema = new Schema<Session>({
     enum: ['Lecture', 'Tutorial', 'Practical', 'Skill'] 
   },
   section: { type: String, required: true, trim: true },
+  roomNumber: { type: String, required: true, trim: true },
   hours: [{ type: Number, required: true, min: 1, max: 11 }]
 });
 
