@@ -91,7 +91,23 @@ export async function getTimetable(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    res.json({ timetable: faculty.timetable });
+    // Return proper empty timetable structure if timetable is undefined/null/empty for new users
+    const emptyTimetable = [
+      { day: 'Monday', sessions: [] },
+      { day: 'Tuesday', sessions: [] },
+      { day: 'Wednesday', sessions: [] },
+      { day: 'Thursday', sessions: [] },
+      { day: 'Friday', sessions: [] },
+      { day: 'Saturday', sessions: [] },
+      { day: 'Sunday', sessions: [] }
+    ];
+    
+    // Check if timetable is undefined, null, or empty array
+    const timetableData = (!faculty.timetable || faculty.timetable.length === 0) ? emptyTimetable : faculty.timetable;
+    console.log('Server: faculty.timetable:', faculty.timetable);
+    console.log('Server: returning timetableData:', timetableData);
+    
+    res.json({ timetable: timetableData });
   } catch (error) {
     console.error('Get timetable error:', error);
     res.status(500).json({ message: 'Failed to get timetable' });

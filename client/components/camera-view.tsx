@@ -66,45 +66,32 @@ export default function CameraView({ subjectCode, hours }: CameraViewProps) {
     );
   }
 
-  return (
-    <View style={styles.container}>
-      <ExpoCameraView
-        ref={cameraRef}
-        style={styles.camera}
-        facing={cameraType}
-      >
-        <View style={styles.controlsContainer}>
-          <View style={styles.topControls}>
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={() => router.back()}
-            >
-              <Text style={styles.closeButtonText}>✕</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.flipButton}
-              onPress={toggleCameraType}
-            >
-              <Text style={styles.flipButtonText}>🔄</Text>
-            </TouchableOpacity>
-          </View>
-          
-          <View style={styles.bottomControls}>
-            <View style={styles.sessionInfo}>
-              <Text style={styles.sessionText}>Subject: {subjectCode}</Text>
-              <Text style={styles.sessionText}>Hours: {hours.join(', ')}</Text>
-            </View>
-            <TouchableOpacity
-              style={styles.captureButton}
-              onPress={handleCapture}
-            >
-              <View style={styles.captureButtonInner} />
-            </TouchableOpacity>
-          </View>
+ return (
+  <View style={styles.container}>
+    <ExpoCameraView
+      ref={cameraRef}
+      style={styles.camera}
+      facing={cameraType}
+    >
+      <View style={styles.controlsContainer}>
+        <View style={styles.topControls}>
+          <TouchableOpacity
+            style={styles.closeButton}
+            onPress={() => router.back()}
+          >
+            <Text style={styles.closeButtonText}>✕</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.flipButton}
+            onPress={toggleCameraType}
+          >
+            <Text style={styles.flipButtonText}>🔄</Text>
+          </TouchableOpacity>
         </View>
-      </ExpoCameraView>
-    </View>
-  );
+      </View>
+    </ExpoCameraView>
+  </View>
+);
 }
 
 const styles = StyleSheet.create({

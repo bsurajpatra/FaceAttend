@@ -66,8 +66,10 @@ export default function Dashboard({
     const currentMinute = now.getMinutes();
 
     // Find today's schedule
-    const todaySchedule = timetable.find(day => day.day === currentDay);
-    if (!todaySchedule) return null;
+    const todaySchedule = timetable && Array.isArray(timetable) && timetable.length > 0 
+      ? timetable.find(day => day && day.day === currentDay) 
+      : null;
+    if (!todaySchedule || !todaySchedule.sessions || todaySchedule.sessions.length === 0) return null;
 
     // Current time in minutes since midnight (24h)
     const currentTimeInMinutes = currentHour * 60 + currentMinute;
@@ -184,19 +186,6 @@ export default function Dashboard({
         })()}
 
       <View style={styles.actionsContainer}>
-        <Pressable
-          onPress={() => {
-            const currentSession = getCurrentSession();
-            if (currentSession) {
-              setHoursModalVisible(true);
-            }
-          }}
-          style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
-          accessibilityRole="button"
-          accessibilityLabel="Take Attendance"
-        >
-          <Text style={styles.actionButtonText}>Take Attendance</Text>
-        </Pressable>
 
         <Pressable
           onPress={onTimetablePress}

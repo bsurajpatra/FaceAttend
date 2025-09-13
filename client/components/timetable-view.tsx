@@ -55,7 +55,22 @@ export default function TimetableView({ timetable, onEdit, onAdd, onBack }: Time
     return `${hours.length} hours`;
   };
 
-  const hasTimetable = timetable.some(day => day.sessions.length > 0);
+  // More robust check for empty timetable
+  const hasTimetable = () => {
+    if (!timetable || !Array.isArray(timetable)) {
+      console.log('TimetableView: timetable is not an array:', timetable);
+      return false;
+    }
+    if (timetable.length === 0) {
+      console.log('TimetableView: timetable is empty array');
+      return false;
+    }
+    
+    // Check if any day has sessions
+    const hasSessions = timetable.some(day => day && day.sessions && Array.isArray(day.sessions) && day.sessions.length > 0);
+    console.log('TimetableView: hasSessions:', hasSessions, 'timetable:', JSON.stringify(timetable, null, 2));
+    return hasSessions;
+  };
 
   return (
     <View style={styles.container}>
@@ -74,7 +89,7 @@ export default function TimetableView({ timetable, onEdit, onAdd, onBack }: Time
       </View>
 
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-        {!hasTimetable ? (
+        {!hasTimetable() ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyTitle}>No Timetable Set</Text>
             <Text style={styles.emptySubtitle}>

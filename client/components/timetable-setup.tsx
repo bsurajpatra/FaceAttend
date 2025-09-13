@@ -50,11 +50,13 @@ const TIME_SLOTS = [
 export default function TimetableSetup({ existingTimetable, onSubmit, onSkip, isSubmitting = false }: TimetableSetupProps) {
   const [expandedSessions, setExpandedSessions] = useState<{[key: string]: boolean}>({});
   const [timetable, setTimetable] = useState<TimetableDay[]>(() => {
-    if (existingTimetable) {
+    console.log('TimetableSetup: existingTimetable:', existingTimetable);
+    
+    if (existingTimetable && Array.isArray(existingTimetable) && existingTimetable.length > 0) {
       // Make sure all fields exist in the existing timetable
-      return existingTimetable.map(day => ({
+      const processedTimetable = existingTimetable.map(day => ({
         day: day.day,
-        sessions: day.sessions.map(session => ({
+        sessions: (day.sessions || []).map(session => ({
           subject: session.subject || '',
           sessionType: session.sessionType || 'Lecture',
           section: session.section || '',
@@ -62,9 +64,14 @@ export default function TimetableSetup({ existingTimetable, onSubmit, onSkip, is
           hours: session.hours || []
         }))
       }));
+      console.log('TimetableSetup: processed existing timetable:', processedTimetable);
+      return processedTimetable;
     }
-    // Initialize empty timetable
-    return DAYS.map(day => ({ day, sessions: [] }));
+    
+    // Initialize empty timetable with all days
+    const emptyTimetable = DAYS.map(day => ({ day, sessions: [] }));
+    console.log('TimetableSetup: initialized empty timetable:', emptyTimetable);
+    return emptyTimetable;
   });
 
   const createEmptySession = (): Session => ({
@@ -210,11 +217,13 @@ export default function TimetableSetup({ existingTimetable, onSubmit, onSkip, is
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>{existingTimetable ? 'Edit Your Timetable' : 'Set Up Your Timetable'}</Text>
-      <Text style={styles.subtitle}>{existingTimetable ? 'Modify your teaching sessions' : 'Add your teaching sessions for each day'}</Text>
+      <Text style={styles.title}>{existingTimetable && existingTimetable.length > 0 ? 'Edit Your Timetable' : 'Set Up Your Timetable'}</Text>
+      <Text style={styles.subtitle}>{existingTimetable && existingTimetable.length > 0 ? 'Modify your teaching sessions' : 'Add your teaching sessions for each day'}</Text>
 
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-        {timetable.map((day, dayIndex) => (
+        {timetable.map((day, dayIndex) => {
+          console.log('TimetableSetup: rendering day', dayIndex, ':', day.day, 'with', day.sessions.length, 'sessions');
+          return (
           <View key={day.day} style={styles.dayContainer}>
             <View style={styles.dayHeader}>
               <Text style={styles.dayName}>{day.day}</Text>
@@ -363,7 +372,8 @@ export default function TimetableSetup({ existingTimetable, onSubmit, onSkip, is
               </Pressable>
             ))}
           </View>
-        ))}
+          );
+        })}
       </ScrollView>
 
       <View style={styles.buttonContainer}>

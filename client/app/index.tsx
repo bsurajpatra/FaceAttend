@@ -21,7 +21,18 @@ export default function WelcomeScreen() {
   const [showRegister, setShowRegister] = useState(false);
   const [showTimetableSetup, setShowTimetableSetup] = useState(false);
   const [showTimetableView, setShowTimetableView] = useState(false);
-  const [timetable, setTimetable] = useState<TimetableDay[]>([]);
+  // Initialize with proper empty timetable structure
+  const getEmptyTimetable = (): TimetableDay[] => [
+    { day: 'Monday', sessions: [] },
+    { day: 'Tuesday', sessions: [] },
+    { day: 'Wednesday', sessions: [] },
+    { day: 'Thursday', sessions: [] },
+    { day: 'Friday', sessions: [] },
+    { day: 'Saturday', sessions: [] },
+    { day: 'Sunday', sessions: [] }
+  ];
+
+  const [timetable, setTimetable] = useState<TimetableDay[]>(getEmptyTimetable());
   const headerTranslateY = useRef(new Animated.Value(0)).current;
   const headerScale = useRef(new Animated.Value(1)).current;
   const loginOpacity = useRef(new Animated.Value(0)).current;
@@ -42,9 +53,10 @@ export default function WelcomeScreen() {
           // Fetch timetable data
           try {
             const response = await getTimetableApi(parsedUser.id);
-            setTimetable(response.timetable);
+            setTimetable(response.timetable || getEmptyTimetable());
           } catch (error) {
             console.error('Error fetching timetable:', error);
+            setTimetable(getEmptyTimetable());
           }
         }
       } catch (error) {
@@ -119,7 +131,7 @@ export default function WelcomeScreen() {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
         <TimetableSetup
-          existingTimetable={timetable}
+          existingTimetable={timetable.length > 0 ? timetable : getEmptyTimetable()}
           onSubmit={async (timetableData) => {
             try {
               setIsSubmitting(true);
@@ -168,13 +180,20 @@ export default function WelcomeScreen() {
           onTimetablePress={async () => {
             try {
               if (user) {
+                console.log('Fetching timetable for user:', user.id);
                 const response = await getTimetableApi(user.id);
-                setTimetable(response.timetable);
+                console.log('Timetable API response:', response);
+                const timetableData = response.timetable || getEmptyTimetable();
+                console.log('Setting timetable data:', timetableData);
+                setTimetable(timetableData);
                 setShowTimetableView(true);
               }
             } catch (error) {
               console.error('Failed to load timetable:', error);
-              // Still show timetable view (will show empty state)
+              // Set empty timetable and show timetable view (will show empty state)
+              const emptyData = getEmptyTimetable();
+              console.log('Setting empty timetable data:', emptyData);
+              setTimetable(emptyData);
               setShowTimetableView(true);
             }
           }}
