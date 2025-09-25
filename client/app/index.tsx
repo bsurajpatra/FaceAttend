@@ -11,6 +11,7 @@ import TimetableView from '@/components/timetable-view';
 import Dashboard from '@/components/dashboard';
 import { loginApi, registerApi } from '@/api/auth';
 import { getTimetableApi, updateTimetableApi, TimetableDay } from '@/api/timetable';
+import { useKiosk } from '@/contexts/KioskContext';
 
 export default function WelcomeScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -21,6 +22,7 @@ export default function WelcomeScreen() {
   const [showRegister, setShowRegister] = useState(false);
   const [showTimetableSetup, setShowTimetableSetup] = useState(false);
   const [showTimetableView, setShowTimetableView] = useState(false);
+  const { setStoredPassword } = useKiosk();
   // Initialize with proper empty timetable structure
   const getEmptyTimetable = (): TimetableDay[] => [
     { day: 'Monday', sessions: [] },
@@ -250,6 +252,8 @@ export default function WelcomeScreen() {
                       // Save login state to AsyncStorage
                       await AsyncStorage.setItem('user', JSON.stringify(user));
                       await AsyncStorage.setItem('token', token);
+                      // Store password for kiosk mode
+                      await setStoredPassword(password);
                       console.log('Registered and logged in:', user.username, token.substring(0, 12) + '...');
                       setUser(user);
                       setIsLoggedIn(true);
@@ -274,6 +278,8 @@ export default function WelcomeScreen() {
                       // Save login state to AsyncStorage
                       await AsyncStorage.setItem('user', JSON.stringify(user));
                       await AsyncStorage.setItem('token', token);
+                      // Store password for kiosk mode
+                      await setStoredPassword(password);
                       console.log('Logged in:', user.username, token.substring(0, 12) + '...');
                       setUser(user);
                       setIsLoggedIn(true);

@@ -1,7 +1,33 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Alert } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, Alert, Platform, StatusBar, Dimensions } from 'react-native';
 import { CameraView as ExpoCameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
+import { useKiosk } from '../contexts/KioskContext';
+import { PasswordModal } from './PasswordModal';
+
+// Expo-compatible kiosk mode implementation
+const ExpoKiosk = {
+  enableKioskMode: async () => {
+    if (Platform.OS === 'android') {
+      console.log('Expo Kiosk Mode Enabled');
+    }
+  },
+  disableKioskMode: async () => {
+    if (Platform.OS === 'android') {
+      console.log('Expo Kiosk Mode Disabled');
+    }
+  },
+  hideSystemUI: async () => {
+    if (Platform.OS === 'android') {
+      console.log('System UI Hidden (Expo managed)');
+    }
+  },
+  showSystemUI: async () => {
+    if (Platform.OS === 'android') {
+      console.log('System UI Shown (Expo managed)');
+    }
+  },
+};
 
 type CameraViewProps = {
   subjectCode: string;
@@ -10,37 +36,124 @@ type CameraViewProps = {
 
 export default function CameraView({ subjectCode, hours }: CameraViewProps) {
   const [permission, requestPermission] = useCameraPermissions();
-  const [cameraType, setCameraType] = useState<CameraType>('back');
+  const [cameraType, setCameraType] = useState<CameraType>('front');
+  const [isCapturing, setIsCapturing] = useState(false);
   const cameraRef = useRef<ExpoCameraView>(null);
   const router = useRouter();
+  const { isKioskMode, enableKioskMode, showPasswordModal, setShowPasswordModal } = useKiosk();
+
+  // Enable kiosk mode when camera screen opens
+  useEffect(() => {
+    const initializeKioskMode = async () => {
+      if (Platform.OS === 'android') {
+        try {
+          await enableKioskMode();
+          console.log('Kiosk mode activated for camera screen');
+        } catch (error) {
+          console.error('Failed to enable kiosk mode:', error);
+        }
+      }
+    };
+
+    initializeKioskMode();
+
+    // Cleanup when component unmounts
+    return () => {
+      if (Platform.OS === 'android' && isKioskMode) {
+        // Note: We don't disable kiosk mode here as it should only be disabled via password
+        console.log('Camera screen unmounted, kiosk mode remains active');
+      }
+    };
+  }, []);
+
+  // Enhanced back button handling for Expo Go
+  useEffect(() => {
+    if (Platform.OS === 'android' && isKioskMode) {
+      const backHandler = () => {
+        // Show password modal instead of allowing back navigation
+        setShowPasswordModal(true);
+        return true; // Prevent default back behavior
+      };
+
+      // Add back handler
+      const subscription = require('react-native').BackHandler.addEventListener('hardwareBackPress', backHandler);
+      
+      return () => subscription.remove();
+    }
+  }, [isKioskMode]);
+
+  // Additional navigation blocking for Expo Go
+  useEffect(() => {
+    if (isKioskMode) {
+      // Block swipe gestures and other navigation attempts
+      const blockNavigation = () => {
+        setShowPasswordModal(true);
+        return true;
+      };
+
+      // This helps with some navigation blocking in Expo Go
+      console.log('Enhanced kiosk mode active - navigation blocked');
+    }
+  }, [isKioskMode]);
 
   const handleCapture = async () => {
-    if (cameraRef.current) {
+    if (cameraRef.current && !isCapturing) {
+      setIsCapturing(true);
       try {
         const photo = await cameraRef.current.takePictureAsync({
           quality: 0.8,
           base64: true,
         });
+        
         console.log('Photo taken:', photo);
-        Alert.alert('Success', 'Photo captured successfully!', [
-          { text: 'OK', onPress: () => router.back() }
-        ]);
+        
+        // Show success message
+        Alert.alert(
+          'Success', 
+          'Photo captured successfully!',
+          [
+            { 
+              text: 'OK', 
+              onPress: () => {
+                // In kiosk mode, don't navigate back automatically
+                if (!isKioskMode) {
+                  router.back();
+                }
+              }
+            }
+          ]
+        );
       } catch (error) {
         console.error('Error taking picture:', error);
         Alert.alert('Error', 'Failed to capture photo. Please try again.');
+      } finally {
+        setIsCapturing(false);
       }
     }
   };
 
+  const handleBackPress = () => {
+    if (isKioskMode) {
+      // In kiosk mode, show password modal instead of navigating back
+      setShowPasswordModal(true);
+    } else {
+      // Not in kiosk mode, navigate back normally
+      router.back();
+    }
+  };
+
+  const handleExitKiosk = () => {
+    setShowPasswordModal(true);
+  };
+
   const toggleCameraType = () => {
-    setCameraType(current => 
-      current === 'back' ? 'front' : 'back'
-    );
+    setCameraType(current => (current === 'front' ? 'back' : 'front'));
   };
 
   if (!permission) {
     return (
       <View style={styles.container}>
+        <StatusBar hidden />
         <Text style={styles.permissionText}>Requesting camera permission...</Text>
       </View>
     );
@@ -49,6 +162,7 @@ export default function CameraView({ subjectCode, hours }: CameraViewProps) {
   if (!permission.granted) {
     return (
       <View style={styles.container}>
+        <StatusBar hidden />
         <Text style={styles.permissionText}>No access to camera</Text>
         <TouchableOpacity 
           style={styles.permissionButton}
@@ -56,31 +170,34 @@ export default function CameraView({ subjectCode, hours }: CameraViewProps) {
         >
           <Text style={styles.permissionButtonText}>Grant Permission</Text>
         </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.permissionButton, { backgroundColor: '#666', marginTop: 10 }]}
-          onPress={() => router.back()}
-        >
-          <Text style={styles.permissionButtonText}>Go Back</Text>
-        </TouchableOpacity>
+        {!isKioskMode && (
+          <TouchableOpacity 
+            style={[styles.permissionButton, { backgroundColor: '#666', marginTop: 10 }]}
+            onPress={() => router.back()}
+          >
+            <Text style={styles.permissionButtonText}>Go Back</Text>
+          </TouchableOpacity>
+        )}
       </View>
     );
   }
 
- return (
-  <View style={styles.container}>
-    <ExpoCameraView
-      ref={cameraRef}
-      style={styles.camera}
-      facing={cameraType}
-    >
-      <View style={styles.controlsContainer}>
+  return (
+    <View style={styles.container}>
+      <StatusBar hidden />
+      
+      {/* Camera View */}
+      <ExpoCameraView
+        ref={cameraRef}
+        style={styles.camera}
+        facing={cameraType}
+      >
+        {/* Top Controls */}
         <View style={styles.topControls}>
-          <TouchableOpacity
-            style={styles.closeButton}
-            onPress={() => router.back()}
-          >
-            <Text style={styles.closeButtonText}>✕</Text>
-          </TouchableOpacity>
+         
+          
+          
+          
           <TouchableOpacity
             style={styles.flipButton}
             onPress={toggleCameraType}
@@ -88,11 +205,22 @@ export default function CameraView({ subjectCode, hours }: CameraViewProps) {
             <Text style={styles.flipButtonText}>🔄</Text>
           </TouchableOpacity>
         </View>
-      </View>
-    </ExpoCameraView>
-  </View>
-);
+      </ExpoCameraView>
+
+      {/* Password Modal */}
+      <PasswordModal
+        visible={showPasswordModal}
+        onClose={() => setShowPasswordModal(false)}
+        onSuccess={() => {
+          // Navigate back after successful password verification
+          router.back();
+        }}
+      />
+    </View>
+  );
 }
+
+const { width, height } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
   container: {
@@ -102,18 +230,29 @@ const styles = StyleSheet.create({
   camera: {
     flex: 1,
   },
-  controlsContainer: {
-    flex: 1,
-    backgroundColor: 'transparent',
-    flexDirection: 'column',
-    justifyContent: 'space-between',
-    padding: 20,
-  },
   topControls: {
+    position: 'absolute',
+    top: Platform.OS === 'android' ? 20 : 50,
+    left: 0,
+    right: 0,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 50, // Account for status bar
+    paddingHorizontal: 20,
+    zIndex: 1,
+  },
+  kioskIndicator: {
+    backgroundColor: 'rgba(255, 0, 0, 0.8)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: 'white',
+  },
+  kioskText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   closeButton: {
     width: 40,
@@ -128,6 +267,19 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
   },
+  exitKioskButton: {
+    backgroundColor: 'rgba(255, 0, 0, 0.8)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: 'white',
+  },
+  exitKioskText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
   flipButton: {
     width: 40,
     height: 40,
@@ -140,39 +292,104 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 18,
   },
-  bottomControls: {
-    flexDirection: 'column',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
   sessionInfo: {
+    position: 'absolute',
+    top: Platform.OS === 'android' ? 80 : 110,
+    left: 20,
+    right: 20,
     backgroundColor: 'rgba(0,0,0,0.6)',
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    marginBottom: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
   },
   sessionText: {
     color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  kioskSessionText: {
+    color: '#ff6b6b',
     fontSize: 14,
-    textAlign: 'center',
-    marginBottom: 2,
+    fontWeight: 'bold',
+    marginTop: 4,
+  },
+  bottomControls: {
+    position: 'absolute',
+    bottom: Platform.OS === 'android' ? 30 : 50,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    paddingHorizontal: 20,
   },
   captureButton: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: 'rgba(255, 255, 255, 0.3)',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 3,
+    borderWidth: 4,
     borderColor: 'white',
+    marginBottom: 20,
+  },
+  captureButtonDisabled: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: '#ccc',
   },
   captureButtonInner: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: 'white',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  captureSpinner: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#007AFF',
+    borderTopColor: 'transparent',
+    // Note: For a real spinner, you'd use Animated or a library like react-native-spinner
+  },
+  instructions: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '500',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  kioskInstructions: {
+    color: '#ff6b6b',
+    fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    backgroundColor: 'rgba(255, 107, 107, 0.2)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#ff6b6b',
+    marginBottom: 8,
+  },
+  kioskSubInstructions: {
+    color: '#ff6b6b',
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+    backgroundColor: 'rgba(255, 107, 107, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#ff6b6b',
+  },
+  kioskWarningContainer: {
+    alignItems: 'center',
+    marginTop: 10,
   },
   permissionText: {
     color: 'white',

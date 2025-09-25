@@ -50,7 +50,7 @@ export const styles = StyleSheet.create({
     flex: 1,
   },
   sessionTypeBadge: {
-    backgroundColor: '#EF4444',
+    backgroundColor: '',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
