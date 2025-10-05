@@ -1,4 +1,5 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const raw = process.env.EXPO_PUBLIC_API_URL;
 const CANDIDATE_BASE_URLS = raw
@@ -13,6 +14,18 @@ export const http: AxiosInstance = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+});
+
+// Attach Authorization header from AsyncStorage token
+http.interceptors.request.use(async (config) => {
+  try {
+    const token = await AsyncStorage.getItem('token');
+    if (token) {
+      config.headers = config.headers || {};
+      (config.headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
+    }
+  } catch {}
+  return config;
 });
 
 http.interceptors.response.use(

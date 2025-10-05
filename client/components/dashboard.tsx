@@ -195,6 +195,21 @@ export default function Dashboard({
         >
           <Text style={styles.actionButtonText}>Timetable</Text>
         </Pressable>
+
+        <Pressable
+          onPress={() => {
+            // Navigate to student registration screen
+            try {
+              // @ts-ignore using expo-router link via global import
+              require('expo-router').router.push('/student-registration');
+            } catch {}
+          }}
+          style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
+          accessibilityRole="button"
+          accessibilityLabel="Register Student"
+        >
+          <Text style={styles.actionButtonText}>Register Student</Text>
+        </Pressable>
       </View>
       </ScrollView>
     </View>
