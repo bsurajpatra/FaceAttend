@@ -6,7 +6,9 @@ export type RegisterStudentInput = {
   subject: string;
   section: string;
   sessionType: 'Lecture' | 'Tutorial' | 'Practical' | 'Skill';
-  faceDescriptor: number[];
+  // Either provide faceDescriptor or faceImageBase64; server will compute if needed
+  faceDescriptor?: number[];
+  faceImageBase64?: string;
 };
 
 export async function registerStudentApi(data: RegisterStudentInput): Promise<{ message: string; studentId: string }> {

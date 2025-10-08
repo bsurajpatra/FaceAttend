@@ -1,10 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, TextInput, Pressable, Modal, Alert, Platform } from 'react-native';
+import { View, Text, TextInput, Pressable, Modal, Alert, Platform, Image } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { getTimetableApi, TimetableDay } from '@/api/timetable';
 import Dropdown from '@/components/Dropdown';
 import { registerStudentApi } from '@/api/students';
-import { extractSingleFaceDescriptorAsync } from '@/utils/face-utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function StudentRegistrationScreen() {
@@ -16,6 +15,8 @@ export default function StudentRegistrationScreen() {
   const [sessionType, setSessionType] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [faceDescriptor, setFaceDescriptor] = useState<number[] | null>(null);
+  const [faceImageBase64, setFaceImageBase64] = useState<string | null>(null);
+  const faceReady = !!faceDescriptor || !!faceImageBase64;
 
   const [cameraOpen, setCameraOpen] = useState(false);
   const [countdown, setCountdown] = useState(3);
@@ -85,14 +86,12 @@ export default function StudentRegistrationScreen() {
       const photo = await cameraRef.current?.takePictureAsync({ base64: true, quality: 0.8 });
       console.log('[StudentRegistration] picture taken?', !!photo, 'base64?', !!photo?.base64, 'size:', photo?.width, 'x', photo?.height);
       if (!photo?.base64) throw new Error('No frame');
-      const descriptor = await extractSingleFaceDescriptorAsync(photo.base64);
-      console.log('[StudentRegistration] descriptor length:', descriptor?.length || 0);
-      if (!descriptor) {
-        Alert.alert('No face detected', 'Ensure only one face is visible and try again.');
-        return;
-      }
-      setFaceDescriptor(descriptor);
+      // Store base64 for server-side embedding (Expo Go compatible)
+      setFaceImageBase64(photo.base64);
+      // Clear any previous descriptor (we rely on server computation)
+      setFaceDescriptor(null);
       setCameraOpen(false);
+      Alert.alert('Face captured', 'Image captured successfully. You can now register.');
     } catch (e) {
       console.error('Capture failed', e);
       Alert.alert('Capture failed', String(e));
@@ -100,10 +99,10 @@ export default function StudentRegistrationScreen() {
     }
   };
 
-  const canSubmit = name && rollNumber && subject && section && sessionType && faceDescriptor;
+  const canSubmit = name && rollNumber && subject && section && sessionType && faceReady;
 
   const onRegister = async () => {
-    if (!canSubmit || !subject || !section || !sessionType || !faceDescriptor) return;
+    if (!canSubmit || !subject || !section || !sessionType || !faceReady) return;
     try {
       setLoading(true);
       const res = await registerStudentApi({
@@ -112,7 +111,9 @@ export default function StudentRegistrationScreen() {
         subject,
         section,
         sessionType: sessionType as any,
-        faceDescriptor,
+        // Prefer descriptor if present, else send base64 for server-side embedding
+        ...(faceDescriptor ? { faceDescriptor } : {}),
+        ...(faceImageBase64 ? { faceImageBase64 } : {}),
       });
       Alert.alert('Success', 'Student registered');
       setName('');
@@ -121,6 +122,7 @@ export default function StudentRegistrationScreen() {
       setSection(null);
       setSessionType(null);
       setFaceDescriptor(null);
+      setFaceImageBase64(null);
     } catch (e: any) {
       const msg = e?.response?.data?.message || 'Registration failed';
       Alert.alert('Error', msg);
@@ -147,8 +149,21 @@ export default function StudentRegistrationScreen() {
         onPress={openCamera}
         style={({ pressed }) => ({ backgroundColor: '#111827', paddingVertical: 12, borderRadius: 8, alignItems: 'center', opacity: pressed ? 0.9 : 1, marginBottom: 12 })}
       >
-        <Text style={{ color: 'white', fontWeight: '600' }}>{faceDescriptor ? 'Retake Face' : 'Capture Face'}</Text>
+        <Text style={{ color: 'white', fontWeight: '600' }}>{faceReady ? 'Retake Face' : 'Capture Face'}</Text>
       </Pressable>
+
+      {faceReady && (
+        <Text style={{ color: '#059669', fontWeight: '600', marginBottom: 12 }}>Face captured ✔</Text>
+      )}
+
+      {faceImageBase64 && (
+        <View style={{ marginBottom: 12 }}>
+          <Image
+            source={{ uri: `data:image/jpeg;base64,${faceImageBase64}` }}
+            style={{ width: 72, height: 72, borderRadius: 36, borderWidth: 2, borderColor: '#10B981' }}
+          />
+        </View>
+      )}
 
       <Pressable
         onPress={onRegister}

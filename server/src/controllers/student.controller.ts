@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import { Student } from '../models/Student';
 import { Faculty } from '../models/Faculty';
+import { getHuman, imageBase64ToTensor } from '../services/human';
 
 export async function registerStudent(req: Request, res: Response): Promise<void> {
   try {
@@ -11,17 +12,42 @@ export async function registerStudent(req: Request, res: Response): Promise<void
       return;
     }
 
-    const { name, rollNumber, subject, section, sessionType, faceDescriptor } = req.body as {
+    const { name, rollNumber, subject, section, sessionType, faceDescriptor, faceImageBase64 } = req.body as {
       name: string;
       rollNumber: string;
       subject: string;
       section: string;
       sessionType: 'Lecture' | 'Tutorial' | 'Practical' | 'Skill';
-      faceDescriptor: number[];
+      faceDescriptor?: number[];
+      faceImageBase64?: string;
     };
 
-    if (!name || !rollNumber || !subject || !section || !sessionType || !Array.isArray(faceDescriptor) || faceDescriptor.length === 0) {
-      res.status(400).json({ message: 'name, rollNumber, subject, section, sessionType and faceDescriptor are required' });
+    if (!name || !rollNumber || !subject || !section || !sessionType) {
+      res.status(400).json({ message: 'name, rollNumber, subject, section and sessionType are required' });
+      return;
+    }
+
+    // If client can't compute descriptor (Expo Go), compute on server from base64
+    let computedDescriptor: number[] | undefined = undefined;
+    if ((!faceDescriptor || faceDescriptor.length === 0) && faceImageBase64) {
+      const human = await getHuman();
+      const tensor = await imageBase64ToTensor(faceImageBase64);
+      try {
+        const result = await human.detect(tensor);
+        const first = result.face?.[0];
+        if (!first?.embedding) {
+          res.status(400).json({ message: 'No face embedding found in the provided image' });
+          return;
+        }
+        computedDescriptor = Array.from(first.embedding);
+      } finally {
+        tensor.dispose();
+      }
+    }
+
+    const finalDescriptor = (faceDescriptor && faceDescriptor.length > 0) ? faceDescriptor : computedDescriptor;
+    if (!finalDescriptor || finalDescriptor.length === 0) {
+      res.status(400).json({ message: 'faceDescriptor or faceImageBase64 is required' });
       return;
     }
 
@@ -55,8 +81,8 @@ export async function registerStudent(req: Request, res: Response): Promise<void
       }
 
       // Optionally update faceDescriptor if provided; prefer latest capture
-      if (Array.isArray(faceDescriptor) && faceDescriptor.length > 0) {
-        existing.faceDescriptor = faceDescriptor;
+      if (Array.isArray(finalDescriptor) && finalDescriptor.length > 0) {
+        existing.faceDescriptor = finalDescriptor;
       }
 
       await existing.save();
@@ -68,7 +94,7 @@ export async function registerStudent(req: Request, res: Response): Promise<void
       name,
       rollNumber,
       enrollments: [{ subject, section, facultyId: new mongoose.Types.ObjectId(facultyId) }],
-      faceDescriptor,
+      faceDescriptor: finalDescriptor,
     });
 
     res.status(201).json({ message: 'Student registered', studentId: created.id });
