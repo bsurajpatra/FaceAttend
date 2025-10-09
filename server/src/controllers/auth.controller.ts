@@ -1,10 +1,10 @@
 import { Request, Response } from 'express';
-import jwt from 'jsonwebtoken';
+import jwt, { SignOptions } from 'jsonwebtoken';
 import { Faculty } from '../models/Faculty';
 import { env } from '../config/env';
 
 function signToken(userId: string): string {
-  return jwt.sign({ sub: userId }, env.jwtSecret, { expiresIn: env.jwtExpiresIn });
+  return jwt.sign({ sub: userId }, env.jwtSecret, { expiresIn: '7d' });
 }
 
 export async function register(req: Request, res: Response): Promise<void> {

@@ -24,7 +24,7 @@ const StudentSchema = new Schema<StudentDocument>({
   name: { type: String, required: true, trim: true },
   rollNumber: { type: String, required: true, trim: true, index: true },
   enrollments: { type: [EnrollmentSchema], default: [] },
-  faceDescriptor: { type: [Number], required: true },
+  faceDescriptor: { type: [Number], required: false, default: [] },
   createdAt: { type: Date, default: Date.now },
 });
 

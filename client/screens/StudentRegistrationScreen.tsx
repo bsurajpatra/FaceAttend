@@ -4,6 +4,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { getTimetableApi, TimetableDay } from '@/api/timetable';
 import Dropdown from '@/components/Dropdown';
 import { registerStudentApi } from '@/api/students';
+import { preloadFaceModels } from '@/utils/face-utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function StudentRegistrationScreen() {
@@ -16,7 +17,7 @@ export default function StudentRegistrationScreen() {
   const [loading, setLoading] = useState(false);
   const [faceDescriptor, setFaceDescriptor] = useState<number[] | null>(null);
   const [faceImageBase64, setFaceImageBase64] = useState<string | null>(null);
-  const faceReady = !!faceDescriptor || !!faceImageBase64;
+  const faceReady = (!!faceDescriptor && faceDescriptor.length > 0) || !!faceImageBase64;
 
   const [cameraOpen, setCameraOpen] = useState(false);
   const [countdown, setCountdown] = useState(3);
@@ -27,6 +28,11 @@ export default function StudentRegistrationScreen() {
     const load = async () => {
       try {
         setLoading(true);
+        
+        // Preload face models for better performance
+        console.log('[StudentRegistration] Preloading face models...');
+        await preloadFaceModels();
+        
         const userRaw = await AsyncStorage.getItem('user');
         if (!userRaw) return;
         const user = JSON.parse(userRaw) as { id: string };
@@ -86,16 +92,50 @@ export default function StudentRegistrationScreen() {
       const photo = await cameraRef.current?.takePictureAsync({ base64: true, quality: 0.8 });
       console.log('[StudentRegistration] picture taken?', !!photo, 'base64?', !!photo?.base64, 'size:', photo?.width, 'x', photo?.height);
       if (!photo?.base64) throw new Error('No frame');
-      // Store base64 for server-side embedding (Expo Go compatible)
-      setFaceImageBase64(photo.base64);
-      // Clear any previous descriptor (we rely on server computation)
-      setFaceDescriptor(null);
-      setCameraOpen(false);
-      Alert.alert('Face captured', 'Image captured successfully. You can now register.');
+      
+      // Process face on client side - MANDATORY
+      console.log('[StudentRegistration] Processing face on client...');
+      console.log('[StudentRegistration] Base64 length:', photo.base64.length);
+      console.log('[StudentRegistration] Base64 preview:', photo.base64.substring(0, 50) + '...');
+      
+      try {
+        // Try client-side processing first
+        const { extractSingleFaceDescriptorAsync } = await import('@/utils/face-utils');
+        console.log('[StudentRegistration] Face utils imported successfully');
+        
+        const descriptor = await extractSingleFaceDescriptorAsync(photo.base64);
+        console.log('[StudentRegistration] Face processing result:', descriptor ? `Descriptor length: ${descriptor.length}` : 'No descriptor');
+        
+        if (descriptor && descriptor.length > 0) {
+          console.log('[StudentRegistration] ✅ Face descriptor extracted, length:', descriptor.length);
+          setFaceDescriptor(descriptor);
+          setFaceImageBase64(null); // Don't need base64 anymore
+          setCameraOpen(false);
+          Alert.alert('Success', 'Face captured and processed successfully! You can now register the student.');
+        } else {
+          throw new Error('No face detected in the image. Please ensure your face is clearly visible.');
+        }
+      } catch (faceError) {
+        console.error('[StudentRegistration] ❌ Client-side face processing failed:', faceError);
+        console.error('[StudentRegistration] Error details:', faceError.message);
+        
+        // Fallback: Store base64 for server processing
+        console.log('[StudentRegistration] Using fallback: storing base64 for server processing');
+        setFaceImageBase64(photo.base64);
+        setFaceDescriptor(null);
+        setCameraOpen(false);
+        Alert.alert(
+          'Face Captured', 
+          'Image captured successfully. Face processing will be done on the server during registration.',
+          [
+            { text: 'OK', onPress: () => {} }
+          ]
+        );
+      }
     } catch (e) {
       console.error('Capture failed', e);
-      Alert.alert('Capture failed', String(e));
-      Alert.alert('Capture failed', 'Try again');
+      setCameraOpen(false);
+      Alert.alert('Capture Failed', 'Could not take the picture. Please try again.');
     }
   };
 
@@ -103,19 +143,32 @@ export default function StudentRegistrationScreen() {
 
   const onRegister = async () => {
     if (!canSubmit || !subject || !section || !sessionType || !faceReady) return;
+    
+    // Face data is mandatory (either descriptor or base64)
+    if ((!faceDescriptor || faceDescriptor.length === 0) && !faceImageBase64) {
+      Alert.alert('Face Required', 'Please capture a face image before registering the student.');
+      return;
+    }
+    
     try {
       setLoading(true);
+      console.log('[StudentRegistration] Registering student...');
+      console.log('[StudentRegistration] Has face descriptor:', !!faceDescriptor);
+      console.log('[StudentRegistration] Has face base64:', !!faceImageBase64);
+      
       const res = await registerStudentApi({
         name,
         rollNumber,
         subject,
         section,
         sessionType: sessionType as any,
-        // Prefer descriptor if present, else send base64 for server-side embedding
-        ...(faceDescriptor ? { faceDescriptor } : {}),
-        ...(faceImageBase64 ? { faceImageBase64 } : {}),
+        faceDescriptor: faceDescriptor || [], // Send descriptor if available
+        faceImageBase64: faceImageBase64 || undefined, // Send base64 if available
       });
-      Alert.alert('Success', 'Student registered');
+      console.log('[StudentRegistration] ✅ Student registered successfully');
+      Alert.alert('Success', 'Student registered successfully!');
+      
+      // Reset form
       setName('');
       setRollNumber('');
       setSubject(null);
@@ -124,8 +177,10 @@ export default function StudentRegistrationScreen() {
       setFaceDescriptor(null);
       setFaceImageBase64(null);
     } catch (e: any) {
+      console.error('[StudentRegistration] ❌ Registration failed:', e);
       const msg = e?.response?.data?.message || 'Registration failed';
-      Alert.alert('Error', msg);
+      const hint = e?.response?.data?.hint || '';
+      Alert.alert('Registration Failed', `${msg}${hint ? '\n\n' + hint : ''}`);
     } finally {
       setLoading(false);
     }
@@ -156,14 +211,6 @@ export default function StudentRegistrationScreen() {
         <Text style={{ color: '#059669', fontWeight: '600', marginBottom: 12 }}>Face captured ✔</Text>
       )}
 
-      {faceImageBase64 && (
-        <View style={{ marginBottom: 12 }}>
-          <Image
-            source={{ uri: `data:image/jpeg;base64,${faceImageBase64}` }}
-            style={{ width: 72, height: 72, borderRadius: 36, borderWidth: 2, borderColor: '#10B981' }}
-          />
-        </View>
-      )}
 
       <Pressable
         onPress={onRegister}
