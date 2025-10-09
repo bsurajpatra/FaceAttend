@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, TextInput, Pressable, Modal, Alert, Platform, Image } from 'react-native';
+import { View, Text, TextInput, Pressable, Modal, Alert, Platform, Image, SafeAreaView } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { getTimetableApi, TimetableDay } from '@/api/timetable';
 import Dropdown from '@/components/Dropdown';
 import { registerStudentApi } from '@/api/students';
 import { preloadFaceModels } from '@/utils/face-utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router } from 'expo-router';
 
 export default function StudentRegistrationScreen() {
   const [name, setName] = useState('');
@@ -117,7 +118,7 @@ export default function StudentRegistrationScreen() {
         } else {
           throw new Error('No face detected in the image. Please ensure your face is clearly visible.');
         }
-      } catch (faceError) {
+      } catch (faceError: any) {
         console.error('[StudentRegistration] ❌ Client-side face processing failed:', faceError);
         console.error('[StudentRegistration] Error details:', faceError.message);
         
@@ -191,58 +192,71 @@ export default function StudentRegistrationScreen() {
   };
 
   return (
-    <View style={{ flex: 1, padding: 16, backgroundColor: '#F9FAFB' }}>
-      <Text style={{ fontSize: 20, fontWeight: '700', marginBottom: 16 }}>Student Registration</Text>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
+      {/* Header */}
+      <View style={{ backgroundColor: 'white', paddingTop: 50, paddingBottom: 16, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#E5E7EB', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Pressable
+          onPress={() => router.back()}
+          style={({ pressed }) => ({ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 6, opacity: pressed ? 0.7 : 1 })}
+          accessibilityRole="button"
+          accessibilityLabel="Back to Dashboard"
+        >
+          <Text style={{ fontSize: 16, color: '#EF4444', fontWeight: '600' }}>← Back</Text>
+        </Pressable>
+        <Text style={{ fontSize: 20, fontWeight: '700', color: '#111827' }}>Student Registration</Text>
+        <View style={{ width: 60 }} />
+      </View>
+      
+      <View style={{ flex: 1, padding: 16 }}>
+        <Text style={{ marginBottom: 6, fontWeight: '600' }}>Student Name</Text>
+        <TextInput value={name} onChangeText={setName} placeholder="Enter name" style={{ backgroundColor: 'white', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8, padding: 12, marginBottom: 12 }} />
 
-      <Text style={{ marginBottom: 6, fontWeight: '600' }}>Student Name</Text>
-      <TextInput value={name} onChangeText={setName} placeholder="Enter name" style={{ backgroundColor: 'white', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8, padding: 12, marginBottom: 12 }} />
+        <Text style={{ marginBottom: 6, fontWeight: '600' }}>Roll Number</Text>
+        <TextInput value={rollNumber} onChangeText={setRollNumber} placeholder="Enter roll number" autoCapitalize="characters" style={{ backgroundColor: 'white', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8, padding: 12, marginBottom: 12 }} />
 
-      <Text style={{ marginBottom: 6, fontWeight: '600' }}>Roll Number</Text>
-      <TextInput value={rollNumber} onChangeText={setRollNumber} placeholder="Enter roll number" autoCapitalize="characters" style={{ backgroundColor: 'white', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8, padding: 12, marginBottom: 12 }} />
+        <Dropdown label="Subject" value={subject} onChange={setSubject} options={subjectOptions} />
+        <Dropdown label="Section" value={section} onChange={setSection} options={sectionOptions} disabled={!subject} />
+        <Dropdown label="Session Type" value={sessionType} onChange={setSessionType} options={sessionOptions} disabled={!subject || !section} />
 
-      <Dropdown label="Subject" value={subject} onChange={setSubject} options={subjectOptions} />
-      <Dropdown label="Section" value={section} onChange={setSection} options={sectionOptions} disabled={!subject} />
-      <Dropdown label="Session Type" value={sessionType} onChange={setSessionType} options={sessionOptions} disabled={!subject || !section} />
+        <Pressable
+          onPress={openCamera}
+          style={({ pressed }) => ({ backgroundColor: '#EF4444', paddingVertical: 12, borderRadius: 8, alignItems: 'center', opacity: pressed ? 0.9 : 1, marginBottom: 12 })}
+        >
+          <Text style={{ color: 'white', fontWeight: '600' }}>{faceReady ? 'Retake Face' : 'Capture Face'}</Text>
+        </Pressable>
 
-      <Pressable
-        onPress={openCamera}
-        style={({ pressed }) => ({ backgroundColor: '#111827', paddingVertical: 12, borderRadius: 8, alignItems: 'center', opacity: pressed ? 0.9 : 1, marginBottom: 12 })}
-      >
-        <Text style={{ color: 'white', fontWeight: '600' }}>{faceReady ? 'Retake Face' : 'Capture Face'}</Text>
-      </Pressable>
+            {faceReady && (
+              <View style={{ marginBottom: 12 }}>
+                <Text style={{ color: '#10B981', fontWeight: '600', marginBottom: 8 }}>Face captured ✔</Text>
+                {capturedImageUri && (
+                  <View style={{ alignItems: 'center', backgroundColor: '#F0FDF4', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#BBF7D0' }}>
+                    <Image
+                      source={{ uri: capturedImageUri }}
+                      style={{
+                        width: 80,
+                        height: 80,
+                        borderRadius: 40,
+                        borderWidth: 3,
+                        borderColor: '#10B981',
+                      }}
+                      resizeMode="cover"
+                    />
+                    <Text style={{ color: '#10B981', fontSize: 12, marginTop: 6, fontWeight: '500' }}>
+                      Face Preview
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
 
-      {faceReady && (
-        <View style={{ marginBottom: 12 }}>
-          <Text style={{ color: '#059669', fontWeight: '600', marginBottom: 8 }}>Face captured ✔</Text>
-          {capturedImageUri && (
-            <View style={{ alignItems: 'center', backgroundColor: '#F0FDF4', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#BBF7D0' }}>
-              <Image
-                source={{ uri: capturedImageUri }}
-                style={{
-                  width: 80,
-                  height: 80,
-                  borderRadius: 40,
-                  borderWidth: 3,
-                  borderColor: '#059669',
-                }}
-                resizeMode="cover"
-              />
-              <Text style={{ color: '#059669', fontSize: 12, marginTop: 6, fontWeight: '500' }}>
-                Face Preview
-              </Text>
-            </View>
-          )}
-        </View>
-      )}
-
-
-      <Pressable
-        onPress={onRegister}
-        disabled={!canSubmit || !!loading}
-        style={({ pressed }) => ({ backgroundColor: !canSubmit ? '#9CA3AF' : '#2563EB', paddingVertical: 12, borderRadius: 8, alignItems: 'center', opacity: pressed ? 0.95 : 1 })}
-      >
-        <Text style={{ color: 'white', fontWeight: '700' }}>{loading ? 'Registering...' : 'Register'}</Text>
-      </Pressable>
+        <Pressable
+          onPress={onRegister}
+          disabled={!canSubmit || !!loading}
+          style={({ pressed }) => ({ backgroundColor: !canSubmit ? '#9CA3AF' : '#10B981', paddingVertical: 12, borderRadius: 8, alignItems: 'center', opacity: pressed ? 0.95 : 1 })}
+        >
+          <Text style={{ color: 'white', fontWeight: '700' }}>{loading ? 'Registering...' : 'Register'}</Text>
+        </Pressable>
+      </View>
 
       <Modal visible={cameraOpen} animationType="slide" onRequestClose={() => setCameraOpen(false)}>
         <View style={{ flex: 1, backgroundColor: 'black' }}>
@@ -252,7 +266,7 @@ export default function StudentRegistrationScreen() {
           <CameraView ref={cameraRef} style={{ flex: 1 }} facing="front" />
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 

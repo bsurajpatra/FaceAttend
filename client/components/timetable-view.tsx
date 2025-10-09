@@ -85,7 +85,17 @@ export default function TimetableView({ timetable, onEdit, onAdd, onBack }: Time
           <Text style={styles.backButtonText}>← Back</Text>
         </Pressable>
         <Text style={styles.title}>Timetable</Text>
-        <View style={styles.placeholder} />
+        {hasTimetable() && (
+          <Pressable
+            onPress={onEdit}
+            style={({ pressed }) => [styles.headerEditButton, pressed && styles.headerEditButtonPressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Edit Timetable"
+          >
+            <Text style={styles.headerEditButtonText}>Edit</Text>
+          </Pressable>
+        )}
+        {!hasTimetable() && <View style={styles.placeholder} />}
       </View>
 
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
@@ -146,14 +156,6 @@ export default function TimetableView({ timetable, onEdit, onAdd, onBack }: Time
               </View>
             ))}
 
-            <Pressable
-              onPress={onEdit}
-              style={({ pressed }) => [styles.editButton, pressed && styles.editButtonPressed]}
-              accessibilityRole="button"
-              accessibilityLabel="Edit Timetable"
-            >
-              <Text style={styles.editButtonText}>Edit Timetable</Text>
-            </Pressable>
           </View>
         )}
       </ScrollView>

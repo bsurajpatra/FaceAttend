@@ -167,27 +167,17 @@ export const styles = StyleSheet.create({
     color: '#374151',
     fontWeight: '500',
   },
-  editButton: {
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 20,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+  headerEditButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
   },
-  editButtonPressed: {
-    opacity: 0.8,
+  headerEditButtonPressed: {
+    opacity: 0.7,
   },
-  editButtonText: {
+  headerEditButtonText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
+    color: '#EF4444',
+    fontWeight: '500',
   },
 });
