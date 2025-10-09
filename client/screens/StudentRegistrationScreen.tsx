@@ -17,6 +17,7 @@ export default function StudentRegistrationScreen() {
   const [loading, setLoading] = useState(false);
   const [faceDescriptor, setFaceDescriptor] = useState<number[] | null>(null);
   const [faceImageBase64, setFaceImageBase64] = useState<string | null>(null);
+  const [capturedImageUri, setCapturedImageUri] = useState<string | null>(null);
   const faceReady = (!!faceDescriptor && faceDescriptor.length > 0) || !!faceImageBase64;
 
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -110,6 +111,7 @@ export default function StudentRegistrationScreen() {
           console.log('[StudentRegistration] ✅ Face descriptor extracted, length:', descriptor.length);
           setFaceDescriptor(descriptor);
           setFaceImageBase64(null); // Don't need base64 anymore
+          setCapturedImageUri(`data:image/jpeg;base64,${photo.base64}`); // Store for thumbnail display
           setCameraOpen(false);
           Alert.alert('Success', 'Face captured and processed successfully! You can now register the student.');
         } else {
@@ -123,6 +125,7 @@ export default function StudentRegistrationScreen() {
         console.log('[StudentRegistration] Using fallback: storing base64 for server processing');
         setFaceImageBase64(photo.base64);
         setFaceDescriptor(null);
+        setCapturedImageUri(`data:image/jpeg;base64,${photo.base64}`); // Store for thumbnail display
         setCameraOpen(false);
         Alert.alert(
           'Face Captured', 
@@ -176,6 +179,7 @@ export default function StudentRegistrationScreen() {
       setSessionType(null);
       setFaceDescriptor(null);
       setFaceImageBase64(null);
+      setCapturedImageUri(null);
     } catch (e: any) {
       console.error('[StudentRegistration] ❌ Registration failed:', e);
       const msg = e?.response?.data?.message || 'Registration failed';
@@ -208,7 +212,27 @@ export default function StudentRegistrationScreen() {
       </Pressable>
 
       {faceReady && (
-        <Text style={{ color: '#059669', fontWeight: '600', marginBottom: 12 }}>Face captured ✔</Text>
+        <View style={{ marginBottom: 12 }}>
+          <Text style={{ color: '#059669', fontWeight: '600', marginBottom: 8 }}>Face captured ✔</Text>
+          {capturedImageUri && (
+            <View style={{ alignItems: 'center', backgroundColor: '#F0FDF4', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#BBF7D0' }}>
+              <Image
+                source={{ uri: capturedImageUri }}
+                style={{
+                  width: 80,
+                  height: 80,
+                  borderRadius: 40,
+                  borderWidth: 3,
+                  borderColor: '#059669',
+                }}
+                resizeMode="cover"
+              />
+              <Text style={{ color: '#059669', fontSize: 12, marginTop: 6, fontWeight: '500' }}>
+                Face Preview
+              </Text>
+            </View>
+          )}
+        </View>
       )}
 
 
