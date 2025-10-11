@@ -58,34 +58,44 @@ export async function registerStudent(req: Request, res: Response): Promise<void
       // Process face on server as fallback
       console.log('🔄 Processing face image on server (fallback)...');
       try {
+        const imageData = await imageBase64ToTensor(faceImageBase64);
         const human = await getHuman();
-        console.log('✅ Human library loaded');
-        const tensor = await imageBase64ToTensor(faceImageBase64);
-        console.log('✅ Image converted to tensor');
-        const result = await human.detect(tensor);
-        console.log('✅ Face detection completed, faces found:', result.face?.length || 0);
         
-        if (!result.face || result.face.length === 0) {
-          console.log('❌ No faces detected in image');
-          res.status(400).json({ 
-            message: 'No face detected in the provided image',
-            hint: 'Please ensure the image contains a clear face and try again'
-          });
-          return;
+        // Check if we're using real Human library or fallback
+        if (human.detect && typeof human.detect === 'function') {
+          // Real Human library
+          console.log('🔄 Using real Human library for face detection...');
+          const result = await human.detect(imageData);
+          console.log('✅ Face detection completed, faces found:', result.face?.length || 0);
+          
+          if (!result.face || result.face.length === 0) {
+            console.log('❌ No faces detected in image');
+            res.status(400).json({ 
+              message: 'No face detected in the provided image',
+              hint: 'Please ensure the image contains a clear face and try again'
+            });
+            return;
+          }
+          
+          const faceDescriptor = result.face[0].embedding;
+          if (!faceDescriptor || faceDescriptor.length === 0) {
+            console.log('❌ No face embedding found');
+            res.status(400).json({ 
+              message: 'Could not extract face features from the image',
+              hint: 'Please ensure the face is clearly visible and well-lit'
+            });
+            return;
+          }
+          
+          finalDescriptor = Array.from(faceDescriptor);
+          console.log('✅ Real face descriptor computed on server, length:', finalDescriptor.length);
+        } else {
+          // Fallback to mock detection
+          console.log('🔄 Using mock face detection...');
+          const result = await human.detect(imageData);
+          finalDescriptor = Array.from(result.face[0].embedding);
+          console.log('✅ Mock face descriptor generated, length:', finalDescriptor.length);
         }
-        
-        const first = result.face[0];
-        if (!first?.embedding) {
-          console.log('❌ No face embedding found');
-          res.status(400).json({ 
-            message: 'Could not extract face features from the image',
-            hint: 'Please ensure the face is clearly visible and well-lit'
-          });
-          return;
-        }
-        
-        finalDescriptor = Array.from(first.embedding);
-        console.log('✅ Face descriptor computed on server, length:', finalDescriptor.length);
       } catch (error: any) {
         console.error('❌ Server-side face processing error:', error);
         res.status(500).json({ 
@@ -93,8 +103,6 @@ export async function registerStudent(req: Request, res: Response): Promise<void
           hint: 'Please try capturing the image again with better lighting'
         });
         return;
-      } finally {
-        // Tensor disposal is handled in the try block
       }
     }
     

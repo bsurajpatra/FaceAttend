@@ -212,28 +212,41 @@ export async function markAttendance(req: Request, res: Response): Promise<void>
     } else if (faceImageBase64) {
       // Process face on server
       try {
+        const imageData = await imageBase64ToTensor(faceImageBase64);
         const human = await getHuman();
-        const tensor = await imageBase64ToTensor(faceImageBase64);
-        const result = await human.detect(tensor);
         
-        if (!result.face || result.face.length === 0) {
-          res.status(400).json({ 
-            message: 'No face detected in the provided image',
-            hint: 'Please ensure the image contains a clear face'
-          });
-          return;
+        // Check if we're using real Human library or fallback
+        if (human.detect && typeof human.detect === 'function') {
+          // Real Human library
+          console.log('🔄 Using real Human library for face detection...');
+          const result = await human.detect(imageData);
+          
+          if (!result.face || result.face.length === 0) {
+            res.status(400).json({ 
+              message: 'No face detected in the provided image',
+              hint: 'Please ensure the image contains a clear face'
+            });
+            return;
+          }
+          
+          const faceDescriptor = result.face[0].embedding;
+          if (!faceDescriptor || faceDescriptor.length === 0) {
+            res.status(400).json({ 
+              message: 'Could not extract face features from the image',
+              hint: 'Please ensure the face is clearly visible and well-lit'
+            });
+            return;
+          }
+          
+          finalDescriptor = Array.from(faceDescriptor);
+          console.log('✅ Real face descriptor extracted, length:', finalDescriptor.length);
+        } else {
+          // Fallback to mock detection
+          console.log('🔄 Using mock face detection...');
+          const result = await human.detect(imageData);
+          finalDescriptor = Array.from(result.face[0].embedding);
+          console.log('✅ Mock face descriptor generated, length:', finalDescriptor.length);
         }
-        
-        const first = result.face[0];
-        if (!first?.embedding) {
-          res.status(400).json({ 
-            message: 'Could not extract face features from the image',
-            hint: 'Please ensure the face is clearly visible and well-lit'
-          });
-          return;
-        }
-        
-        finalDescriptor = Array.from(first.embedding);
       } catch (error: any) {
         console.error('Server-side face processing error:', error);
         res.status(500).json({ 
