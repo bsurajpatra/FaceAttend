@@ -9,10 +9,12 @@ type HourSelectModalProps = {
   onSelectHour: (hours: number[]) => void;
   hours: number[];
   timeSlots: Array<{ hour: number; time: string; }>;
-  subjectCode: string;
+  subject: string;
+  section?: string;
+  sessionType?: string;
 };
 
-export function HourSelectModal({ visible, onClose, onSelectHour, hours, timeSlots, subjectCode }: HourSelectModalProps) {
+export function HourSelectModal({ visible, onClose, onSelectHour, hours, timeSlots, subject, section, sessionType }: HourSelectModalProps) {
   const [selectedHours, setSelectedHours] = useState<number[]>([]);
 
   const toggleHour = (hour: number) => {
@@ -31,7 +33,9 @@ export function HourSelectModal({ visible, onClose, onSelectHour, hours, timeSlo
         pathname: '/take-attendance',
         params: {
           hours: JSON.stringify(selectedHours),
-          subject: subjectCode
+          subject: subject,
+          section: section || 'S11',
+          sessionType: sessionType || 'Lecture'
         }
       });
       onClose();

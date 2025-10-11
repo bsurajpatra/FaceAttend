@@ -1,41 +1,112 @@
-import React, { useLayoutEffect } from 'react';
-import { useLocalSearchParams, useNavigation } from 'expo-router';
-import { TouchableOpacity, Text } from 'react-native';
-import CameraView from '../components/camera-view';
-import { useKiosk } from '@/contexts/KioskContext';
+import React, { useState, useEffect } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { View, Text, Alert, ActivityIndicator } from 'react-native';
+import LiveAttendance from '../components/live-attendance';
+import { startAttendanceSessionApi } from '@/api/attendance';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const TakeAttendancePage = () => {
-  const params = useLocalSearchParams<{ subject: string; hours: string }>();
+  const params = useLocalSearchParams<{ subject: string; hours: string; section: string; sessionType: string }>();
   const hours = params.hours ? JSON.parse(params.hours) : [];
-  const navigation = useNavigation();
-  const { isKioskMode, setShowPasswordModal } = useKiosk();
+  const router = useRouter();
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isSessionCreating, setIsSessionCreating] = useState(false);
 
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      title: 'Take Attendance',
-      headerBackVisible: false,
-      headerLeft: () => (
-        <TouchableOpacity
-          onPress={() => {
-            if (isKioskMode) {
-              setShowPasswordModal(true);
-            } else {
-              // @ts-ignore - type mismatch between expo-router and RN types
-              navigation.goBack();
-            }
-          }}
-          style={{ paddingHorizontal: 12, paddingVertical: 6 }}
-        >
-          <Text style={{ fontSize: 16, color: 'white' }}>←Back                </Text>
-        </TouchableOpacity>
-      ),
-    });
-  }, [navigation, isKioskMode, setShowPasswordModal]);
-  
+  useEffect(() => {
+    const startSession = async () => {
+      if (isSessionCreating || sessionId) return; // Prevent multiple calls and re-creation
+      
+      try {
+        setIsSessionCreating(true);
+        setLoading(true);
+        
+        // Get faculty info
+        const userRaw = await AsyncStorage.getItem('user');
+        if (!userRaw) {
+          setError('User not logged in');
+          return;
+        }
+        
+        const user = JSON.parse(userRaw);
+        
+        // Start attendance session
+        const result = await startAttendanceSessionApi({
+          subject: params.subject || '',
+          section: params.section || '',
+          sessionType: (params.sessionType as any) || 'Lecture',
+          hours: hours
+        });
+        
+        setSessionId(result.sessionId);
+        console.log('Attendance session started:', result);
+        
+      } catch (err: any) {
+        console.error('Failed to start attendance session:', err);
+        setError(err?.response?.data?.message || 'Failed to start attendance session');
+      } finally {
+        setLoading(false);
+        setIsSessionCreating(false);
+      }
+    };
+
+    startSession();
+  }, [params.subject, params.section, params.sessionType, hours]); // Removed isSessionCreating from deps
+
+  const handleAttendanceMarked = (data: any) => {
+    console.log('Attendance marked:', data);
+    // You can add additional logic here, like showing notifications
+  };
+
+  const handleClose = () => {
+    router.back();
+  };
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F9FAFB' }}>
+        <ActivityIndicator size="large" color="#10B981" />
+        <Text style={{ marginTop: 16, fontSize: 16, color: '#6B7280' }}>
+          Starting attendance session...
+        </Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F9FAFB', padding: 20 }}>
+        <Text style={{ fontSize: 18, color: '#EF4444', textAlign: 'center', marginBottom: 16 }}>
+          Error: {error}
+        </Text>
+        <Text style={{ fontSize: 16, color: '#6B7280', textAlign: 'center' }}>
+          Please check your internet connection and try again.
+        </Text>
+      </View>
+    );
+  }
+
+  if (!sessionId) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F9FAFB' }}>
+        <Text style={{ fontSize: 18, color: '#6B7280' }}>
+          Session not found
+        </Text>
+      </View>
+    );
+  }
+
   return (
-    <CameraView
-      subjectCode={params.subject || ''}
+    <LiveAttendance
+      sessionId={sessionId}
+      subject={params.subject || ''}
+      section={params.section || ''}
+      sessionType={params.sessionType || 'Lecture'}
       hours={hours}
+      totalStudents={0} // Will be updated by the session
+      onAttendanceMarked={handleAttendanceMarked}
+      onClose={handleClose}
     />
   );
 };

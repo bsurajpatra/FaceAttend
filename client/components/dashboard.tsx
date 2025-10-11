@@ -3,6 +3,8 @@ import { View, Text, Pressable, ScrollView } from 'react-native';
 import { Image } from 'expo-image';
 import { styles } from './styles/dashboard-styles';
 import { HourSelectModal } from './hour-select-modal';
+import AttendanceReports from './attendance-reports';
+import { TimetableDay as ApiTimetableDay, Session as ApiSession } from '@/api/timetable';
 
 type User = {
   id: string;
@@ -12,7 +14,6 @@ type User = {
 
 type Session = {
   subject: string;
-  subjectCode: string;
   sessionType: 'Lecture' | 'Tutorial' | 'Practical' | 'Skill';
   section: string;
   roomNumber: string;
@@ -26,10 +27,11 @@ type TimetableDay = {
 
 type DashboardProps = {
   user: User;
-  timetable: TimetableDay[];
+  timetable: ApiTimetableDay[];
   onLogout?: () => void;
   onTakeAttendance?: (hours: number[]) => void;
   onTimetablePress?: () => void;
+  onViewReports?: () => void;
 };
 
 // College time slots (11 working hours)
@@ -55,9 +57,11 @@ export default function Dashboard({
   timetable,
   onLogout, 
   onTakeAttendance, 
-  onTimetablePress
+  onTimetablePress,
+  onViewReports
 }: DashboardProps) {
   const [isHoursModalVisible, setHoursModalVisible] = useState(false);
+  const [showReports, setShowReports] = useState(false);
 
   const getCurrentSession = () => {
     const now = new Date();
@@ -171,7 +175,9 @@ export default function Dashboard({
                     }}
                     hours={currentSession.hours}
                     timeSlots={TIME_SLOTS}
-                    subjectCode={currentSession.subjectCode}
+                    subject={currentSession.subject}
+                    section={currentSession.section}
+                    sessionType={currentSession.sessionType}
                   />
                 )}
               </View>
@@ -210,8 +216,24 @@ export default function Dashboard({
         >
           <Text style={styles.actionButtonText}>Register Student</Text>
         </Pressable>
+
+        <Pressable
+          onPress={() => setShowReports(true)}
+          style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
+          accessibilityRole="button"
+          accessibilityLabel="View Reports"
+        >
+          <Text style={styles.actionButtonText}>View Reports</Text>
+        </Pressable>
       </View>
       </ScrollView>
+
+      {/* Attendance Reports Modal */}
+      {showReports && (
+        <AttendanceReports
+          onClose={() => setShowReports(false)}
+        />
+      )}
     </View>
   );
 }

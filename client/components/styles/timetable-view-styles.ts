@@ -180,4 +180,15 @@ export const styles = StyleSheet.create({
     color: '#EF4444',
     fontWeight: '500',
   },
+  sessionInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  roomText: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
 });

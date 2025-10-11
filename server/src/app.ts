@@ -7,6 +7,7 @@ import { authRouter } from './routes/auth.routes';
 import { timetableRouter } from './routes/timetable.routes';
 import { env } from './config/env';
 import { studentRouter } from './routes/student.routes';
+import { attendanceRouter } from './routes/attendance.routes';
 
 export function createApp(): Application {
   const app = express();
@@ -40,6 +41,7 @@ export function createApp(): Application {
   app.use('/api/auth', authRouter);
   app.use('/api/timetable', timetableRouter);
   app.use('/api/students', studentRouter);
+  app.use('/api/attendance', attendanceRouter);
 
   // 404 handler
   app.use((_req, res) => {

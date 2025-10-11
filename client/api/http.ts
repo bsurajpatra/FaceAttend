@@ -3,9 +3,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const raw = process.env.EXPO_PUBLIC_API_URL;
 const CANDIDATE_BASE_URLS = raw
-  .split(',')
-  .map((s) => s.trim())
-  .filter(Boolean);
+  ? raw.split(',').map((s) => s.trim()).filter(Boolean)
+  : ['http://localhost:3000'];
 
 const initialBaseURL = CANDIDATE_BASE_URLS[0];
 

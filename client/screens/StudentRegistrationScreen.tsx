@@ -116,7 +116,19 @@ export default function StudentRegistrationScreen() {
           setCameraOpen(false);
           Alert.alert('Success', 'Face captured and processed successfully! You can now register the student.');
         } else {
-          throw new Error('No face detected in the image. Please ensure your face is clearly visible.');
+          // This is expected behavior - client-side processing returns null, use server-side fallback
+          console.log('[StudentRegistration] Client-side processing returned null, using server-side fallback');
+          setFaceImageBase64(photo.base64);
+          setFaceDescriptor(null);
+          setCapturedImageUri(`data:image/jpeg;base64,${photo.base64}`); // Store for thumbnail display
+          setCameraOpen(false);
+          Alert.alert(
+            'Face Captured', 
+            'Image captured successfully. Face processing will be done on the server during registration.',
+            [
+              { text: 'OK', onPress: () => {} }
+            ]
+          );
         }
       } catch (faceError: any) {
         console.error('[StudentRegistration] ❌ Client-side face processing failed:', faceError);
