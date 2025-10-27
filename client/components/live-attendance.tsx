@@ -14,6 +14,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useKiosk } from '../contexts/KioskContext';
 import { PasswordModal } from './PasswordModal';
 import { markAttendanceApi, MarkAttendanceInput } from '@/api/attendance';
+import { getTimeRange, getSessionDuration } from '@/utils/timeSlots';
 
 type LiveAttendanceProps = {
   sessionId: string;
@@ -371,7 +372,7 @@ export default function LiveAttendance({
           
           <View style={styles.sessionInfo}>
             <Text style={styles.sessionText}>{subject} - {section}</Text>
-            <Text style={styles.sessionSubtext}>{sessionType} • Hours: {hours.join(', ')}</Text>
+            <Text style={styles.sessionSubtext}>{sessionType} • {getTimeRange(hours)} ({getSessionDuration(hours)})</Text>
           </View>
         </View>
 

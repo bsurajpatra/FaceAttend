@@ -12,6 +12,7 @@ import {
   Platform,
   Image,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import FaceCaptureModal from './face-capture-modal';
 
 type Student = {
@@ -93,6 +94,37 @@ export default function EditStudentModal({
   const handleFaceCapture = (base64Image: string) => {
     setCapturedFaceImage(base64Image);
     setShowFaceCapture(false);
+  };
+
+  const uploadPhoto = async () => {
+    try {
+      // Request permission to access media library
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please grant permission to access your photo library.');
+        return;
+      }
+
+      // Launch image picker
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        if (asset.base64) {
+          setCapturedFaceImage(asset.base64);
+          Alert.alert('Success', 'Photo uploaded successfully! New face data will be used for attendance recognition.');
+        }
+      }
+    } catch (error) {
+      console.error('Error uploading photo:', error);
+      Alert.alert('Error', 'Failed to upload photo. Please try again.');
+    }
   };
 
   const handleDelete = () => {
@@ -196,15 +228,27 @@ export default function EditStudentModal({
                         </View>
                       </View>
                     ) : null}
-                    <TouchableOpacity
-                      style={styles.faceCaptureButton}
-                      onPress={() => setShowFaceCapture(true)}
-                      disabled={isSaving}
-                    >
-                      <Text style={styles.faceCaptureButtonText}>
-                        {capturedFaceImage ? '🔄 Recapture Face' : '📷 Capture Face'}
-                      </Text>
-                    </TouchableOpacity>
+                    <View style={styles.faceCaptureButtons}>
+                      <TouchableOpacity
+                        style={[styles.faceCaptureButton, styles.captureButton]}
+                        onPress={() => setShowFaceCapture(true)}
+                        disabled={isSaving}
+                      >
+                        <Text style={styles.faceCaptureButtonText}>
+                          📷 Capture
+                        </Text>
+                      </TouchableOpacity>
+                      
+                      <TouchableOpacity
+                        style={[styles.faceCaptureButton, styles.uploadButton]}
+                        onPress={uploadPhoto}
+                        disabled={isSaving}
+                      >
+                        <Text style={styles.faceCaptureButtonText}>
+                          📁 Upload
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
                     {capturedFaceImage && (
                       <Text style={styles.faceCaptureStatus}>
                         ✅ New face data captured
@@ -375,6 +419,21 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     marginBottom: 8,
+  },
+  faceCaptureButtons: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 8,
+  },
+  captureButton: {
+    flex: 1,
+    backgroundColor: '#EF4444',
+    marginBottom: 0,
+  },
+  uploadButton: {
+    flex: 1,
+    backgroundColor: '#3B82F6',
+    marginBottom: 0,
   },
   faceCaptureButtonText: {
     color: 'white',

@@ -54,12 +54,26 @@ export default function Dashboard({
   const [attendanceStatus, setAttendanceStatus] = useState<any>(null);
   const [isCheckingAttendance, setIsCheckingAttendance] = useState(false);
 
+  // Format location to show both address and coordinates
+  const formatLocation = (location: any) => {
+    if (!location) return 'Location unavailable';
+    
+    const hasAddress = location.address && location.address.trim() !== '';
+    const hasCoordinates = location.latitude && location.longitude;
+    
+    if (hasAddress && hasCoordinates) {
+      return `${location.address} (${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)})`;
+    } else if (hasAddress) {
+      return location.address;
+    } else if (hasCoordinates) {
+      return `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`;
+    } else {
+      return 'Location unavailable';
+    }
+  };
+
   // Check if students are registered for the current session
   const checkRegisteredStudents = async (session: any) => {
-    if (!session) {
-      setHasRegisteredStudents(null);
-      return;
-    }
 
     setIsCheckingStudents(true);
     try {
@@ -202,11 +216,7 @@ export default function Dashboard({
                     <Text style={styles.detailText}>Time: {currentSession.timeSlot}</Text>
                     {attendanceStatus?.location && (
                       <Text style={styles.detailText}>
-                        {attendanceStatus.location.address || 
-                          (attendanceStatus.location.latitude && attendanceStatus.location.longitude 
-                            ? `${attendanceStatus.location.latitude.toFixed(4)}, ${attendanceStatus.location.longitude.toFixed(4)}`
-                            : 'Location unavailable'
-                          )} 📍
+                        {formatLocation(attendanceStatus.location)} 📍
                       </Text>
                     )}
                   </View>

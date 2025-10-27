@@ -571,6 +571,8 @@ export async function getStudentAttendanceData(req: Request, res: Response): Pro
     const studentAttendanceData = students.map(student => {
       let totalSessions = 0;
       let presentSessions = 0;
+      let lastPresentDate: Date | null = null;
+      let lastPresentSessionHours: string | null = null;
       
       sessions.forEach(session => {
         totalSessions++;
@@ -579,6 +581,12 @@ export async function getStudentAttendanceData(req: Request, res: Response): Pro
         );
         if (studentRecord && studentRecord.isPresent) {
           presentSessions++;
+          // Update last present date if this session is more recent
+          if (!lastPresentDate || session.date > lastPresentDate) {
+            lastPresentDate = session.date;
+            // Store session hours for display
+            lastPresentSessionHours = session.hours.map(hour => `H${hour}`).join(', ');
+          }
         }
       });
       
@@ -592,7 +600,8 @@ export async function getStudentAttendanceData(req: Request, res: Response): Pro
         presentSessions,
         absentSessions: totalSessions - presentSessions,
         attendancePercentage,
-        lastAttendanceDate: sessions.length > 0 ? sessions[0].date : null
+        lastAttendanceDate: lastPresentDate,
+        lastPresentSessionHours: lastPresentSessionHours
       };
     });
     

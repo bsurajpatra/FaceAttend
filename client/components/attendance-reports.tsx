@@ -15,6 +15,7 @@ import {
 import * as FileSystem from 'expo-file-system/legacy';
 import Papa from 'papaparse';
 import { getAttendanceReportsApi, AttendanceReportsResponse } from '@/api/attendance';
+import { getTimeRange, getSessionDuration } from '@/utils/timeSlots';
 
 type AttendanceReportsProps = {
   onClose: () => void;
@@ -163,14 +164,9 @@ export default function AttendanceReports({ onClose }: AttendanceReportsProps) {
             <div><strong>Section:</strong> ${session.section}</div>
             <div><strong>Type:</strong> ${session.sessionType}</div>
             <div><strong>Date:</strong> ${fmt(session.date)}</div>
-            <div><strong>Hours:</strong> ${(session.hours || []).join(', ')}</div>
+            <div><strong>Hours:</strong> ${getTimeRange(session.hours || [])} (${getSessionDuration(session.hours || [])})</div>
             <div><strong>Summary:</strong> <span class="pill">${session.presentStudents}/${session.totalStudents} present</span></div>
-            ${session.location ? `<div><strong>Location:</strong> 📍 ${session.location.address || 
-              (session.location.latitude && session.location.longitude 
-                ? `${session.location.latitude}, ${session.location.longitude}`
-                : 'Location unavailable'
-              )
-            }</div>` : ''}
+            ${session.location ? `<div><strong>Location:</strong> 📍 ${formatLocation(session.location)}</div>` : ''}
           </div>
           <h2>Present Students</h2>
           <table>
@@ -239,13 +235,26 @@ export default function AttendanceReports({ onClose }: AttendanceReportsProps) {
   };
 
   const formatHours = (hours: number[]) => {
-    return hours.map(hour => `H${hour}`).join(', ');
+    const timeRange = getTimeRange(hours);
+    const duration = getSessionDuration(hours);
+    return timeRange ? `${timeRange} (${duration})` : 'No time slots';
   };
 
-  const getAttendanceColor = (percentage: number) => {
-    if (percentage >= 80) return '#10B981'; // Green
-    if (percentage >= 60) return '#F59E0B'; // Yellow
-    return '#EF4444'; // Red
+  const formatLocation = (location: any) => {
+    if (!location) return 'Location unavailable';
+    
+    const hasAddress = location.address && location.address.trim() !== '';
+    const hasCoordinates = location.latitude && location.longitude;
+    
+    if (hasAddress && hasCoordinates) {
+      return `${location.address} (${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)})`;
+    } else if (hasAddress) {
+      return location.address;
+    } else if (hasCoordinates) {
+      return `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`;
+    } else {
+      return 'Location unavailable';
+    }
   };
 
   const handleSessionPress = (session: any) => {
@@ -331,11 +340,7 @@ export default function AttendanceReports({ onClose }: AttendanceReportsProps) {
                 </Text>
                 {session.location && (
                   <Text style={styles.sessionLocation}>
-                    {session.location.address || 
-                      (session.location.latitude && session.location.longitude 
-                        ? `${session.location.latitude.toFixed(4)}, ${session.location.longitude.toFixed(4)}`
-                        : 'Location unavailable'
-                      )} 📍
+                    {formatLocation(session.location)} 📍
                   </Text>
                 )}
               </View>
@@ -404,11 +409,7 @@ export default function AttendanceReports({ onClose }: AttendanceReportsProps) {
                 </Text>
                 {selectedSession.location && (
                   <Text style={styles.sessionInfoText}>
-                    {selectedSession.location.address || 
-                      (selectedSession.location.latitude && selectedSession.location.longitude 
-                        ? `${selectedSession.location.latitude.toFixed(4)}, ${selectedSession.location.longitude.toFixed(4)}`
-                        : 'Location unavailable'
-                      )} 📍
+                    {formatLocation(selectedSession.location)} 📍
                   </Text>
                 )}
                 <View style={styles.sessionStats}>

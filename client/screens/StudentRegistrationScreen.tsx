@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TextInput, Pressable, Modal, Alert, Platform, Image, SafeAreaView } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
 import { getTimetableApi, TimetableDay } from '@/api/timetable';
 import Dropdown from '@/components/Dropdown';
 import { registerStudentApi } from '@/api/students';
@@ -76,6 +77,80 @@ export default function StudentRegistrationScreen() {
     }
     setCountdown(3);
     setCameraOpen(true);
+  };
+
+  const uploadPhoto = async () => {
+    // Require context selections first
+    if (!subject || !section || !sessionType) {
+      Alert.alert('Select Class Context', 'Please select Subject, Section, and Component first.');
+      return;
+    }
+
+    try {
+      // Request permission to access media library
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please grant permission to access your photo library.');
+        return;
+      }
+
+      // Launch image picker
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        if (asset.base64) {
+          // Process the uploaded image similar to camera capture
+          try {
+            // Try client-side processing first
+            const { extractSingleFaceDescriptorAsync } = await import('@/utils/face-utils');
+            
+            const descriptor = await extractSingleFaceDescriptorAsync(asset.base64);
+            
+            if (descriptor && descriptor.length > 0) {
+              setFaceDescriptor(descriptor);
+              setFaceImageBase64(null); // Don't need base64 anymore
+              setCapturedImageUri(`data:image/jpeg;base64,${asset.base64}`); // Store for thumbnail display
+              Alert.alert('Success', 'Photo uploaded and processed successfully! You can now register the student.');
+            } else {
+              // Fallback: Store base64 for server processing
+              setFaceImageBase64(asset.base64);
+              setFaceDescriptor(null);
+              setCapturedImageUri(`data:image/jpeg;base64,${asset.base64}`); // Store for thumbnail display
+              Alert.alert(
+                'Photo Uploaded', 
+                'Image uploaded successfully. Face processing will be done on the server during registration.',
+                [
+                  { text: 'OK', onPress: () => {} }
+                ]
+              );
+            }
+          } catch (faceError: any) {
+            console.log('Client-side face processing failed, using server-side fallback:', faceError.message);
+            // Fallback: Store base64 for server processing
+            setFaceImageBase64(asset.base64);
+            setFaceDescriptor(null);
+            setCapturedImageUri(`data:image/jpeg;base64,${asset.base64}`); // Store for thumbnail display
+            Alert.alert(
+              'Photo Uploaded', 
+              'Image uploaded successfully. Face processing will be done on the server during registration.',
+              [
+                { text: 'OK', onPress: () => {} }
+              ]
+            );
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error uploading photo:', error);
+      Alert.alert('Error', 'Failed to upload photo. Please try again.');
+    }
   };
 
   useEffect(() => {
@@ -228,17 +303,44 @@ export default function StudentRegistrationScreen() {
             style={{ backgroundColor: !subject || !section || !sessionType ? '#F3F4F6' : 'white', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8, padding: 12, marginBottom: 12 }}
           />
 
-          <Pressable
-            onPress={openCamera}
-            disabled={!subject || !section || !sessionType}
-            style={({ pressed }) => ({ backgroundColor: !subject || !section || !sessionType ? '#9CA3AF' : '#EF4444', paddingVertical: 12, borderRadius: 8, alignItems: 'center', opacity: pressed ? 0.9 : 1, marginBottom: 12 })}
-          >
-            <Text style={{ color: 'white', fontWeight: '600' }}>{faceReady ? 'Retake Face' : 'Capture Face'}</Text>
-          </Pressable>
+          {/* Face Capture Options */}
+          <Text style={{ marginBottom: 8, fontWeight: '600', color: !subject || !section || !sessionType ? '#9CA3AF' : '#111827' }}>Face Photo</Text>
+          
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+            <Pressable
+              onPress={openCamera}
+              disabled={!subject || !section || !sessionType}
+              style={({ pressed }) => ({ 
+                flex: 1,
+                backgroundColor: !subject || !section || !sessionType ? '#9CA3AF' : '#EF4444', 
+                paddingVertical: 12, 
+                borderRadius: 8, 
+                alignItems: 'center', 
+                opacity: pressed ? 0.9 : 1 
+              })}
+            >
+              <Text style={{ color: 'white', fontWeight: '600' }}>📷 Capture</Text>
+            </Pressable>
+            
+            <Pressable
+              onPress={uploadPhoto}
+              disabled={!subject || !section || !sessionType}
+              style={({ pressed }) => ({ 
+                flex: 1,
+                backgroundColor: !subject || !section || !sessionType ? '#9CA3AF' : '#3B82F6', 
+                paddingVertical: 12, 
+                borderRadius: 8, 
+                alignItems: 'center', 
+                opacity: pressed ? 0.9 : 1 
+              })}
+            >
+              <Text style={{ color: 'white', fontWeight: '600' }}>📁 Upload</Text>
+            </Pressable>
+          </View>
 
             {faceReady && (
               <View style={{ marginBottom: 12 }}>
-                <Text style={{ color: '#10B981', fontWeight: '600', marginBottom: 8 }}>Face captured ✔</Text>
+                <Text style={{ color: '#10B981', fontWeight: '600', marginBottom: 8 }}>Face photo ready ✔</Text>
                 {capturedImageUri && (
                   <View style={{ alignItems: 'center', backgroundColor: '#F0FDF4', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#BBF7D0' }}>
                     <Image

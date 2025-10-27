@@ -157,6 +157,7 @@ export type StudentAttendanceData = {
   absentSessions: number;
   attendancePercentage: number;
   lastAttendanceDate: string | null;
+  lastPresentSessionHours: string | null;
 };
 
 export type StudentAttendanceResponse = {

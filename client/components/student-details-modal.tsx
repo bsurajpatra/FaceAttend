@@ -58,6 +58,15 @@ export default function StudentDetailsModal({
     });
   };
 
+  const formatDateOnly = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
   const getStudentAttendance = (studentId: string): StudentAttendanceData | null => {
     return attendanceData.find(att => att.studentId === studentId) || null;
   };
@@ -136,7 +145,10 @@ export default function StudentDetailsModal({
             ${attendance ? `${attendance.attendancePercentage}%` : 'N/A'}
           </td>
           <td>${attendance ? `${attendance.presentSessions}/${attendance.totalSessions}` : 'N/A'}</td>
-          <td>${attendance && attendance.lastAttendanceDate ? new Date(attendance.lastAttendanceDate).toLocaleString() : 'N/A'}</td>
+          <td>${attendance && attendance.lastAttendanceDate ? 
+            new Date(attendance.lastAttendanceDate).toLocaleDateString() + 
+            (attendance.lastPresentSessionHours ? ` (${attendance.lastPresentSessionHours})` : '') 
+            : 'N/A'}</td>
         </tr>
       `;
     }).join('');
@@ -311,7 +323,12 @@ export default function StudentDetailsModal({
                           <View style={styles.detailRow}>
                             <Text style={styles.detailLabel}>Last Present:</Text>
                             <Text style={styles.detailValue}>
-                              {formatDate(attendance.lastAttendanceDate)}
+                              {formatDateOnly(attendance.lastAttendanceDate)}
+                              {attendance.lastPresentSessionHours && (
+                                <Text style={styles.sessionHoursText}>
+                                  {' '}({attendance.lastPresentSessionHours})
+                                </Text>
+                              )}
                             </Text>
                           </View>
                         )}
@@ -541,6 +558,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     flex: 2,
     textAlign: 'right',
+  },
+  sessionHoursText: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '400',
   },
   attendanceContainer: {
     flexDirection: 'row',
