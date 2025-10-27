@@ -257,6 +257,12 @@ export default function AttendanceReports({ onClose }: AttendanceReportsProps) {
     }
   };
 
+  const getAttendanceColor = (percentage: number) => {
+    if (percentage >= 80) return '#10B981'; // Green
+    if (percentage >= 60) return '#F59E0B'; // Yellow
+    return '#EF4444'; // Red
+  };
+
   const handleSessionPress = (session: any) => {
     setSelectedSession(session);
     setShowDetailsModal(true);
