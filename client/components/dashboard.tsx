@@ -74,6 +74,10 @@ export default function Dashboard({
 
   // Check if students are registered for the current session
   const checkRegisteredStudents = async (session: any) => {
+    if (!session) {
+      setHasRegisteredStudents(null);
+      return;
+    }
 
     setIsCheckingStudents(true);
     try {
