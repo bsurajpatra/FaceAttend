@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert } from 'react-native';
 import { styles } from './styles/timetable-setup-styles';
+import { TIME_SLOTS, SESSION_TYPES, getTimeRange, getSessionDuration, validateConsecutiveHours, getTimeSlotByHour } from '@/utils/timeSlots';
 
 type Session = {
   subject: string;
@@ -23,7 +24,6 @@ type TimetableSetupProps = {
 };
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-const SESSION_TYPES = ['Lecture', 'Tutorial', 'Practical', 'Skill'] as const;
 
 // Common section patterns (numbers only)
 const COMMON_SECTIONS = [
@@ -31,26 +31,9 @@ const COMMON_SECTIONS = [
   '11', '12', '13', '14', '15', '16', '17', '18', '19', '20'
 ];
 
-
-// College time slots (11 working hours)
-const TIME_SLOTS = [
-  { hour: 1, time: '7:10 - 8:00', duration: '50 mins' },
-  { hour: 2, time: '8:00 - 8:50', duration: '50 mins' },
-  { hour: 3, time: '9:20 - 10:10', duration: '50 mins' },
-  { hour: 4, time: '10:10 - 11:00', duration: '50 mins' },
-  { hour: 5, time: '11:10 - 12:00', duration: '50 mins' },
-  { hour: 6, time: '12:00 - 12:50', duration: '50 mins' },
-  { hour: 7, time: '12:55 - 1:45', duration: '50 mins' },
-  { hour: 8, time: '1:50 - 2:40', duration: '50 mins' },
-  { hour: 9, time: '2:40 - 3:30', duration: '50 mins' },
-  { hour: 10, time: '3:50 - 4:40', duration: '50 mins' },
-  { hour: 11, time: '4:40 - 5:30', duration: '50 mins' },
-];
-
 export default function TimetableSetup({ existingTimetable, onSubmit, onSkip, isSubmitting = false }: TimetableSetupProps) {
   const [expandedSessions, setExpandedSessions] = useState<{[key: string]: boolean}>({});
   const [timetable, setTimetable] = useState<TimetableDay[]>(() => {
-    console.log('TimetableSetup: existingTimetable:', existingTimetable);
     
     if (existingTimetable && Array.isArray(existingTimetable) && existingTimetable.length > 0) {
       // Make sure all fields exist in the existing timetable
@@ -64,13 +47,11 @@ export default function TimetableSetup({ existingTimetable, onSubmit, onSkip, is
           hours: session.hours || []
         }))
       }));
-      console.log('TimetableSetup: processed existing timetable:', processedTimetable);
       return processedTimetable;
     }
     
     // Initialize empty timetable with all days
     const emptyTimetable = DAYS.map(day => ({ day, sessions: [] }));
-    console.log('TimetableSetup: initialized empty timetable:', emptyTimetable);
     return emptyTimetable;
   });
 
@@ -157,28 +138,59 @@ export default function TimetableSetup({ existingTimetable, onSubmit, onSkip, is
     return expandedSessions[key] || false;
   };
 
+  // Check for overlapping hours within the same day
+  const hasOverlappingHours = (timetable: TimetableDay[]): { hasOverlap: boolean; conflictDetails?: string } => {
+    for (const day of timetable) {
+      if (!day.sessions || day.sessions.length <= 1) continue;
+      
+      // Check each session against all other sessions on the same day
+      for (let i = 0; i < day.sessions.length; i++) {
+        for (let j = i + 1; j < day.sessions.length; j++) {
+          const session1 = day.sessions[i];
+          const session2 = day.sessions[j];
+          
+          // Check if any hours overlap
+          const hours1 = new Set(session1.hours);
+          const hours2 = new Set(session2.hours);
+          
+          for (const hour of hours1) {
+            if (hours2.has(hour)) {
+              const timeSlot = getTimeSlotByHour(hour);
+              const timeString = timeSlot ? timeSlot.time : `hour ${hour}`;
+              return {
+                hasOverlap: true,
+                conflictDetails: `${session1.subject} (${session1.section}) and ${session2.subject} (${session2.section}) both scheduled at ${timeString} on ${day.day}`
+              };
+            }
+          }
+        }
+      }
+    }
+    
+    return { hasOverlap: false };
+  };
+
   const handleSubmit = async () => {
     try {
-      // Basic validation
-      const hasSessions = timetable.some(day => day.sessions.length > 0);
-      if (!hasSessions) {
-        Alert.alert('No Sessions', 'Please add at least one session to your timetable.');
-        return;
-      }
+      // Allow empty timetables - no need to validate for sessions
+      // Users can clear their entire timetable if needed
 
-      // Validate all required fields
+      // Validate all required fields only for sessions that exist
       let hasEmptyFields = false;
       let dayWithError = '';
       let sessionNumber = 0;
 
       for (const day of timetable) {
-        for (let i = 0; i < day.sessions.length; i++) {
-          const session = day.sessions[i];
-          if (!session?.subject?.trim() || !session?.section?.trim() || !session?.roomNumber?.trim() || !session?.hours?.length) {
-            hasEmptyFields = true;
-            dayWithError = day.day;
-            sessionNumber = i + 1;
-            break;
+        // Only validate if there are sessions
+        if (day.sessions && day.sessions.length > 0) {
+          for (let i = 0; i < day.sessions.length; i++) {
+            const session = day.sessions[i];
+            if (!session?.subject?.trim() || !session?.section?.trim() || !session?.roomNumber?.trim() || !session?.hours?.length) {
+              hasEmptyFields = true;
+              dayWithError = day.day;
+              sessionNumber = i + 1;
+              break;
+            }
           }
         }
         if (hasEmptyFields) break;
@@ -192,12 +204,23 @@ export default function TimetableSetup({ existingTimetable, onSubmit, onSkip, is
         return;
       }
 
-      // Validate consecutive hours
+      // Validate consecutive hours only for sessions that exist
       const hasInvalidHours = timetable.some(day => 
+        day.sessions && day.sessions.length > 0 && 
         day.sessions.some(session => !validateConsecutiveHours(session.hours))
       );
       if (hasInvalidHours) {
         Alert.alert('Invalid Hours', 'Please make sure all sessions have consecutive hours.');
+        return;
+      }
+
+      // Check for overlapping hours
+      const overlapCheck = hasOverlappingHours(timetable);
+      if (overlapCheck.hasOverlap) {
+        Alert.alert(
+          'Schedule Conflict',
+          `You cannot have multiple classes at the same time.\n\n${overlapCheck.conflictDetails}\n\nPlease adjust the time slots to avoid conflicts.`
+        );
         return;
       }
 
@@ -222,7 +245,6 @@ export default function TimetableSetup({ existingTimetable, onSubmit, onSkip, is
 
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
         {timetable.map((day, dayIndex) => {
-          console.log('TimetableSetup: rendering day', dayIndex, ':', day.day, 'with', day.sessions.length, 'sessions');
           return (
           <View key={day.day} style={styles.dayContainer}>
             <View style={styles.dayHeader}>

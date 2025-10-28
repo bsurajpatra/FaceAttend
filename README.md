@@ -1,313 +1,596 @@
-# FaceAttend - AI-Powered Face Recognition Attendance System
+# FaceAttend – Face Recognition Attendance System
 
-FaceAttend is a comprehensive attendance management system that uses advanced face recognition technology to automatically mark student attendance. Built with React Native (Expo) for the mobile app and Node.js/Express for the backend, it provides a seamless, contactless attendance solution for educational institutions.
+FaceAttend is a modern attendance management solution designed for educational institutions. The app leverages advanced face recognition technology to automatically identify and mark student attendance, eliminating the need for manual roll calls and preventing proxy attendance. With its intuitive mobile interface and secure kiosk mode, FaceAttend streamlines the attendance process while maintaining data integrity and security.
+
+It consists of:
+- A mobile client (React Native + Expo)
+- A Node.js/Express backend with MongoDB
+- A Python/Flask FaceNet microservice for high-accuracy embeddings
+
+## The Problem
+Manual attendance is time-consuming, error-prone, and susceptible to proxy attendance. Institutions need a fast, secure, and contactless solution that integrates with their schedule and generates reliable reports.
+
+## The Solution
+FaceAttend captures live frames from a kiosk-mode device, generates a robust FaceNet embedding server-side, matches against enrolled students for the current class session, and updates attendance in real time with clear feedback to the operator.
+
+## 📱 Kiosk Mode for Secure Attendance
+FaceAttend is designed specifically for faculty to take classroom attendance using their mobile device. In many classrooms, faculty temporarily hand their phone to a student (or a student representative) to capture attendance. To prevent misuse while the device is out of the instructor's hands, FaceAttend includes a kiosk mode. Kiosk mode restricts access to the device to only the attendance capture flow — it prevents students from opening other apps, accessing device settings, or navigating away from the attendance screen while recording attendance.
 
 ## 🚀 Features
-
-### Core Functionality
-- **Face Recognition Attendance**: Automatic student identification and attendance marking using AI-powered face detection
-- **Real-time Processing**: Live camera feed with continuous face detection and instant attendance updates
-- **Student Management**: Complete student registration with face enrollment and subject enrollment
-- **Faculty Dashboard**: Comprehensive dashboard with current session detection and attendance management
-- **Timetable Management**: Flexible timetable setup and management for different subjects and sessions
-- **Attendance Reports**: Detailed attendance reports with analytics and export capabilities
-- **Kiosk Mode**: Secure kiosk mode for dedicated attendance stations with password protection
-
-### Technical Features
-- **Cross-platform Mobile App**: Built with React Native/Expo for iOS and Android
-- **RESTful API**: Node.js/Express backend with MongoDB database
-- **JWT Authentication**: Secure authentication with JSON Web Tokens
-- **Face Recognition Engine**: Uses @vladmandic/human library with TensorFlow.js for accurate face detection
-- **Real-time Updates**: Live attendance statistics and student recognition feedback
-- **Offline Support**: Local storage for user sessions and offline functionality
-- **Responsive Design**: Modern UI with smooth animations and intuitive user experience
+- Face recognition attendance with FaceNet embeddings (Python microservice)
+- Real-time live camera detection with 0.5s capture loop (silent)
+- Student enrollment with face capture and subject/section association
+- Faculty dashboard with current-session detection and one-tap "Take Attendance"
+- Timetable setup and editing (supports hours 1–24)
+- Attendance sessions and detailed reports with location tracking
+- Secure kiosk mode for dedicated devices (Android orientation lock, UI blocking, back button handling)
+- JWT authentication and protected APIs
+- Settings & Profile Management: Camera and location permissions, faculty profile updates, password management
+- Advanced Student Management: View, edit, and delete student records with comprehensive filtering and export capabilities
+- Export Functionality: PDF and CSV export for student lists and attendance reports with location data
+- Duplicate Prevention: Automatic validation for duplicate roll numbers and face descriptors within classes
+- Location Tracking: GPS location capture and display for attendance sessions
+- Student Attendance Analytics: Individual student attendance percentages and session tracking
+- Attendance Status Management: Dashboard acknowledgment of taken attendance with retake functionality
+- Flexible Time Management: Support for 24-hour time slots and empty timetable handling
 
 ## 🏗️ Architecture
-
-### Client-Side (React Native/Expo)
+### Client (React Native / Expo)
 ```
 client/
-├── app/                    # Main app screens and routing
-│   ├── index.tsx          # Welcome/login screen
-│   ├── take-attendance.tsx # Attendance capture screen
-│   └── student-registration.tsx # Student enrollment
-├── components/            # Reusable UI components
-│   ├── live-attendance.tsx # Real-time attendance interface
-│   ├── camera-view.tsx    # Camera functionality
-│   ├── dashboard.tsx     # Faculty dashboard
-│   └── styles/           # Component styling
-├── api/                  # API client functions
-├── contexts/            # React contexts (Kiosk mode)
-├── utils/               # Utility functions (face processing)
-└── hooks/               # Custom React hooks
+├── app/                       # Routing and screens
+│   ├── index.tsx              # Welcome/login
+│   ├── take-attendance.tsx    # Attendance capture screen
+│   ├── student-registration.tsx
+│   └── manage-students.tsx    # Student management with export
+├── components/
+│   ├── dashboard.tsx          # Faculty dashboard (current session)
+│   ├── live-attendance.tsx    # Live detection UI (status banners)
+│   ├── camera-view.tsx        # Silent 0.5s capture loop
+│   ├── hour-select-modal.tsx  # Hour picker
+│   ├── edit-student-modal.tsx # Student editing with face recapture
+│   ├── student-details-modal.tsx # Student list with export functionality
+│   ├── face-capture-modal.tsx # Auto-capture camera interface
+│   └── styles/
+├── api/                       # Axios-based API clients
+├── contexts/                  # Kiosk context
+├── utils/                     # Face utils (forces server-side processing)
+└── hooks/
 ```
 
-### Server-Side (Node.js/Express)
+### Server (Node.js / Express / TypeScript)
 ```
 server/
 ├── src/
-│   ├── controllers/      # Request handlers
+│   ├── controllers/
 │   │   ├── attendance.controller.ts
 │   │   ├── auth.controller.ts
 │   │   └── student.controller.ts
-│   ├── models/          # Database schemas
+│   ├── models/
 │   │   ├── Attendance.ts
 │   │   ├── Student.ts
 │   │   └── Faculty.ts
-│   ├── routes/          # API routes
-│   ├── services/        # Business logic
-│   │   └── human.ts     # Face recognition service
-│   ├── middleware/     # Authentication & validation
-│   └── config/         # Database & environment config
+│   ├── routes/
+│   ├── services/
+│   │   └── facenet.service.ts   # Bridge to Python service
+│   ├── middleware/
+│   └── config/
 ```
 
-## 🛠️ Technology Stack
+### FaceNet Microservice (Python / Flask)
+```
+facenet_service/
+├── face_recognition_service.py   # Flask API for embeddings
+├── 
+└──requirements.txt
+```
 
-### Frontend (Mobile App)
-- **React Native** with Expo framework
-- **TypeScript** for type safety
-- **Expo Camera** for camera functionality
-- **@tensorflow/tfjs** for client-side face processing
-- **@vladmandic/human** for face detection
-- **React Navigation** for screen navigation
-- **AsyncStorage** for local data persistence
-- **Redux Toolkit** for state management
+## 🤖 FaceNet Recognition Service
 
-### Backend (Server)
-- **Node.js** with Express.js framework
-- **TypeScript** for type safety
-- **MongoDB** with Mongoose ODM
-- **JWT** for authentication
-- **bcryptjs** for password hashing
-- **@vladmandic/human** for server-side face processing
-- **Canvas** for image processing
-- **CORS** for cross-origin requests
-- **Helmet** for security headers
+The FaceNet service is a Python Flask microservice that provides high-accuracy face recognition using pre-trained FaceNet embeddings.
 
-### Development Tools
-- **ESLint** for code linting
-- **TypeScript** for static type checking
-- **Expo CLI** for mobile development
-- **MongoDB Compass** for database management
+### Features
+- **High Accuracy**: Uses pre-trained FaceNet model for face recognition
+- **REST API**: Simple HTTP interface for integration
+- **Face Detection**: Automatic face detection and cropping using MTCNN
+- **512D Embeddings**: Generates 512-dimensional face embeddings
+- **Health Check**: Built-in health monitoring endpoint
 
-## 📱 Installation & Setup
-
-### Prerequisites
-- Node.js (v16 or higher)
-- npm or yarn
-- MongoDB (local or cloud instance)
-- Expo CLI (`npm install -g @expo/cli`)
-- Android Studio (for Android development)
-- Xcode (for iOS development, macOS only)
-
-### Backend Setup
-
-1. **Clone the repository**
+### Installation
+1. **Install Python Dependencies**:
    ```bash
-   git clone <repository-url>
-   cd Face-Attend/server
+   cd facenet_service
+   pip install -r requirements.txt
    ```
 
-2. **Install dependencies**
+2. **Start the Service**:
    ```bash
-   npm install
+   python face_recognition_service.py
    ```
+   The service will start on `http://localhost:5001`
 
-3. **Environment Configuration**
-   Create a `.env` file in the server directory:
-   ```env
-   PORT=4000
-   MONGODB_URI=mongodb://127.0.0.1:27017/face-attend
-   JWT_SECRET=your-super-secret-jwt-key
-   JWT_EXPIRES_IN=7d
-   ```
+### API Endpoints
 
-4. **Start the server**
-   ```bash
-   # Development mode
-   npm run dev
-   
-   # Production mode
-   npm run build
-   npm start
-   ```
+#### POST `/api/recognize`
+Extract face embedding from an uploaded image.
 
-### Frontend Setup
+**Request**:
+- Method: POST
+- Content-Type: multipart/form-data
+- Body: Form field `image` containing the image file
 
-1. **Navigate to client directory**
-   ```bash
-   cd ../client
-   ```
+**Response**:
+```json
+{
+  "success": true,
+  "embedding": [0.1, 0.2, ...], // 512-dimensional array
+  "embedding_size": 512
+}
+```
 
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
+**Error Response**:
+```json
+{
+  "success": false,
+  "message": "No face detected"
+}
+```
 
-3. **Environment Configuration**
-   Create a `.env` file in the client directory:
-   ```env
-   EXPO_PUBLIC_API_URL=http://localhost:4000
-   ```
+#### GET `/health`
+Health check endpoint.
 
-4. **Start the development server**
-   ```bash
-   npm start
-   ```
+**Response**:
+```json
+{
+  "status": "healthy",
+  "service": "facenet-recognition"
+}
+```
 
-5. **Run on device/emulator**
-   ```bash
-   # Android
-   npm run android
-   
-   # iOS
-   npm run ios
-   
-   # Web
-   npm run web
-   ```
+### Model Information
+- **Face Detection**: MTCNN (Multi-task CNN)
+- **Face Recognition**: InceptionResnetV1 pre-trained on VGGFace2
+- **Embedding Size**: 512 dimensions
+- **Similarity**: Cosine similarity recommended (threshold ~0.6)
 
-## 🎯 Usage Guide
+### Integration
+The Node.js backend automatically communicates with this service using the `facenet.service.ts` module. The service is configured via the `FACENET_SERVICE_URL` environment variable.
 
-### For Faculty
+## ⚙️ Settings & Student Management
 
-1. **Registration/Login**
-   - Create a faculty account or login with existing credentials
-   - Complete profile setup with timetable configuration
+### Settings Module
+A dedicated section within the app for faculty and administrators to manage app-level preferences and permissions.
 
-2. **Student Registration**
-   - Navigate to "Register Student" from the dashboard
-   - Add student details (name, roll number)
-   - Capture student's face for enrollment
-   - Enroll students in specific subjects and sections
-
-3. **Taking Attendance**
-   - The dashboard shows current session based on timetable
-   - Click "Take Attendance" for ongoing sessions
-   - Camera opens in kiosk mode for secure attendance marking
-   - Students look at the camera for automatic recognition
-   - Real-time feedback shows attendance status
-
-4. **Viewing Reports**
-   - Access attendance reports from the dashboard
-   - Filter by date range, subject, or section
-   - Export reports for record keeping
-
-### For Students
-
-1. **Face Enrollment**
-   - Students must be registered by faculty
-   - Face capture during registration creates biometric profile
-   - Multiple photos may be taken for better accuracy
-
-2. **Attendance Marking**
-   - Students approach the attendance station during class
-   - Look directly at the camera
-   - System automatically recognizes and marks attendance
-   - Receive confirmation of successful attendance marking
-
-## 🔧 Configuration
-
-### Face Recognition Settings
-- **Detection Threshold**: Configurable similarity threshold for face matching
-- **Processing Mode**: Client-side or server-side face processing
-- **Image Quality**: Adjustable camera quality settings
-- **Detection Interval**: Configurable face detection frequency
-
-### Kiosk Mode Settings
-- **Password Protection**: Secure password-based exit from kiosk mode
-- **Orientation Lock**: Portrait mode lock for consistent interface
-- **System UI Control**: Hide/show system UI elements
-- **Navigation Blocking**: Prevent unauthorized navigation
-
-### Database Configuration
-- **MongoDB Connection**: Configurable database connection strings
-- **Indexing**: Optimized indexes for performance
-- **Data Retention**: Configurable data retention policies
-
-## 🔒 Security Features
-
-- **JWT Authentication**: Secure token-based authentication
-- **Password Hashing**: bcryptjs for secure password storage
-- **CORS Protection**: Configurable cross-origin request policies
-- **Input Validation**: Comprehensive input sanitization
-- **Rate Limiting**: API rate limiting to prevent abuse
-- **Kiosk Mode Security**: Password-protected exit from kiosk mode
-
-## 📊 API Documentation
-
-### Authentication Endpoints
-- `POST /api/auth/register` - Faculty registration
-- `POST /api/auth/login` - Faculty login
+**Features:**
+- **Camera Permissions Management** – Allows checking and re-requesting permissions directly within the app for smoother kiosk setup.  
+- **Profile Management** – Update faculty profile details such as name, email, and password securely via JWT-protected endpoints.  
+- **Forgot Password Flow** – Supports secure password reset through email verification or admin reset (depending on role).  
+- **Device Settings (Kiosk Mode)** – Optional device lock, orientation lock, and inactivity timeout to prevent misuse in kiosk environments.
 
 ### Student Management
-- `POST /api/students/register` - Register new student
-- `GET /api/students` - Get enrolled students
-- `PUT /api/students/:id` - Update student information
+Comprehensive tools to manage student data efficiently with advanced filtering, editing, and export capabilities.
 
-### Attendance Management
-- `POST /api/attendance/session/start` - Start attendance session
-- `POST /api/attendance/mark` - Mark student attendance
-- `GET /api/attendance/session/:id` - Get session details
-- `GET /api/attendance/reports` - Get attendance reports
+**Core Capabilities:**
+- **Advanced Filtering** – Retrieve students by subject, section, and session type with real-time filtering
+- **Student Details View** – Comprehensive modal showing all student information with edit capabilities
+- **Inline Editing** – Edit student name, roll number, and face data directly from the student list
+- **Face Recapture** – 5-second auto-capture system for updating student face data
+- **Photo Upload** – Upload photos directly from gallery or capture new photos during registration and management
+- **Export Functionality** – Generate PDF and CSV reports of student lists with professional formatting
+- **Duplicate Prevention** – Automatic validation to prevent duplicate roll numbers and face descriptors within the same class
 
-### Timetable Management
-- `GET /api/timetable/:facultyId` - Get faculty timetable
-- `PUT /api/timetable/:facultyId` - Update faculty timetable
+**Enhanced Features:**
+- **Visual Indicators** – Clear feedback for modified fields during editing
+- **Optional Fields** – Flexible editing where faculty can update any combination of name, roll number, face data, or photo
+- **Multiple Photo Sources** – Capture from camera or upload from device gallery during student registration and management
+- **Professional Export** – PDF reports with proper formatting and CSV files with structured data
+- **File Sharing** – Direct sharing of exported files via email, cloud storage, or other apps
 
-## 🚀 Deployment
+**API Endpoints:**
+- `GET /api/students?subject=...&section=...` – Get students by class
+- `PUT /api/students/:id` – Update student data with duplicate validation
+- `DELETE /api/students/:id` – Delete student with confirmation
+- **Validation** – Server-side checks for duplicate roll numbers and face descriptors within the same subject-section-component
 
-### Backend Deployment
-1. **Build the application**
-   ```bash
-   npm run build
-   ```
+**Export Formats:**
+- **PDF Reports** – Professional student lists with class information and formatted tables
+- **CSV Data** – Structured data for analysis with class metadata and student details
+- **File Naming** – Automatic naming with subject, section, and date information
 
-2. **Deploy to cloud platform** (Heroku, AWS, DigitalOcean)
-   - Configure environment variables
-   - Set up MongoDB Atlas or cloud database
-   - Deploy using platform-specific instructions
+## 📍 Location Tracking & Analytics
 
-### Mobile App Deployment
-1. **Build for production**
-   ```bash
-   expo build:android
-   expo build:ios
-   ```
+### Location Tracking System
+FaceAttend now includes comprehensive location tracking for attendance sessions, providing accountability and detailed reporting.
 
-2. **Publish to app stores**
-   - Follow Expo's publishing guidelines
-   - Submit to Google Play Store and Apple App Store
+**Core Features:**
+- **Automatic GPS Capture** – Location is automatically captured when starting attendance sessions with precise coordinates
+- **GPS Coordinates** – Latitude and longitude coordinates captured with high accuracy for audit trails
+- **Address Resolution** – GPS coordinates are reverse-geocoded to human-readable addresses for display
+- **Permission Management** – Location permissions managed through settings alongside camera permissions
+- **Fallback Handling** – Graceful handling when location permission is denied or unavailable
 
-## 🤝 Contributing
+**Location Data Storage:**
+- **Coordinates** – Accurate latitude and longitude with precision information stored for each session
+- **Address** – Human-readable address from reverse geocoding of GPS coordinates
+- **Accuracy Metrics** – GPS accuracy and uncertainty data for validation
+- **Session Association** – Location data linked to specific attendance sessions
+- **Export Integration** – Location coordinates and addresses included in all reports and exports
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+**Display Integration:**
+- **Dashboard** – Current session shows location when attendance has been taken
+- **Reports** – Location displayed in attendance reports with 📍 icon
+- **Session Details** – Location information in detailed session views
+- **Export Data** – Location included in CSV and PDF exports
 
-## 📝 License
+### Student Attendance Analytics
+Advanced analytics system for tracking individual student attendance patterns and performance.
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+**Analytics Features:**
+- **Individual Tracking** – Per-student attendance percentages and session counts
+- **Class Overview** – Attendance statistics for specific subject-section combinations
+- **Session History** – Complete attendance history with dates and locations
+- **Performance Metrics** – Present/absent session counts and percentage calculations
+- **Last Session Present Tracking** – Detailed tracking of when each student was last marked present with session details
 
-## 🆘 Support
+**Display Features:**
+- **Color-Coded Indicators** – Green (≥80%), Amber (≥60%), Red (<60%) attendance percentages
+- **Session Details** – Shows present/total sessions for each student
+- **Last Attendance Display** – Prominently displays when student was last marked present with date, time, and session information
+- **Attendance History** – Complete timeline of student attendance with last present session highlighted
+- **Export Integration** – Analytics data including last session present dates included in student export reports
 
-For support and questions:
-- Create an issue in the GitHub repository
-- Check the documentation for common solutions
-- Contact the development team
-
-## 🔮 Future Enhancements
-
-- **Multi-language Support**: Internationalization for global use
-- **Advanced Analytics**: Detailed attendance analytics and insights
-- **Integration APIs**: Integration with existing school management systems
-- **Offline Mode**: Enhanced offline functionality
-- **Biometric Alternatives**: Support for fingerprint and other biometric methods
-- **Cloud Storage**: Cloud-based face data storage and synchronization
-- **Mobile App for Students**: Dedicated student mobile application
+**API Endpoints:**
+- `GET /api/attendance/student-data` – Get comprehensive student attendance analytics
+- `GET /api/attendance/status` – Check attendance status with location data
+- **Response Format** – Includes attendance percentages, session counts, last session present details, and location information
 
 ---
 
-**FaceAttend** - Revolutionizing attendance management with AI-powered face recognition technology.
+## ⚙️ Tech Stack & Key Packages
+
+### Client (React Native / Expo)
+**Core Framework:**
+- React Native 0.81.4, Expo ~54.0.1, TypeScript 5.9.2
+
+**Navigation & UI:**
+- expo-router ~6.0.7 (file-based routing)
+- @react-navigation/native ~7.1.8, @react-navigation/native-stack ~7.3.16
+- @react-navigation/bottom-tabs ~7.4.0, @react-navigation/elements ~2.6.3
+- react-native-safe-area-context ~5.6.0, react-native-screens ~4.16.0
+
+**Camera & Media:**
+- expo-camera ~17.0.8 (face capture)
+- expo-image ~3.0.8, expo-image-manipulator ~14.0.7
+- @expo/image-utils ^0.8.7
+
+**State Management & Data:**
+- @reduxjs/toolkit ^2.9.0, react-redux ^9.2.0
+- @tanstack/react-query ^5.87.4 (server state)
+- @react-native-async-storage/async-storage ^1.24.0
+
+**Networking & Security:**
+- axios ^1.11.0 (HTTP client)
+- react-native-keychain ^8.1.3 (secure storage)
+
+**Development & Utilities:**
+- expo-dev-client ^6.0.13, expo-constants ~18.0.9
+- expo-file-system ~19.0.17, react-native-fs ^2.20.0
+- papaparse ^5.5.3 (CSV parsing)
+- tailwind-react-native-classnames ^1.5.1 (styling)
+- @expo/vector-icons ^15.0.2 (icon library)
+- react-native-vector-icons ^10.3.0 (additional icons)
+
+**UI & Animation:**
+- react-native-reanimated ~4.1.0 (animations)
+- react-native-worklets 0.5.1 (background processing)
+- expo-haptics ~15.0.7 (tactile feedback)
+- expo-splash-screen ~31.0.10 (splash screen)
+
+**Additional Features:**
+- expo-print ~15.0.7 (PDF generation)
+- expo-sharing ~14.0.7 (file sharing)
+- expo-web-browser ~15.0.7 (in-app browser)
+- expo-linking ~8.0.8 (deep linking)
+- expo-location ~18.0.0 (GPS location tracking)
+
+**Development Dependencies:**
+- @types/papaparse ^5.3.16 (TypeScript types)
+- @types/react ~19.1.0 (React types)
+- eslint ^9.25.0 (code linting)
+- eslint-config-expo ~10.0.0 (Expo linting config)
+- typescript ~5.9.2 (TypeScript compiler)
+
+**Kiosk Mode & Device Control:**
+- expo-screen-orientation ^9.0.7 (orientation lock)
+- expo-system-ui ^6.0.7 (UI blocking)
+- expo-haptics ~15.0.7 (feedback)
+
+### Server (Node.js / Express / TypeScript)
+**Core Framework:**
+- Node.js, Express ^5.1.0, TypeScript 5.9.2
+
+**Database & ODM:**
+- mongoose ^8.18.1 (MongoDB integration)
+
+**Authentication & Security:**
+- jsonwebtoken ^9.0.2 (JWT tokens)
+- bcryptjs ^3.0.2 (password hashing)
+- helmet ^8.1.0 (security headers)
+- cors ^2.8.5 (CORS handling)
+
+**Image Processing & AI:**
+- @tensorflow/tfjs ^4.22.0 (face processing fallback)
+- canvas ^3.2.0 (image manipulation)
+- jpeg-js ^0.4.4 (image encoding)
+
+**HTTP & Communication:**
+- axios ^1.12.2 (HTTP client)
+- form-data ^4.0.4 (multipart form data)
+
+**Development & Monitoring:**
+- morgan ^1.10.1 (HTTP logging)
+- dotenv ^17.2.2 (environment variables)
+- ts-node-dev ^2.0.0 (development server)
+- @typescript-eslint/eslint-plugin ^8.43.0 (linting)
+- @typescript-eslint/parser ^8.43.0 (TypeScript linting)
+- eslint ^9.35.0 (code quality)
+
+### FaceNet Service (Python / Flask)
+**Core Framework:**
+- Flask 2.3.3 (web framework)
+
+**AI & Computer Vision:**
+- facenet-pytorch 2.5.3 (face recognition)
+- torch 2.7.0, torchvision 0.22.0 (PyTorch)
+- opencv-python 4.10.0.84 (computer vision)
+
+**Image Processing:**
+- pillow 11.0.0 (image manipulation)
+- numpy 2.1.2 (numerical computing)
+
+## 🔄 End-to-End Flow
+1) Login
+- Client: `POST /api/auth/login` → stores JWT in AsyncStorage; axios adds `Authorization` header.
+
+2) Timetable
+- Faculty configures sessions (subject, section, type, hours). Server validates `hours` (min 1, max 20).
+- Dashboard computes “current session” based on time using `TIME_SLOTS` (now includes hour 12).
+
+3) Student Registration
+- Client captures face image (base64) or uploads photo from gallery and calls `POST /api/students/register`.
+- Server calls Python `/api/recognize`, stores FaceNet embedding on `Student` (`faceDescriptor` legacy + `embeddings` array), and stores photo.
+
+4) Start Attendance
+- Client: `POST /api/attendance/start` with subject/section/type/hours.
+- Server creates an attendance session with records for enrolled students.
+
+5) Live Attendance
+- `live-attendance.tsx` runs a silent frame capture every 0.5–3s and sends base64 frames to `POST /api/attendance/mark`.
+- Server requests embedding from Python, matches by cosine similarity vs enrolled students; threshold defaults to 0.6.
+- UI shows banners near the Start/Pause button with student ID display:
+  - Green: "✅ [Student Name] (ID: [Roll Number]) marked present!"
+  - Yellow: "⚠️ [Student Name] (ID: [Roll Number]) already marked"
+  - Red: not found/error
+
+6) Reports
+- Client queries `GET /api/attendance/reports` and `GET /api/attendance/session/:id` for details.
+
+## 🗂️ Schema Designs (Server)
+### Faculty
+```ts
+// server/src/models/Faculty.ts
+const SessionSchema = new Schema({
+  subject: { type: String, required: true, trim: true },
+  sessionType: { type: String, required: true, enum: ['Lecture','Tutorial','Practical','Skill'] },
+  section: { type: String, required: true, trim: true },
+  roomNumber: { type: String, required: true, trim: true },
+  hours: [{ type: Number, required: true, min: 1, max: 20 }], // supports hour 12+
+});
+```
+
+### Student
+```ts
+// server/src/models/Student.ts
+{
+  name: String,
+  rollNumber: String,
+  enrollments: [{ subject, section, facultyId }],
+  faceDescriptor: [Number],       // legacy single vector
+  embeddings: [[Number]],         // FaceNet embeddings array
+  photoUri: String,               // stored photo URI
+  photoBase64: String             // base64 photo data
+}
+```
+
+### Attendance Session
+```ts
+// server/src/models/Attendance.ts
+{
+  facultyId,
+  subject, section, sessionType, hours, date,
+  totalStudents, presentStudents, absentStudents,
+  location: {
+    latitude: Number,      // GPS latitude coordinate
+    longitude: Number,     // GPS longitude coordinate
+    address: String,       // reverse-geocoded address
+    accuracy: Number       // GPS accuracy in meters
+  },
+  records: [{
+    studentId, studentName, rollNumber,
+    isPresent, markedAt, confidence,
+    lastSessionPresent: Date  // track last time student was marked present
+  }]
+}
+```
+
+## 🔌 API Overview
+
+### Authentication & Profile
+- POST `/api/auth/register` - Faculty registration
+- POST `/api/auth/login` - Faculty login
+- PUT `/api/auth/profile` - Update faculty profile
+- GET `/api/auth/profile` - Get faculty profile
+- GET `/api/auth/faculty-subjects` - Get faculty subjects/sections
+
+### Student Management
+- POST `/api/students/register` - Register student with face image and photo upload (includes duplicate validation)
+- GET `/api/students?subject=...&section=...` - Get students by class
+- PUT `/api/students/:id` - Update student data (name, roll number, face data, photo)
+- DELETE `/api/students/:id` - Delete student record
+
+### Attendance System
+- POST `/api/attendance/start` - Start attendance session (with location data)
+- POST `/api/attendance/mark` - Mark attendance (face recognition)
+- GET `/api/attendance/session/:id` - Get session details
+- GET `/api/attendance/reports` - Get attendance reports (with location data)
+- GET `/api/attendance/status` - Check if attendance has been taken for today's session
+- GET `/api/attendance/student-data` - Get student attendance data for analytics
+
+### Timetable Management
+- GET `/api/timetable/:facultyId` - Get faculty timetable
+- PUT `/api/timetable/:facultyId` - Update faculty timetable
+
+### FaceNet Service (Python)
+- POST `/api/recognize` - Extract face embedding (multipart: `image`)
+- GET `/health` - Service health check
+
+## 🧪 Matching & Recognition Details
+- Python service uses MTCNN + InceptionResnetV1 (VGGFace2). Tuned for better recall:
+  - MTCNN thresholds: `[0.5, 0.6, 0.7]`
+  - margin: `40`, min_face_size: `20`
+  - Augmentations: rotations (±15°), horizontal flip; average embeddings
+- Server matches via cosine similarity; default threshold is `0.6`.
+
+## ⚙️ Configuration & Environment
+### Client Environment
+**Required Environment Variables:**
+```env
+EXPO_PUBLIC_API_URL=http://localhost:3000
+```
+
+**Optional Configuration:**
+- Supports comma-separated URLs for failover: `http://localhost:3000,http://backup:3000`
+- Development mode: Uses Expo dev client for hot reloading
+- Production mode: Uses standalone APK with embedded assets
+
+### Server Environment
+**Required Environment Variables:**
+```env
+PORT=3000
+MONGODB_URI=mongodb://127.0.0.1:27017/face-attend
+JWT_SECRET=your-super-secret-jwt-key
+JWT_EXPIRES_IN=7d
+FACENET_SERVICE_URL=http://localhost:5001
+```
+
+**Optional Configuration:**
+```env
+ALLOW_LAN_8081=true
+NODE_ENV=development
+```
+
+**Note:** CORS is configured to allow all origins (`*`) by default. Set `ALLOW_LAN_8081=true` for mobile device testing on the same network.
+
+### Python Service Environment
+**Default Configuration:**
+- Port: `5001`
+- Host: `0.0.0.0` (all interfaces)
+- Debug mode: `True` (development)
+
+**Model Configuration:**
+- Face detection: MTCNN with thresholds `[0.5, 0.6, 0.7]`
+- Face recognition: InceptionResnetV1 (VGGFace2)
+- Embedding size: 512 dimensions
+- Similarity threshold: 0.6 (configurable)
+
+**Performance Notes:**
+- First run downloads models (~100MB)
+- GPU acceleration available with CUDA
+- Restart required after changing thresholds/margins
+
+## 🧭 Setup & Run
+
+### Quick Start (One Command)
+   ```bash
+./start-services.sh
+```
+Starts: Python FaceNet (5001), Node.js Server (3000), Expo dev server.
+
+### Manual Setup
+
+#### 1) Python FaceNet Service
+   ```bash
+cd facenet_service
+pip install -r requirements.txt
+python face_recognition_service.py
+   ```
+   - Runs on `http://localhost:5001`
+   - Downloads models on first run (~100MB)
+
+#### 2) Node.js Server
+   ```bash
+cd server
+npm install
+npm run dev
+   ```
+   - Runs on `http://localhost:3000`
+   - Auto-reloads on file changes
+
+#### 3) React Native Client
+   ```bash
+cd client
+npm install
+npm start
+   ```
+   - Expo dev server starts
+   - Scan QR code with Expo Go app
+
+### Production Deployment
+
+#### Android APK Build
+   ```bash
+cd client
+npx expo run:android --variant release
+   ```
+
+#### Kiosk Mode Setup
+   ```bash
+cd client
+chmod +x setup-device-owner.sh
+./setup-device-owner.sh
+   ```
+   - Sets up device owner mode
+   - Locks orientation and UI
+   - Prevents unauthorized access
+
+## 🛠️ Troubleshooting & Tuning
+
+### General Issues
+- Face not detected: ensure good lighting, frontal face; Python service logs "No face detected".
+- Poor recall: adjust threshold in server (`FACE_MATCH_THRESHOLD = 0.6`) and Python MTCNN params.
+- Timetable hour 12+ not showing: ensure client `TIME_SLOTS` includes hour, server `hours.max` allows (currently 20).
+- Network fallbacks: set `EXPO_PUBLIC_API_URL` with multiple URLs (comma-separated) for failover.
+- Kiosk overlap: status banners in `live-attendance.tsx` render above/below the Start/Pause button.
+
+### FaceNet Service Issues
+1. **"FaceNet service is not running"**: Make sure the Python service is started on port 5001
+2. **"No face detected"**: Ensure the uploaded image contains a clear, well-lit face
+3. **Import errors**: Run `pip install -r requirements.txt` to install all dependencies
+4. **Connection refused**: Check if the service is running and accessible at `http://localhost:5001`
+5. **Model loading errors**: Ensure all required model files are downloaded and accessible
+
+## 🔒 Security
+- JWT auth, password hashing (bcryptjs), protected routes
+- Helmet, CORS
+
+## 📈 Future Enhancements
+- On-device face quality checks and liveness hints
+- Batch enrollment quality scoring
+- Role-based access for admins
+- Advanced analytics and reporting
+
+## 📝 License
+MIT License - see [LICENSE](LICENSE).
+
+---
+FaceAttend – Kiosk-grade attendance made simple.

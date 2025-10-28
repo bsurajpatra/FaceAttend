@@ -1,10 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import { Image } from 'expo-image';
+import { useFocusEffect } from '@react-navigation/native';
 import { styles } from './styles/dashboard-styles';
 import { HourSelectModal } from './hour-select-modal';
 import AttendanceReports from './attendance-reports';
 import { TimetableDay as ApiTimetableDay, Session as ApiSession } from '@/api/timetable';
+import { TIME_SLOTS, getCurrentSession } from '@/utils/timeSlots';
+import { getStudentsApi } from '@/api/students';
+import { checkAttendanceStatusApi } from '@/api/attendance';
 
 type User = {
   id: string;
@@ -34,23 +38,6 @@ type DashboardProps = {
   onViewReports?: () => void;
 };
 
-// College time slots (11 working hours)
-// Added normalized start/end minutes to correctly compare with current time (24h)
-const TIME_SLOTS = [
-  { hour: 1, time: '7:10 - 8:00', startMinutes: 7 * 60 + 10, endMinutes: 8 * 60 + 0 },
-  { hour: 2, time: '8:00 - 8:50', startMinutes: 8 * 60 + 0, endMinutes: 8 * 60 + 50 },
-  { hour: 3, time: '9:20 - 10:10', startMinutes: 9 * 60 + 20, endMinutes: 10 * 60 + 10 },
-  { hour: 4, time: '10:10 - 11:00', startMinutes: 10 * 60 + 10, endMinutes: 11 * 60 + 0 },
-  { hour: 5, time: '11:10 - 12:00', startMinutes: 11 * 60 + 10, endMinutes: 12 * 60 + 0 },
-  { hour: 6, time: '12:00 - 12:50', startMinutes: 12 * 60 + 0, endMinutes: 12 * 60 + 50 },
-  { hour: 7, time: '12:55 - 1:45', startMinutes: 12 * 60 + 55, endMinutes: 13 * 60 + 45 },
-  { hour: 8, time: '1:50 - 2:40', startMinutes: 13 * 60 + 50, endMinutes: 14 * 60 + 40 },
-  { hour: 9, time: '2:40 - 3:30', startMinutes: 14 * 60 + 40, endMinutes: 15 * 60 + 30 },
-  { hour: 10, time: '3:50 - 4:40', startMinutes: 15 * 60 + 50, endMinutes: 16 * 60 + 40 },
-  { hour: 11, time: '4:40 - 5:30', startMinutes: 16 * 60 + 40, endMinutes: 17 * 60 + 30 },
-];
-
-const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 export default function Dashboard({ 
   user, 
@@ -61,49 +48,109 @@ export default function Dashboard({
   onViewReports
 }: DashboardProps) {
   const [isHoursModalVisible, setHoursModalVisible] = useState(false);
-  const [showReports, setShowReports] = useState(false);
+  const [currentSession, setCurrentSession] = useState<any>(null);
+  const [hasRegisteredStudents, setHasRegisteredStudents] = useState<boolean | null>(null);
+  const [isCheckingStudents, setIsCheckingStudents] = useState(false);
+  const [attendanceStatus, setAttendanceStatus] = useState<any>(null);
+  const [isCheckingAttendance, setIsCheckingAttendance] = useState(false);
 
-  const getCurrentSession = () => {
-    const now = new Date();
-    const currentDay = DAYS[now.getDay()];
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
+  // Format location to show both address and coordinates
+  const formatLocation = (location: any) => {
+    if (!location) return 'Location unavailable';
+    
+    const hasAddress = location.address && location.address.trim() !== '';
+    const hasCoordinates = location.latitude && location.longitude;
+    
+    if (hasAddress && hasCoordinates) {
+      return `${location.address} (${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)})`;
+    } else if (hasAddress) {
+      return location.address;
+    } else if (hasCoordinates) {
+      return `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`;
+    } else {
+      return 'Location unavailable';
+    }
+  };
 
-    // Find today's schedule
-    const todaySchedule = timetable && Array.isArray(timetable) && timetable.length > 0 
-      ? timetable.find(day => day && day.day === currentDay) 
-      : null;
-    if (!todaySchedule || !todaySchedule.sessions || todaySchedule.sessions.length === 0) return null;
-
-    // Current time in minutes since midnight (24h)
-    const currentTimeInMinutes = currentHour * 60 + currentMinute;
-
-    // Find current session
-    for (const session of todaySchedule.sessions) {
-      const timeSlots = session.hours.map(hour => TIME_SLOTS[hour - 1]).filter(Boolean);
-      if (timeSlots.length === 0) continue;
-
-      // Get combined time range
-      const firstSlot = timeSlots[0];
-      const lastSlot = timeSlots[timeSlots.length - 1];
-      if (!firstSlot || !lastSlot) continue;
-
-      const sessionStartTime = firstSlot.startMinutes as number;
-      const sessionEndTime = lastSlot.endMinutes as number;
-
-      if (currentTimeInMinutes >= sessionStartTime && currentTimeInMinutes <= sessionEndTime) {
-        const [, endTime] = lastSlot.time.split(' - ');
-        const timeRange = `${firstSlot.time.split(' - ')[0]} - ${endTime}`;
-        return {
-          ...session,
-          timeSlot: timeRange,
-          timeSlots: timeSlots,
-        };
-      }
+  // Check if students are registered for the current session
+  const checkRegisteredStudents = async (session: any) => {
+    if (!session) {
+      setHasRegisteredStudents(null);
+      return;
     }
 
-    return null;
+    setIsCheckingStudents(true);
+    try {
+      const response = await getStudentsApi(session.subject, session.section);
+      setHasRegisteredStudents(response.students.length > 0);
+    } catch (error: any) {
+      // Handle 401 errors (logged out) gracefully
+      if (error?.response?.status === 401) {
+        console.log('User not authenticated, skipping student check');
+        setHasRegisteredStudents(false);
+      } else {
+        console.error('Failed to check registered students:', error);
+        setHasRegisteredStudents(false);
+      }
+    } finally {
+      setIsCheckingStudents(false);
+    }
   };
+
+  // Check if attendance has been taken for today's session
+  const checkAttendanceStatus = async (session: any) => {
+    if (!session) {
+      setAttendanceStatus(null);
+      return;
+    }
+
+    setIsCheckingAttendance(true);
+    try {
+      const response = await checkAttendanceStatusApi(session.subject, session.section, session.sessionType);
+      setAttendanceStatus(response);
+    } catch (error: any) {
+      // Handle 401 errors (logged out) gracefully
+      if (error?.response?.status === 401) {
+        console.log('User not authenticated, skipping attendance status check');
+        setAttendanceStatus(null);
+      } else {
+        console.error('Failed to check attendance status:', error);
+        setAttendanceStatus(null);
+      }
+    } finally {
+      setIsCheckingAttendance(false);
+    }
+  };
+
+  // Update current session when timetable changes
+  useEffect(() => {
+    const session = getCurrentSession(timetable);
+    setCurrentSession(session);
+    checkRegisteredStudents(session);
+    checkAttendanceStatus(session);
+  }, [timetable]);
+
+  // Update current session every 30 seconds to handle time changes and student updates
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const session = getCurrentSession(timetable);
+      setCurrentSession(session);
+      checkRegisteredStudents(session);
+      checkAttendanceStatus(session);
+    }, 30000); // Check every 30 seconds
+
+    return () => clearInterval(interval);
+  }, [timetable]);
+
+  // Check for students and attendance status whenever dashboard comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      if (currentSession) {
+        checkRegisteredStudents(currentSession);
+        checkAttendanceStatus(currentSession);
+      }
+    }, [currentSession])
+  );
   return (
     <View style={styles.container}>
       {/* Header with logo, app name, and logout */}
@@ -118,12 +165,17 @@ export default function Dashboard({
           <Text style={styles.appName}>FaceAttend</Text>
         </View>
         <Pressable
-          onPress={onLogout}
+          onPress={() => {
+            try {
+              // @ts-ignore using expo-router link via global import
+              require('expo-router').router.push('/settings');
+            } catch {}
+          }}
           style={({ pressed }) => [styles.headerLogoutButton, pressed && styles.headerLogoutButtonPressed]}
           accessibilityRole="button"
-          accessibilityLabel="Logout"
+          accessibilityLabel="Settings"
         >
-          <Text style={styles.headerLogoutText}>Logout</Text>
+          <Text style={styles.headerLogoutText}>Settings</Text>
         </Pressable>
       </View>
 
@@ -136,7 +188,6 @@ export default function Dashboard({
 
         {/* Current Session Card */}
         {(() => {
-          const currentSession = getCurrentSession();
           if (currentSession) {
             return (
               <View style={styles.currentSessionCard}>
@@ -147,23 +198,82 @@ export default function Dashboard({
                     <View style={styles.sessionTypeBadge}>
                       <Text style={styles.sessionTypeText}>{currentSession.sessionType}</Text>
                     </View>
+                    {/* Refresh Button - Top Right */}
+                    <Pressable
+                      onPress={() => {
+                        checkRegisteredStudents(currentSession);
+                        checkAttendanceStatus(currentSession);
+                      }}
+                      style={({ pressed }) => [
+                        styles.refreshButton,
+                        pressed && styles.refreshButtonPressed
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel="Refresh student and attendance status"
+                    >
+                      <Text style={styles.refreshButtonText}>🔄</Text>
+                    </Pressable>
                   </View>
                   <View style={styles.sessionDetails}>
                     <Text style={styles.detailText}>Section: {currentSession.section}</Text>
                     <Text style={styles.detailText}>Room: {currentSession.roomNumber}</Text>
                     <Text style={styles.detailText}>Time: {currentSession.timeSlot}</Text>
+                    {attendanceStatus?.location && (
+                      <Text style={styles.detailText}>
+                        {formatLocation(attendanceStatus.location)} 📍
+                      </Text>
+                    )}
                   </View>
-                  <Pressable
-                    onPress={() => setHoursModalVisible(true)}
-                    style={({ pressed }) => [
-                      styles.takeAttendanceButton,
-                      pressed && styles.takeAttendanceButtonPressed
-                    ]}
-                    accessibilityRole="button"
-                    accessibilityLabel="Take attendance for current session"
-                  >
-                    <Text style={styles.takeAttendanceButtonText}>Take Attendance</Text>
-                  </Pressable>
+                  {(() => {
+                    if (hasRegisteredStudents === false) {
+                      return (
+                        <View style={[styles.takeAttendanceButton, styles.disabledButton]}>
+                          <Text style={styles.takeAttendanceButtonText}>No Students Registered</Text>
+                        </View>
+                      );
+                    }
+                    
+                    if (attendanceStatus?.hasAttendance) {
+                      const attendancePercentage = Math.round((attendanceStatus.presentStudents / attendanceStatus.totalStudents) * 100);
+                      const attendanceTime = new Date(attendanceStatus.updatedAt).toLocaleTimeString();
+                      return (
+                        <View style={styles.attendanceTakenContainer}>
+                          <View style={styles.attendanceTakenInfo}>
+                            <Text style={styles.attendanceTakenButtonText}>✅ Attendance Taken</Text>
+                            <Text style={styles.attendanceDetailsText}>
+                              {attendanceStatus.presentStudents}/{attendanceStatus.totalStudents} present ({attendancePercentage}%)
+                            </Text>
+                            <Text style={styles.attendanceTimeText}>Completed at {attendanceTime}</Text>
+                          </View>
+                          <Pressable
+                            onPress={() => setHoursModalVisible(true)}
+                            style={({ pressed }) => [
+                              styles.retakeAttendanceButton,
+                              pressed && styles.retakeAttendanceButtonPressed
+                            ]}
+                            accessibilityRole="button"
+                            accessibilityLabel="Retake attendance for missed students"
+                          >
+                            <Text style={styles.retakeAttendanceButtonText}>Retake Attendance</Text>
+                          </Pressable>
+                        </View>
+                      );
+                    }
+                    
+                    return (
+                      <Pressable
+                        onPress={() => setHoursModalVisible(true)}
+                        style={({ pressed }) => [
+                          styles.takeAttendanceButton,
+                          pressed && styles.takeAttendanceButtonPressed
+                        ]}
+                        accessibilityRole="button"
+                        accessibilityLabel="Take attendance for current session"
+                      >
+                        <Text style={styles.takeAttendanceButtonText}>Take Attendance</Text>
+                      </Pressable>
+                    );
+                  })()}
                 </View>
                 {isHoursModalVisible && (
                   <HourSelectModal
@@ -218,22 +328,21 @@ export default function Dashboard({
         </Pressable>
 
         <Pressable
-          onPress={() => setShowReports(true)}
+          onPress={() => {
+            try {
+              // @ts-ignore using expo-router link via global import
+              require('expo-router').router.push('/attendance-reports');
+            } catch {}
+          }}
           style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
           accessibilityRole="button"
           accessibilityLabel="View Reports"
         >
-          <Text style={styles.actionButtonText}>View Reports</Text>
+          <Text style={styles.actionButtonText}>View Attendance Reports</Text>
         </Pressable>
       </View>
       </ScrollView>
 
-      {/* Attendance Reports Modal */}
-      {showReports && (
-        <AttendanceReports
-          onClose={() => setShowReports(false)}
-        />
-      )}
     </View>
   );
 }

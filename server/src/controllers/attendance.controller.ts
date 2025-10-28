@@ -3,14 +3,14 @@ import mongoose from 'mongoose';
 import { AttendanceSession } from '../models/Attendance';
 import { Student } from '../models/Student';
 import { Faculty } from '../models/Faculty';
-import { getHuman, imageBase64ToTensor } from '../services/human';
+import { getFaceEmbedding } from '../services/facenet.service';
 
-// Face matching threshold (cosine similarity) - very low for mock embeddings
-const FACE_MATCH_THRESHOLD = 0.1;
+// Face matching threshold (cosine similarity) - higher threshold for FaceNet embeddings
+const FACE_MATCH_THRESHOLD = 0.6;
 
 // Rate limiting for session creation
 const sessionCreationTimes = new Map<string, number>();
-const SESSION_CREATION_COOLDOWN = 5000; // 5 seconds
+const SESSION_CREATION_COOLDOWN = 1000; // 1 second
 
 // Calculate cosine similarity between two face descriptors
 function cosineSimilarity(a: number[], b: number[]): number {
@@ -31,31 +31,42 @@ function cosineSimilarity(a: number[], b: number[]): number {
   return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
-// Find best matching student for a face descriptor
+// Find best matching student for a face embedding
 async function findMatchingStudent(
-  faceDescriptor: number[], 
+  faceEmbedding: number[], 
   enrolledStudents: any[]
 ): Promise<{ student: any; confidence: number } | null> {
   let bestMatch = null;
   let bestConfidence = 0;
   
-  console.log('🔍 Finding matching student...');
-  console.log('Input descriptor length:', faceDescriptor.length);
+  console.log('🔍 Finding matching student using FaceNet embeddings...');
+  console.log('Input embedding length:', faceEmbedding.length);
   console.log('Enrolled students count:', enrolledStudents.length);
   
   for (const student of enrolledStudents) {
-    if (!student.faceDescriptor || student.faceDescriptor.length === 0) {
-      console.log(`⚠️ Student ${student.name} has no face descriptor`);
+    // Check both embeddings and legacy faceDescriptor
+    const embeddings = student.embeddings || [];
+    const legacyDescriptor = student.faceDescriptor || [];
+    
+    if (embeddings.length === 0 && legacyDescriptor.length === 0) {
+      console.log(`⚠️ Student ${student.name} has no face data`);
       continue;
     }
     
-    const similarity = cosineSimilarity(faceDescriptor, student.faceDescriptor);
-    console.log(`📊 Comparing with ${student.name}: similarity = ${similarity.toFixed(4)}`);
+    // Try FaceNet embeddings first, then fall back to legacy descriptor
+    const faceDataArray = embeddings.length > 0 ? embeddings : [legacyDescriptor];
     
-    if (similarity > bestConfidence && similarity >= FACE_MATCH_THRESHOLD) {
-      bestConfidence = similarity;
-      bestMatch = student;
-      console.log(`✅ New best match: ${student.name} with confidence ${similarity.toFixed(4)}`);
+    for (const storedEmbedding of faceDataArray) {
+      if (!storedEmbedding || storedEmbedding.length === 0) continue;
+      
+      const similarity = cosineSimilarity(faceEmbedding, storedEmbedding);
+      console.log(`📊 Comparing with ${student.name}: similarity = ${similarity.toFixed(4)}`);
+      
+      if (similarity > bestConfidence && similarity >= FACE_MATCH_THRESHOLD) {
+        bestConfidence = similarity;
+        bestMatch = student;
+        console.log(`✅ New best match: ${student.name} with confidence ${similarity.toFixed(4)}`);
+      }
     }
   }
   
@@ -67,7 +78,7 @@ async function findMatchingStudent(
 export async function startAttendanceSession(req: Request, res: Response): Promise<void> {
   try {
     const facultyId = req.userId;
-    const { subject, section, sessionType, hours } = req.body;
+    const { subject, section, sessionType, hours, location } = req.body;
     
     if (!facultyId || !mongoose.isValidObjectId(facultyId)) {
       res.status(401).json({ message: 'Unauthorized' });
@@ -126,7 +137,7 @@ export async function startAttendanceSession(req: Request, res: Response): Promi
       'enrollments.subject': subject,
       'enrollments.section': section,
       'enrollments.facultyId': new mongoose.Types.ObjectId(facultyId)
-    }).select('name rollNumber faceDescriptor');
+    }).select('name rollNumber faceDescriptor embeddings');
     
     if (enrolledStudents.length === 0) {
       res.status(404).json({ 
@@ -148,6 +159,12 @@ export async function startAttendanceSession(req: Request, res: Response): Promi
       totalStudents: enrolledStudents.length,
       presentStudents: 0,
       absentStudents: enrolledStudents.length,
+      location: location ? {
+        latitude: location.latitude,
+        longitude: location.longitude,
+        address: location.address,
+        accuracy: location.accuracy
+      } : undefined,
       records: enrolledStudents.map(student => ({
         studentId: student._id,
         studentName: student.name,
@@ -165,7 +182,8 @@ export async function startAttendanceSession(req: Request, res: Response): Promi
         id: s._id,
         name: s.name,
         rollNumber: s.rollNumber,
-        hasFaceDescriptor: !!(s.faceDescriptor && s.faceDescriptor.length > 0)
+        hasFaceDescriptor: !!(s.faceDescriptor && s.faceDescriptor.length > 0),
+        hasFaceNetEmbeddings: !!(s.embeddings && s.embeddings.length > 0)
       }))
     });
     
@@ -179,7 +197,7 @@ export async function startAttendanceSession(req: Request, res: Response): Promi
 export async function markAttendance(req: Request, res: Response): Promise<void> {
   try {
     const facultyId = req.userId;
-    const { sessionId, faceDescriptor, faceImageBase64 } = req.body;
+    const { sessionId, faceImageBase64 } = req.body;
     
     if (!facultyId || !mongoose.isValidObjectId(facultyId)) {
       res.status(401).json({ message: 'Unauthorized' });
@@ -188,6 +206,14 @@ export async function markAttendance(req: Request, res: Response): Promise<void>
     
     if (!sessionId || !mongoose.isValidObjectId(sessionId)) {
       res.status(400).json({ message: 'Valid sessionId is required' });
+      return;
+    }
+    
+    if (!faceImageBase64) {
+      res.status(400).json({ 
+        message: 'Face image is required',
+        hint: 'Please provide faceImageBase64'
+      });
       return;
     }
     
@@ -204,61 +230,18 @@ export async function markAttendance(req: Request, res: Response): Promise<void>
       return;
     }
     
-    let finalDescriptor: number[] = [];
+    // Generate FaceNet embedding from the image
+    console.log('🔄 Processing face image with FaceNet...');
+    let faceEmbedding: number[];
     
-    // Process face descriptor
-    if (faceDescriptor && faceDescriptor.length > 0) {
-      finalDescriptor = faceDescriptor;
-    } else if (faceImageBase64) {
-      // Process face on server
-      try {
-        const imageData = await imageBase64ToTensor(faceImageBase64);
-        const human = await getHuman();
-        
-        // Check if we're using real Human library or fallback
-        if (human.detect && typeof human.detect === 'function') {
-          // Real Human library
-          console.log('🔄 Using real Human library for face detection...');
-          const result = await human.detect(imageData);
-          
-          if (!result.face || result.face.length === 0) {
-            res.status(400).json({ 
-              message: 'No face detected in the provided image',
-              hint: 'Please ensure the image contains a clear face'
-            });
-            return;
-          }
-          
-          const faceDescriptor = result.face[0].embedding;
-          if (!faceDescriptor || faceDescriptor.length === 0) {
-            res.status(400).json({ 
-              message: 'Could not extract face features from the image',
-              hint: 'Please ensure the face is clearly visible and well-lit'
-            });
-            return;
-          }
-          
-          finalDescriptor = Array.from(faceDescriptor);
-          console.log('✅ Real face descriptor extracted, length:', finalDescriptor.length);
-        } else {
-          // Fallback to mock detection
-          console.log('🔄 Using mock face detection...');
-          const result = await human.detect(imageData);
-          finalDescriptor = Array.from(result.face[0].embedding);
-          console.log('✅ Mock face descriptor generated, length:', finalDescriptor.length);
-        }
-      } catch (error: any) {
-        console.error('Server-side face processing error:', error);
-        res.status(500).json({ 
-          message: 'Failed to process face image on server',
-          hint: 'Please try capturing the image again with better lighting'
-        });
-        return;
-      }
-    } else {
+    try {
+      faceEmbedding = await getFaceEmbedding(faceImageBase64);
+      console.log('✅ FaceNet embedding generated, length:', faceEmbedding.length);
+    } catch (error: any) {
+      console.error('❌ FaceNet processing error:', error);
       res.status(400).json({ 
-        message: 'Face data is required',
-        hint: 'Please provide either faceDescriptor or faceImageBase64'
+        message: error.message || 'Failed to process face image',
+        hint: 'Please ensure the image contains a clear face and try again'
       });
       return;
     }
@@ -268,10 +251,10 @@ export async function markAttendance(req: Request, res: Response): Promise<void>
       'enrollments.subject': session.subject,
       'enrollments.section': session.section,
       'enrollments.facultyId': session.facultyId
-    }).select('_id name rollNumber faceDescriptor');
+    }).select('_id name rollNumber faceDescriptor embeddings');
     
     // Find matching student
-    const match = await findMatchingStudent(finalDescriptor, enrolledStudents);
+    const match = await findMatchingStudent(faceEmbedding, enrolledStudents);
     
     if (!match) {
       res.status(404).json({ 
@@ -302,7 +285,7 @@ export async function markAttendance(req: Request, res: Response): Promise<void>
         'enrollments.subject': session.subject,
         'enrollments.section': session.section,
         'enrollments.facultyId': session.facultyId
-      }).select('_id name rollNumber faceDescriptor');
+      }).select('_id name rollNumber faceDescriptor embeddings');
       
       // Check if the student exists in the latest enrollment
       const studentExists = latestEnrolledStudents.find(s => String(s._id) === String(match.student._id));
@@ -412,6 +395,62 @@ export async function markAttendance(req: Request, res: Response): Promise<void>
   }
 }
 
+// Check if attendance has been taken for today's session
+export async function checkAttendanceStatus(req: Request, res: Response): Promise<void> {
+  try {
+    const facultyId = req.userId;
+    const { subject, section, sessionType } = req.query;
+    
+    if (!facultyId || !mongoose.isValidObjectId(facultyId)) {
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+    
+    if (!subject || !section || !sessionType) {
+      res.status(400).json({ message: 'subject, section, and sessionType are required' });
+      return;
+    }
+    
+    // Check if session exists for today
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const existingSession = await AttendanceSession.findOne({
+      facultyId: new mongoose.Types.ObjectId(facultyId),
+      subject: subject as string,
+      section: section as string,
+      sessionType: sessionType as string,
+      date: today
+    });
+    
+    if (existingSession) {
+      res.status(200).json({
+        hasAttendance: true,
+        sessionId: existingSession._id,
+        totalStudents: existingSession.totalStudents,
+        presentStudents: existingSession.presentStudents,
+        absentStudents: existingSession.absentStudents,
+        location: existingSession.location ? {
+          latitude: existingSession.location.latitude,
+          longitude: existingSession.location.longitude,
+          address: existingSession.location.address,
+          accuracy: existingSession.location.accuracy
+        } : null,
+        createdAt: existingSession.createdAt,
+        updatedAt: existingSession.updatedAt
+      });
+    } else {
+      res.status(200).json({
+        hasAttendance: false
+      });
+    }
+    
+  } catch (error) {
+    console.error('Check attendance status error:', error);
+    res.status(500).json({ message: 'Failed to check attendance status' });
+  }
+}
+
 // Get attendance session details
 export async function getAttendanceSession(req: Request, res: Response): Promise<void> {
   try {
@@ -497,6 +536,90 @@ export async function getAttendanceSession(req: Request, res: Response): Promise
   }
 }
 
+// Get student attendance data for a specific subject/section/sessionType
+export async function getStudentAttendanceData(req: Request, res: Response): Promise<void> {
+  try {
+    const facultyId = req.userId;
+    const { subject, section, sessionType } = req.query;
+    
+    if (!facultyId || !mongoose.isValidObjectId(facultyId)) {
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+    
+    if (!subject || !section || !sessionType) {
+      res.status(400).json({ message: 'subject, section, and sessionType are required' });
+      return;
+    }
+    
+    // Get all attendance sessions for this subject/section/sessionType
+    const sessions = await AttendanceSession.find({
+      facultyId: new mongoose.Types.ObjectId(facultyId),
+      subject: subject as string,
+      section: section as string,
+      sessionType: sessionType as string
+    }).sort({ date: -1 }); // Most recent first
+    
+    // Get all students for this subject/section
+    const students = await Student.find({
+      'enrollments.subject': subject as string,
+      'enrollments.section': section as string,
+      'enrollments.facultyId': new mongoose.Types.ObjectId(facultyId)
+    }).select('name rollNumber');
+    
+    // Calculate attendance for each student
+    const studentAttendanceData = students.map(student => {
+      let totalSessions = 0;
+      let presentSessions = 0;
+      let lastPresentDate: Date | null = null;
+      let lastPresentSessionHours: string | null = null;
+      
+      sessions.forEach(session => {
+        totalSessions++;
+        const studentRecord = session.records.find(record => 
+          record.studentId.toString() === student._id.toString()
+        );
+        if (studentRecord && studentRecord.isPresent) {
+          presentSessions++;
+          // Update last present date if this session is more recent
+          if (!lastPresentDate || session.date > lastPresentDate) {
+            lastPresentDate = session.date;
+            // Store session hours for display
+            lastPresentSessionHours = session.hours.map(hour => `H${hour}`).join(', ');
+          }
+        }
+      });
+      
+      const attendancePercentage = totalSessions > 0 ? Math.round((presentSessions / totalSessions) * 100) : 0;
+      
+      return {
+        studentId: student._id,
+        name: student.name,
+        rollNumber: student.rollNumber,
+        totalSessions,
+        presentSessions,
+        absentSessions: totalSessions - presentSessions,
+        attendancePercentage,
+        lastAttendanceDate: lastPresentDate,
+        lastPresentSessionHours: lastPresentSessionHours
+      };
+    });
+    
+    res.status(200).json({
+      students: studentAttendanceData,
+      totalSessions: sessions.length,
+      dateRange: sessions.length > 0 ? {
+        from: sessions[sessions.length - 1].date,
+        to: sessions[0].date
+      } : null
+    });
+    
+  } catch (error) {
+    console.error('Get student attendance data error:', error);
+    res.status(500).json({ message: 'Failed to get student attendance data' });
+  }
+}
+
 // Get attendance reports
 export async function getAttendanceReports(req: Request, res: Response): Promise<void> {
   try {
@@ -559,6 +682,12 @@ export async function getAttendanceReports(req: Request, res: Response): Promise
           attendancePercentage: session.totalStudents > 0 
             ? Math.round((session.presentStudents / session.totalStudents) * 100) 
             : 0,
+          location: session.location ? {
+            latitude: session.location.latitude,
+            longitude: session.location.longitude,
+            address: session.location.address,
+            accuracy: session.location.accuracy
+          } : null,
           createdAt: session.createdAt,
           // Detailed student lists
           presentStudentsList: presentStudents,

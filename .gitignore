@@ -60,3 +60,10 @@ yarn-error.log*
 *.swp
 *.bak
 *.tmp
+
+venv/
+facenet_service/venv/
+
+# Python cache
+__pycache__/
+*.pyc

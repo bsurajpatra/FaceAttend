@@ -10,7 +10,8 @@ export interface StudentDocument extends Document {
   name: string;
   rollNumber: string;
   enrollments: Enrollment[];
-  faceDescriptor: number[];
+  faceDescriptor: number[]; // Legacy field - keeping for backward compatibility
+  embeddings: number[][]; // FaceNet embeddings - array of 512-dimensional vectors
   createdAt: Date;
 }
 
@@ -22,9 +23,10 @@ const EnrollmentSchema = new Schema<Enrollment>({
 
 const StudentSchema = new Schema<StudentDocument>({
   name: { type: String, required: true, trim: true },
-  rollNumber: { type: String, required: true, trim: true, index: true },
+  rollNumber: { type: String, required: true, trim: true },
   enrollments: { type: [EnrollmentSchema], default: [] },
-  faceDescriptor: { type: [Number], required: false, default: [] },
+  faceDescriptor: { type: [Number], required: false, default: [] }, // Legacy field
+  embeddings: { type: [[Number]], required: false, default: [] }, // FaceNet embeddings
   createdAt: { type: Date, default: Date.now },
 });
 

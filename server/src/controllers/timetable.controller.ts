@@ -1,6 +1,36 @@
 import { Request, Response } from 'express';
 import { Faculty } from '../models/Faculty';
 
+// Check for overlapping hours within the same day
+function hasOverlappingHours(timetable: any[]): { hasOverlap: boolean; conflictDetails?: string } {
+  for (const day of timetable) {
+    if (!day.sessions || day.sessions.length <= 1) continue;
+    
+    // Check each session against all other sessions on the same day
+    for (let i = 0; i < day.sessions.length; i++) {
+      for (let j = i + 1; j < day.sessions.length; j++) {
+        const session1 = day.sessions[i];
+        const session2 = day.sessions[j];
+        
+        // Check if any hours overlap
+        const hours1 = new Set(session1.hours);
+        const hours2 = new Set(session2.hours);
+        
+        for (const hour of hours1) {
+          if (hours2.has(hour)) {
+            return {
+              hasOverlap: true,
+              conflictDetails: `${session1.subject} (${session1.section}) and ${session2.subject} (${session2.section}) both scheduled at hour ${hour} on ${day.day}`
+            };
+          }
+        }
+      }
+    }
+  }
+  
+  return { hasOverlap: false };
+}
+
 export async function updateTimetable(req: Request, res: Response): Promise<void> {
   try {
     const { facultyId } = req.params;
@@ -13,7 +43,8 @@ export async function updateTimetable(req: Request, res: Response): Promise<void
 
     // Validate timetable structure
     for (const day of timetable) {
-      if (!day.sessions) continue;
+      // Skip validation if no sessions exist (allows empty timetable)
+      if (!day.sessions || day.sessions.length === 0) continue;
       
       for (const session of day.sessions) {
         if (!session.subject?.trim()) {
@@ -44,7 +75,39 @@ export async function updateTimetable(req: Request, res: Response): Promise<void
           });
           return;
         }
+        
+        // Validate hour range and consecutive hours
+        if (!session.hours.every((hour: number) => hour >= 1 && hour <= 24)) {
+          res.status(400).json({ 
+            message: `Invalid hour range for ${session.subject} on ${day.day}. Hours must be between 1-24`,
+            field: 'hours'
+          });
+          return;
+        }
+        
+        // Validate consecutive hours
+        const sortedHours = [...session.hours].sort((a, b) => a - b);
+        for (let i = 1; i < sortedHours.length; i++) {
+          if (sortedHours[i] - sortedHours[i - 1] !== 1) {
+            res.status(400).json({ 
+              message: `Hours must be consecutive for ${session.subject} on ${day.day}`,
+              field: 'hours'
+            });
+            return;
+          }
+        }
       }
+    }
+
+    // Check for overlapping hours
+    const overlapCheck = hasOverlappingHours(timetable);
+    if (overlapCheck.hasOverlap) {
+      res.status(400).json({ 
+        message: `Schedule conflict detected: ${overlapCheck.conflictDetails}`,
+        field: 'hours',
+        conflict: overlapCheck.conflictDetails
+      });
+      return;
     }
 
     const faculty = await Faculty.findByIdAndUpdate(

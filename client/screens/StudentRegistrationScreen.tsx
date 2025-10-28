@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, TextInput, Pressable, Modal, Alert, Platform, Image, SafeAreaView } from 'react-native';
+import { View, Text, TextInput, Pressable, Modal, Alert, Platform, Image, SafeAreaView, Linking } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
 import { getTimetableApi, TimetableDay } from '@/api/timetable';
 import Dropdown from '@/components/Dropdown';
 import { registerStudentApi } from '@/api/students';
-import { preloadFaceModels } from '@/utils/face-utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 
@@ -16,6 +16,7 @@ export default function StudentRegistrationScreen() {
   const [section, setSection] = useState<string | null>(null);
   const [sessionType, setSessionType] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [contextExpanded, setContextExpanded] = useState(true);
   const [faceDescriptor, setFaceDescriptor] = useState<number[] | null>(null);
   const [faceImageBase64, setFaceImageBase64] = useState<string | null>(null);
   const [capturedImageUri, setCapturedImageUri] = useState<string | null>(null);
@@ -30,10 +31,6 @@ export default function StudentRegistrationScreen() {
     const load = async () => {
       try {
         setLoading(true);
-        
-        // Preload face models for better performance
-        console.log('[StudentRegistration] Preloading face models...');
-        await preloadFaceModels();
         
         const userRaw = await AsyncStorage.getItem('user');
         if (!userRaw) return;
@@ -70,12 +67,109 @@ export default function StudentRegistrationScreen() {
   }, [timetable, subject, section]);
 
   const openCamera = async () => {
+    // Require context selections first
+    if (!subject || !section || !sessionType) {
+      Alert.alert('Select Class Context', 'Please select Subject, Section, and Component first.');
+      return;
+    }
     if (!permission?.granted) {
       const p = await requestPermission();
       if (!p.granted) return;
     }
     setCountdown(3);
     setCameraOpen(true);
+  };
+
+  const uploadPhoto = async () => {
+    // Require context selections first
+    if (!subject || !section || !sessionType) {
+      Alert.alert('Select Class Context', 'Please select Subject, Section, and Component first.');
+      return;
+    }
+
+    try {
+      // Check current permission status first
+      const currentPermission = await ImagePicker.getMediaLibraryPermissionsAsync();
+      
+      if (!currentPermission.granted) {
+        // Request permission to access media library
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert(
+            'Permission Required', 
+            'Media library access is required to upload photos. Please grant permission in Settings.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Open Settings', onPress: () => { 
+                try { 
+                  Linking.openSettings(); 
+                } catch (error) {
+                  console.error('Failed to open settings:', error);
+                }
+              }},
+            ]
+          );
+          return;
+        }
+      }
+
+      // Launch image picker
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        if (asset.base64) {
+          // Process the uploaded image similar to camera capture
+          try {
+            // Try client-side processing first
+            const { extractSingleFaceDescriptorAsync } = await import('@/utils/face-utils');
+            
+            const descriptor = await extractSingleFaceDescriptorAsync(asset.base64);
+            
+            if (descriptor && descriptor.length > 0) {
+              setFaceDescriptor(descriptor);
+              setFaceImageBase64(null); // Don't need base64 anymore
+              setCapturedImageUri(`data:image/jpeg;base64,${asset.base64}`); // Store for thumbnail display
+              Alert.alert('Success', 'Photo uploaded and processed successfully! You can now register the student.');
+            } else {
+              // Fallback: Store base64 for server processing
+              setFaceImageBase64(asset.base64);
+              setFaceDescriptor(null);
+              setCapturedImageUri(`data:image/jpeg;base64,${asset.base64}`); // Store for thumbnail display
+              Alert.alert(
+                'Photo Uploaded', 
+                'Image uploaded successfully. Face processing will be done on the server during registration.',
+                [
+                  { text: 'OK', onPress: () => {} }
+                ]
+              );
+            }
+          } catch (faceError: any) {
+            console.log('Client-side face processing failed, using server-side fallback:', faceError.message);
+            // Fallback: Store base64 for server processing
+            setFaceImageBase64(asset.base64);
+            setFaceDescriptor(null);
+            setCapturedImageUri(`data:image/jpeg;base64,${asset.base64}`); // Store for thumbnail display
+            Alert.alert(
+              'Photo Uploaded', 
+              'Image uploaded successfully. Face processing will be done on the server during registration.',
+              [
+                { text: 'OK', onPress: () => {} }
+              ]
+            );
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error uploading photo:', error);
+      Alert.alert('Error', 'Failed to upload photo. Please try again.');
+    }
   };
 
   useEffect(() => {
@@ -90,26 +184,17 @@ export default function StudentRegistrationScreen() {
 
   const captureFrame = async () => {
     try {
-      console.log('[StudentRegistration] requesting picture...');
       const photo = await cameraRef.current?.takePictureAsync({ base64: true, quality: 0.8 });
-      console.log('[StudentRegistration] picture taken?', !!photo, 'base64?', !!photo?.base64, 'size:', photo?.width, 'x', photo?.height);
       if (!photo?.base64) throw new Error('No frame');
       
       // Process face on client side - MANDATORY
-      console.log('[StudentRegistration] Processing face on client...');
-      console.log('[StudentRegistration] Base64 length:', photo.base64.length);
-      console.log('[StudentRegistration] Base64 preview:', photo.base64.substring(0, 50) + '...');
-      
       try {
         // Try client-side processing first
         const { extractSingleFaceDescriptorAsync } = await import('@/utils/face-utils');
-        console.log('[StudentRegistration] Face utils imported successfully');
         
         const descriptor = await extractSingleFaceDescriptorAsync(photo.base64);
-        console.log('[StudentRegistration] Face processing result:', descriptor ? `Descriptor length: ${descriptor.length}` : 'No descriptor');
         
         if (descriptor && descriptor.length > 0) {
-          console.log('[StudentRegistration] ✅ Face descriptor extracted, length:', descriptor.length);
           setFaceDescriptor(descriptor);
           setFaceImageBase64(null); // Don't need base64 anymore
           setCapturedImageUri(`data:image/jpeg;base64,${photo.base64}`); // Store for thumbnail display
@@ -117,7 +202,6 @@ export default function StudentRegistrationScreen() {
           Alert.alert('Success', 'Face captured and processed successfully! You can now register the student.');
         } else {
           // This is expected behavior - client-side processing returns null, use server-side fallback
-          console.log('[StudentRegistration] Client-side processing returned null, using server-side fallback');
           setFaceImageBase64(photo.base64);
           setFaceDescriptor(null);
           setCapturedImageUri(`data:image/jpeg;base64,${photo.base64}`); // Store for thumbnail display
@@ -131,11 +215,8 @@ export default function StudentRegistrationScreen() {
           );
         }
       } catch (faceError: any) {
-        console.error('[StudentRegistration] ❌ Client-side face processing failed:', faceError);
-        console.error('[StudentRegistration] Error details:', faceError.message);
         
         // Fallback: Store base64 for server processing
-        console.log('[StudentRegistration] Using fallback: storing base64 for server processing');
         setFaceImageBase64(photo.base64);
         setFaceDescriptor(null);
         setCapturedImageUri(`data:image/jpeg;base64,${photo.base64}`); // Store for thumbnail display
@@ -157,6 +238,16 @@ export default function StudentRegistrationScreen() {
 
   const canSubmit = name && rollNumber && subject && section && sessionType && faceReady;
 
+  // Auto-minimize context card when all selections are completed
+  useEffect(() => {
+    if (subject && section && sessionType) {
+      const timer = setTimeout(() => {
+        setContextExpanded(false);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [subject, section, sessionType]);
+
   const onRegister = async () => {
     if (!canSubmit || !subject || !section || !sessionType || !faceReady) return;
     
@@ -168,10 +259,6 @@ export default function StudentRegistrationScreen() {
     
     try {
       setLoading(true);
-      console.log('[StudentRegistration] Registering student...');
-      console.log('[StudentRegistration] Has face descriptor:', !!faceDescriptor);
-      console.log('[StudentRegistration] Has face base64:', !!faceImageBase64);
-      
       const res = await registerStudentApi({
         name,
         rollNumber,
@@ -181,20 +268,15 @@ export default function StudentRegistrationScreen() {
         faceDescriptor: faceDescriptor || [], // Send descriptor if available
         faceImageBase64: faceImageBase64 || undefined, // Send base64 if available
       });
-      console.log('[StudentRegistration] ✅ Student registered successfully');
       Alert.alert('Success', 'Student registered successfully!');
       
-      // Reset form
+      // Reset only student-specific fields; keep selected Subject/Section/Component
       setName('');
       setRollNumber('');
-      setSubject(null);
-      setSection(null);
-      setSessionType(null);
       setFaceDescriptor(null);
       setFaceImageBase64(null);
       setCapturedImageUri(null);
     } catch (e: any) {
-      console.error('[StudentRegistration] ❌ Registration failed:', e);
       const msg = e?.response?.data?.message || 'Registration failed';
       const hint = e?.response?.data?.hint || '';
       Alert.alert('Registration Failed', `${msg}${hint ? '\n\n' + hint : ''}`);
@@ -220,26 +302,89 @@ export default function StudentRegistrationScreen() {
       </View>
       
       <View style={{ flex: 1, padding: 16 }}>
-        <Text style={{ marginBottom: 6, fontWeight: '600' }}>Student Name</Text>
-        <TextInput value={name} onChangeText={setName} placeholder="Enter name" style={{ backgroundColor: 'white', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8, padding: 12, marginBottom: 12 }} />
-
-        <Text style={{ marginBottom: 6, fontWeight: '600' }}>Roll Number</Text>
-        <TextInput value={rollNumber} onChangeText={setRollNumber} placeholder="Enter roll number" autoCapitalize="characters" style={{ backgroundColor: 'white', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8, padding: 12, marginBottom: 12 }} />
-
-        <Dropdown label="Subject" value={subject} onChange={setSubject} options={subjectOptions} />
-        <Dropdown label="Section" value={section} onChange={setSection} options={sectionOptions} disabled={!subject} />
-        <Dropdown label="Session Type" value={sessionType} onChange={setSessionType} options={sessionOptions} disabled={!subject || !section} />
-
-        <Pressable
-          onPress={openCamera}
-          style={({ pressed }) => ({ backgroundColor: '#EF4444', paddingVertical: 12, borderRadius: 8, alignItems: 'center', opacity: pressed ? 0.9 : 1, marginBottom: 12 })}
+        {/* Step 1: Select class context */}
+        <Pressable 
+          onPress={() => setContextExpanded(!contextExpanded)}
+          style={{ backgroundColor: 'white', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, marginBottom: 16, overflow: 'hidden' }}
         >
-          <Text style={{ color: 'white', fontWeight: '600' }}>{faceReady ? 'Retake Face' : 'Capture Face'}</Text>
+          {contextExpanded || (!subject || !section || !sessionType) ? (
+            <View style={{ padding: 12 }}>
+              <Text style={{ fontWeight: '700', marginBottom: 8 }}>Step 1: Select Class Context</Text>
+              <Dropdown label="Subject" value={subject} onChange={(v) => { setSubject(v); setSection(null); setSessionType(null); }} options={subjectOptions} />
+              <Dropdown label="Section" value={section} onChange={(v) => { setSection(v); setSessionType(null); }} options={sectionOptions} disabled={!subject} />
+              <Dropdown label="Component (Session Type)" value={sessionType} onChange={setSessionType} options={sessionOptions} disabled={!subject || !section} />
+            </View>
+          ) : (
+            <View style={{ padding: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontWeight: '700', marginBottom: 4 }}>Step 1: Class Context</Text>
+                <Text style={{ color: '#6B7280', fontSize: 13 }}>{subject} • {section} • {sessionType}</Text>
+              </View>
+              <Text style={{ color: '#9CA3AF', fontSize: 16 }}>▲</Text>
+            </View>
+          )}
         </Pressable>
+
+        {/* Step 2: Student details & face capture (enabled after context) */}
+        <View style={{ backgroundColor: 'white', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, padding: 12 }}>
+          <Text style={{ fontWeight: '700', marginBottom: 8 }}>Step 2: Student Details</Text>
+          <Text style={{ marginBottom: 6, fontWeight: '600', color: !subject || !section || !sessionType ? '#9CA3AF' : '#111827' }}>Student Name</Text>
+          <TextInput
+            value={name}
+            onChangeText={setName}
+            placeholder={!subject || !section || !sessionType ? 'Select class context first' : 'Enter name'}
+            editable={!!subject && !!section && !!sessionType}
+            style={{ backgroundColor: !subject || !section || !sessionType ? '#F3F4F6' : 'white', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8, padding: 12, marginBottom: 12 }}
+          />
+
+          <Text style={{ marginBottom: 6, fontWeight: '600', color: !subject || !section || !sessionType ? '#9CA3AF' : '#111827' }}>Roll Number</Text>
+          <TextInput
+            value={rollNumber}
+            onChangeText={setRollNumber}
+            placeholder={!subject || !section || !sessionType ? 'Select class context first' : 'Enter roll number'}
+            autoCapitalize="characters"
+            editable={!!subject && !!section && !!sessionType}
+            style={{ backgroundColor: !subject || !section || !sessionType ? '#F3F4F6' : 'white', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8, padding: 12, marginBottom: 12 }}
+          />
+
+          {/* Face Capture Options */}
+          <Text style={{ marginBottom: 8, fontWeight: '600', color: !subject || !section || !sessionType ? '#9CA3AF' : '#111827' }}>Face Photo</Text>
+          
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+            <Pressable
+              onPress={openCamera}
+              disabled={!subject || !section || !sessionType}
+              style={({ pressed }) => ({ 
+                flex: 1,
+                backgroundColor: !subject || !section || !sessionType ? '#9CA3AF' : '#EF4444', 
+                paddingVertical: 12, 
+                borderRadius: 8, 
+                alignItems: 'center', 
+                opacity: pressed ? 0.9 : 1 
+              })}
+            >
+              <Text style={{ color: 'white', fontWeight: '600' }}>📷 Capture</Text>
+            </Pressable>
+            
+            <Pressable
+              onPress={uploadPhoto}
+              disabled={!subject || !section || !sessionType}
+              style={({ pressed }) => ({ 
+                flex: 1,
+                backgroundColor: !subject || !section || !sessionType ? '#9CA3AF' : '#3B82F6', 
+                paddingVertical: 12, 
+                borderRadius: 8, 
+                alignItems: 'center', 
+                opacity: pressed ? 0.9 : 1 
+              })}
+            >
+              <Text style={{ color: 'white', fontWeight: '600' }}>📁 Upload</Text>
+            </Pressable>
+          </View>
 
             {faceReady && (
               <View style={{ marginBottom: 12 }}>
-                <Text style={{ color: '#10B981', fontWeight: '600', marginBottom: 8 }}>Face captured ✔</Text>
+                <Text style={{ color: '#10B981', fontWeight: '600', marginBottom: 8 }}>Face photo ready ✔</Text>
                 {capturedImageUri && (
                   <View style={{ alignItems: 'center', backgroundColor: '#F0FDF4', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#BBF7D0' }}>
                     <Image
@@ -261,13 +406,14 @@ export default function StudentRegistrationScreen() {
               </View>
             )}
 
-        <Pressable
-          onPress={onRegister}
-          disabled={!canSubmit || !!loading}
-          style={({ pressed }) => ({ backgroundColor: !canSubmit ? '#9CA3AF' : '#10B981', paddingVertical: 12, borderRadius: 8, alignItems: 'center', opacity: pressed ? 0.95 : 1 })}
-        >
-          <Text style={{ color: 'white', fontWeight: '700' }}>{loading ? 'Registering...' : 'Register'}</Text>
-        </Pressable>
+          <Pressable
+            onPress={onRegister}
+            disabled={!canSubmit || !!loading}
+            style={({ pressed }) => ({ backgroundColor: !canSubmit ? '#9CA3AF' : '#10B981', paddingVertical: 12, borderRadius: 8, alignItems: 'center', opacity: pressed ? 0.95 : 1 })}
+          >
+            <Text style={{ color: 'white', fontWeight: '700' }}>{loading ? 'Registering...' : 'Register'}</Text>
+          </Pressable>
+        </View>
       </View>
 
       <Modal visible={cameraOpen} animationType="slide" onRequestClose={() => setCameraOpen(false)}>

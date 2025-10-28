@@ -14,7 +14,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useKiosk } from '../contexts/KioskContext';
 import { PasswordModal } from './PasswordModal';
 import { markAttendanceApi, MarkAttendanceInput } from '@/api/attendance';
-import { extractSingleFaceDescriptorAsync } from '@/utils/face-utils';
+import { getTimeRange, getSessionDuration } from '@/utils/timeSlots';
 
 type LiveAttendanceProps = {
   sessionId: string;
@@ -25,6 +25,16 @@ type LiveAttendanceProps = {
   totalStudents: number;
   onAttendanceMarked: (data: any) => void;
   onClose: () => void;
+  existingAttendance?: {
+    presentStudents: number;
+    absentStudents: number;
+    markedStudents: Array<{
+      id: string;
+      name: string;
+      rollNumber: string;
+      isPresent: boolean;
+    }>;
+  };
 };
 
 type AttendanceStats = {
@@ -41,30 +51,60 @@ export default function LiveAttendance({
   hours, 
   totalStudents,
   onAttendanceMarked,
-  onClose 
+  onClose,
+  existingAttendance
 }: LiveAttendanceProps) {
   const [permission, requestPermission] = useCameraPermissions();
   const [isProcessing, setIsProcessing] = useState(false);
-  const [attendanceStats, setAttendanceStats] = useState<AttendanceStats>({
-    present: 0,
-    absent: totalStudents,
-    total: totalStudents
+  const [attendanceStats, setAttendanceStats] = useState<AttendanceStats>(() => {
+    if (existingAttendance) {
+      return {
+        present: existingAttendance.presentStudents,
+        absent: existingAttendance.absentStudents,
+        total: totalStudents
+      };
+    }
+    return {
+      present: 0,
+      absent: totalStudents,
+      total: totalStudents
+    };
   });
   const [recentlyMarked, setRecentlyMarked] = useState<string[]>([]);
   const [isDetecting, setIsDetecting] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const [markedStudents, setMarkedStudents] = useState<Set<string>>(new Set());
-  const [showSuccessMessage, setShowSuccessMessage] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [statusType, setStatusType] = useState<'success' | 'duplicate' | 'notfound' | 'error' | null>(null);
   const [isButtonDisabled, setIsButtonDisabled] = useState(false);
   const [lastProcessedImage, setLastProcessedImage] = useState<string | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
-  const [debugInfo, setDebugInfo] = useState<string[]>([]);
   
   const cameraRef = useRef<CameraView>(null);
   const detectionIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const markedStudentsRef = useRef<Set<string>>(new Set());
   const isDetectingRef = useRef<boolean>(false);
   const { isKioskMode, enableKioskMode, showPasswordModal, setShowPasswordModal } = useKiosk();
+
+  // Initialize marked students with existing attendance data
+  useEffect(() => {
+    if (existingAttendance) {
+      const alreadyMarked = new Set(
+        existingAttendance.markedStudents
+          .filter(student => student.isPresent)
+          .map(student => student.id)
+      );
+      markedStudentsRef.current = alreadyMarked;
+      setMarkedStudents(alreadyMarked);
+      
+      // Add recently marked students to the display
+      const recentlyMarkedNames = existingAttendance.markedStudents
+        .filter(student => student.isPresent)
+        .map(student => `${student.name} (${student.rollNumber})`)
+        .slice(0, 4);
+      setRecentlyMarked(recentlyMarkedNames);
+    }
+  }, [existingAttendance]);
 
   // Enable kiosk mode when component mounts
   useEffect(() => {
@@ -84,10 +124,8 @@ export default function LiveAttendance({
 
   // Start continuous face detection
   const startFaceDetection = useCallback(() => {
-    console.log('startFaceDetection called - detectionIntervalRef:', !!detectionIntervalRef.current, 'isInitialized:', isInitialized, 'isDetecting:', isDetecting);
     
     if (detectionIntervalRef.current) {
-      console.log('Detection already running, clearing interval...');
       clearInterval(detectionIntervalRef.current);
       detectionIntervalRef.current = null;
       setIsDetecting(false);
@@ -95,26 +133,21 @@ export default function LiveAttendance({
     }
     
     if (!isInitialized) {
-      console.log('Camera not initialized yet');
       return;
     }
     
-    console.log('Starting face detection...');
     setIsDetecting(true);
     isDetectingRef.current = true;
     
     // Small delay to ensure state is set
     setTimeout(() => {
       detectionIntervalRef.current = setInterval(async () => {
-      console.log('Detection interval tick - isProcessing:', isProcessing, 'cameraRef:', !!cameraRef.current, 'isInitialized:', isInitialized, 'isDetecting:', isDetectingRef.current);
       
       if (isProcessing || !cameraRef.current || !isInitialized || !isDetectingRef.current) {
-        console.log('Skipping detection - conditions not met');
         return;
       }
       
       try {
-        console.log('Starting image capture...');
         setIsProcessing(true);
         
         // Capture frame
@@ -122,8 +155,6 @@ export default function LiveAttendance({
           quality: 0.7,
           base64: true,
         });
-        
-        console.log('Photo captured:', !!photo?.base64);
         
         if (!photo?.base64) {
           setIsProcessing(false);
@@ -139,30 +170,8 @@ export default function LiveAttendance({
         setLastProcessedImage(imageHash);
         
         // Process face descriptor
-        let faceDescriptor: number[] | null = null;
-        try {
-          const debugMsg = `Processing image ${new Date().toLocaleTimeString()}`;
-          setDebugInfo(prev => [debugMsg, ...prev.slice(0, 4)]);
-          
-          faceDescriptor = await extractSingleFaceDescriptorAsync(photo.base64);
-          
-          if (faceDescriptor) {
-            const faceMsg = `Face detected! Descriptor length: ${faceDescriptor.length}`;
-            setDebugInfo(prev => [faceMsg, ...prev.slice(0, 4)]);
-          } else {
-            const noFaceMsg = `No face detected in image`;
-            setDebugInfo(prev => [noFaceMsg, ...prev.slice(0, 4)]);
-          }
-        } catch (faceError: any) {
-          console.log('Face processing error:', faceError);
-          const errorMsg = `Face processing error: ${faceError.message}`;
-          setDebugInfo(prev => [errorMsg, ...prev.slice(0, 4)]);
-          setIsProcessing(false);
-          return;
-        }
-        
-        // Since we're now using server-side processing, we'll always send the image
-        console.log('Using server-side face processing...');
+        // All face recognition is handled by the Python FaceNet microservice
+        // We'll send the image directly for server-side processing
         
         // Mark attendance with image data for server-side processing
         const markData: MarkAttendanceInput = {
@@ -172,11 +181,12 @@ export default function LiveAttendance({
         
         try {
             const result = await markAttendanceApi(markData);
-            console.log('Attendance marked successfully:', result);
             
-            // Check if student was already marked to prevent duplicates
+            // Check server response message to determine if it's a duplicate
             const studentId = result.student.id;
-            if (!markedStudentsRef.current.has(studentId)) {
+            const isAlreadyMarked = result.message === 'Student already marked present';
+            
+            if (!isAlreadyMarked) {
               // Update UI
               setAttendanceStats({
                 present: result.attendance.present,
@@ -189,13 +199,15 @@ export default function LiveAttendance({
               setMarkedStudents(new Set(markedStudentsRef.current));
               
               // Show success feedback
-              setShowSuccessMessage(`✅ ${result.student.name} marked present!`);
-              setRecentlyMarked(prev => [result.student.name, ...prev.slice(0, 4)]);
+              setStatusType('success');
+              setStatusMessage(`✅ ${result.student.name} (ID: ${result.student.rollNumber}) marked present!`);
+              setRecentlyMarked(prev => [`${result.student.name} (${result.student.rollNumber})`, ...prev.slice(0, 4)]);
               onAttendanceMarked(result);
               
               // Clear success message after 2 seconds
               setTimeout(() => {
-                setShowSuccessMessage(null);
+                setStatusMessage(null);
+                setStatusType(null);
               }, 2000);
               
               // Clear recent list after 5 seconds
@@ -204,34 +216,34 @@ export default function LiveAttendance({
               }, 5000);
             } else {
               // Show duplicate punch message
-              setShowSuccessMessage(`⚠️ ${result.student.name} already marked`);
+              setStatusType('duplicate');
+              setStatusMessage(`⚠️ ${result.student.name} (ID: ${result.student.rollNumber}) already marked`);
               setTimeout(() => {
-                setShowSuccessMessage(null);
+                setStatusMessage(null);
+                setStatusType(null);
               }, 1500);
             }
           } catch (apiError: any) {
-            console.log('API Error:', apiError.response?.data || apiError.message);
-            
-            // Add debug info
-            const errorMsg = `API Error: ${apiError.response?.status || 'Unknown'} - ${apiError.response?.data?.message || apiError.message}`;
-            setDebugInfo(prev => [errorMsg, ...prev.slice(0, 4)]);
             
             // Show user-friendly error message
             if (apiError.response?.status === 404) {
-              setShowSuccessMessage('❌ No matching student found');
+              setStatusType('notfound');
+              setStatusMessage('❌ No matching student found');
             } else if (apiError.response?.status === 400) {
-              setShowSuccessMessage('❌ Face not recognized');
+              setStatusType('notfound');
+              setStatusMessage('❌ Face not recognized');
             } else {
-              setShowSuccessMessage('❌ Detection failed');
+              setStatusType('error');
+              setStatusMessage('❌ Detection failed');
             }
             
             setTimeout(() => {
-              setShowSuccessMessage(null);
+              setStatusMessage(null);
+              setStatusType(null);
             }, 2000);
           }
         } catch (error: any) {
           // Silently handle errors to avoid interrupting detection
-          console.log('Face detection error:', error.message);
         } finally {
           setIsProcessing(false);
         }
@@ -241,7 +253,6 @@ export default function LiveAttendance({
 
   // Stop face detection
   const stopFaceDetection = useCallback(() => {
-    console.log('Stopping face detection...');
     if (detectionIntervalRef.current) {
       clearInterval(detectionIntervalRef.current);
       detectionIntervalRef.current = null;
@@ -250,8 +261,7 @@ export default function LiveAttendance({
     isDetectingRef.current = false;
     setIsProcessing(false);
     setLastProcessedImage(null); // Clear image hash
-    markedStudentsRef.current.clear(); // Clear marked students
-    setMarkedStudents(new Set());
+    // DO NOT clear markedStudentsRef - we want to maintain the list of already marked students
   }, []);
 
   // Cleanup on unmount
@@ -362,7 +372,7 @@ export default function LiveAttendance({
           
           <View style={styles.sessionInfo}>
             <Text style={styles.sessionText}>{subject} - {section}</Text>
-            <Text style={styles.sessionSubtext}>{sessionType} • Hours: {hours.join(', ')}</Text>
+            <Text style={styles.sessionSubtext}>{sessionType} • {getTimeRange(hours)} ({getSessionDuration(hours)})</Text>
           </View>
         </View>
 
@@ -400,55 +410,26 @@ export default function LiveAttendance({
           )}
         </View>
 
-        {/* Attendance Stats */}
-        <View style={styles.statsContainer}>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{attendanceStats.present}</Text>
-            <Text style={styles.statLabel}>Present</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{attendanceStats.absent}</Text>
-            <Text style={styles.statLabel}>Absent</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{attendanceStats.total}</Text>
-            <Text style={styles.statLabel}>Total</Text>
-          </View>
-        </View>
+        {/* Attendance Stats removed per request */}
 
-        {/* Success Message */}
-        {showSuccessMessage && (
-          <View style={styles.successMessage}>
-            <Text style={styles.successMessageText}>{showSuccessMessage}</Text>
-          </View>
-        )}
+        {/* Status messages moved to bottomControls to avoid overlap */}
 
-        {/* Recently Marked Students */}
-        {recentlyMarked.length > 0 && (
-          <View style={styles.recentlyMarked}>
-            <Text style={styles.recentlyMarkedTitle}>Recently Marked:</Text>
-            {recentlyMarked.map((name, index) => (
-              <Text key={index} style={styles.recentlyMarkedItem}>
-                ✅ {name}
-              </Text>
-            ))}
-          </View>
-        )}
-
-        {/* Debug Info */}
-        {debugInfo.length > 0 && (
-          <View style={styles.debugContainer}>
-            <Text style={styles.debugTitle}>Debug Info:</Text>
-            {debugInfo.map((info, index) => (
-              <Text key={index} style={styles.debugItem}>
-                {info}
-              </Text>
-            ))}
-          </View>
-        )}
+        {/* Recently Marked Students panel removed per request */}
 
         {/* Bottom Controls */}
         <View style={styles.bottomControls}>
+          {statusMessage && (
+            <View style={[
+              styles.statusBanner,
+              styles.statusBannerTopInControls,
+              statusType === 'success' && styles.statusBannerSuccess,
+              statusType === 'duplicate' && styles.statusBannerDuplicate,
+              statusType === 'notfound' && styles.statusBannerNotFound,
+              statusType === 'error' && styles.statusBannerError,
+            ]}>
+              <Text style={styles.statusBannerText}>{statusMessage}</Text>
+            </View>
+          )}
           <TouchableOpacity
             style={[
               styles.controlButton, 
@@ -631,47 +612,39 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginBottom: 4,
   },
-  debugContainer: {
-    position: 'absolute',
-    top: 120,
-    right: 10,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    padding: 8,
-    borderRadius: 8,
-    maxWidth: 200,
-  },
-  debugTitle: {
-    color: '#10B981',
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  debugItem: {
-    color: 'white',
-    fontSize: 10,
-    marginBottom: 2,
-  },
-  successMessage: {
-    position: 'absolute',
-    top: Platform.OS === 'android' ? 250 : 280,
-    left: 20,
-    right: 20,
-    backgroundColor: 'rgba(16, 185, 129, 0.95)',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12,
+  // Removed old successMessage styles
+  statusBanner: {
+    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
   },
-  successMessageText: {
+  statusBannerSuccess: {
+    backgroundColor: 'rgba(16, 185, 129, 0.95)',
+  },
+  statusBannerDuplicate: {
+    backgroundColor: 'rgba(234, 179, 8, 0.95)',
+  },
+  statusBannerNotFound: {
+    backgroundColor: 'rgba(239, 68, 68, 0.95)',
+  },
+  statusBannerError: {
+    backgroundColor: 'rgba(239, 68, 68, 0.95)',
+  },
+  statusBannerText: {
     color: 'white',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     textAlign: 'center',
+  },
+  statusBannerTopInControls: {
+    marginBottom: 12,
+    alignSelf: 'stretch',
+  },
+  statusBannerBottomInControls: {
+    marginTop: 12,
+    alignSelf: 'stretch',
   },
   bottomControls: {
     position: 'absolute',
