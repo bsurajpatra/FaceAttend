@@ -175,12 +175,14 @@ Comprehensive tools to manage student data efficiently with advanced filtering, 
 - **Student Details View** – Comprehensive modal showing all student information with edit capabilities
 - **Inline Editing** – Edit student name, roll number, and face data directly from the student list
 - **Face Recapture** – 5-second auto-capture system for updating student face data
+- **Photo Upload** – Upload photos directly from gallery or capture new photos during registration and management
 - **Export Functionality** – Generate PDF and CSV reports of student lists with professional formatting
 - **Duplicate Prevention** – Automatic validation to prevent duplicate roll numbers and face descriptors within the same class
 
 **Enhanced Features:**
 - **Visual Indicators** – Clear feedback for modified fields during editing
-- **Optional Fields** – Flexible editing where faculty can update any combination of name, roll number, or face data
+- **Optional Fields** – Flexible editing where faculty can update any combination of name, roll number, face data, or photo
+- **Multiple Photo Sources** – Capture from camera or upload from device gallery during student registration and management
 - **Professional Export** – PDF reports with proper formatting and CSV files with structured data
 - **File Sharing** – Direct sharing of exported files via email, cloud storage, or other apps
 
@@ -201,16 +203,18 @@ Comprehensive tools to manage student data efficiently with advanced filtering, 
 FaceAttend now includes comprehensive location tracking for attendance sessions, providing accountability and detailed reporting.
 
 **Core Features:**
-- **Automatic GPS Capture** – Location is automatically captured when starting attendance sessions
-- **Address Resolution** – GPS coordinates are reverse-geocoded to human-readable addresses
+- **Automatic GPS Capture** – Location is automatically captured when starting attendance sessions with precise coordinates
+- **GPS Coordinates** – Latitude and longitude coordinates captured with high accuracy for audit trails
+- **Address Resolution** – GPS coordinates are reverse-geocoded to human-readable addresses for display
 - **Permission Management** – Location permissions managed through settings alongside camera permissions
 - **Fallback Handling** – Graceful handling when location permission is denied or unavailable
 
 **Location Data Storage:**
-- **Coordinates** – Latitude and longitude with accuracy information
-- **Address** – Human-readable address from reverse geocoding
+- **Coordinates** – Accurate latitude and longitude with precision information stored for each session
+- **Address** – Human-readable address from reverse geocoding of GPS coordinates
+- **Accuracy Metrics** – GPS accuracy and uncertainty data for validation
 - **Session Association** – Location data linked to specific attendance sessions
-- **Export Integration** – Location data included in all reports and exports
+- **Export Integration** – Location coordinates and addresses included in all reports and exports
 
 **Display Integration:**
 - **Dashboard** – Current session shows location when attendance has been taken
@@ -226,17 +230,19 @@ Advanced analytics system for tracking individual student attendance patterns an
 - **Class Overview** – Attendance statistics for specific subject-section combinations
 - **Session History** – Complete attendance history with dates and locations
 - **Performance Metrics** – Present/absent session counts and percentage calculations
+- **Last Session Present Tracking** – Detailed tracking of when each student was last marked present with session details
 
 **Display Features:**
 - **Color-Coded Indicators** – Green (≥80%), Amber (≥60%), Red (<60%) attendance percentages
 - **Session Details** – Shows present/total sessions for each student
-- **Last Attendance** – Displays when student was last marked present
-- **Export Integration** – Analytics data included in student export reports
+- **Last Attendance Display** – Prominently displays when student was last marked present with date, time, and session information
+- **Attendance History** – Complete timeline of student attendance with last present session highlighted
+- **Export Integration** – Analytics data including last session present dates included in student export reports
 
 **API Endpoints:**
 - `GET /api/attendance/student-data` – Get comprehensive student attendance analytics
 - `GET /api/attendance/status` – Check attendance status with location data
-- **Response Format** – Includes attendance percentages, session counts, and location information
+- **Response Format** – Includes attendance percentages, session counts, last session present details, and location information
 
 ---
 
@@ -351,8 +357,8 @@ Advanced analytics system for tracking individual student attendance patterns an
 - Dashboard computes “current session” based on time using `TIME_SLOTS` (now includes hour 12).
 
 3) Student Registration
-- Client captures face image (base64) and calls `POST /api/students/register`.
-- Server calls Python `/api/recognize`, stores FaceNet embedding on `Student` (`faceDescriptor` legacy + `embeddings` array).
+- Client captures face image (base64) or uploads photo from gallery and calls `POST /api/students/register`.
+- Server calls Python `/api/recognize`, stores FaceNet embedding on `Student` (`faceDescriptor` legacy + `embeddings` array), and stores photo.
 
 4) Start Attendance
 - Client: `POST /api/attendance/start` with subject/section/type/hours.
@@ -391,6 +397,8 @@ const SessionSchema = new Schema({
   enrollments: [{ subject, section, facultyId }],
   faceDescriptor: [Number],       // legacy single vector
   embeddings: [[Number]],         // FaceNet embeddings array
+  photoUri: String,               // stored photo URI
+  photoBase64: String             // base64 photo data
 }
 ```
 
@@ -402,14 +410,15 @@ const SessionSchema = new Schema({
   subject, section, sessionType, hours, date,
   totalStudents, presentStudents, absentStudents,
   location: {
-    latitude: Number,
-    longitude: Number,
-    address: String,
-    accuracy: Number
+    latitude: Number,      // GPS latitude coordinate
+    longitude: Number,     // GPS longitude coordinate
+    address: String,       // reverse-geocoded address
+    accuracy: Number       // GPS accuracy in meters
   },
   records: [{
     studentId, studentName, rollNumber,
-    isPresent, markedAt, confidence
+    isPresent, markedAt, confidence,
+    lastSessionPresent: Date  // track last time student was marked present
   }]
 }
 ```
@@ -424,9 +433,9 @@ const SessionSchema = new Schema({
 - GET `/api/auth/faculty-subjects` - Get faculty subjects/sections
 
 ### Student Management
-- POST `/api/students/register` - Register student with face image (includes duplicate validation)
+- POST `/api/students/register` - Register student with face image and photo upload (includes duplicate validation)
 - GET `/api/students?subject=...&section=...` - Get students by class
-- PUT `/api/students/:id` - Update student data (name, roll number, face data)
+- PUT `/api/students/:id` - Update student data (name, roll number, face data, photo)
 - DELETE `/api/students/:id` - Delete student record
 
 ### Attendance System
@@ -573,24 +582,6 @@ chmod +x setup-device-owner.sh
 ## 🔒 Security
 - JWT auth, password hashing (bcryptjs), protected routes
 - Helmet, CORS
-
-## 📈 Recent Enhancements
-- ✅ **Student Management Overhaul** - Complete redesign with advanced filtering and export capabilities
-- ✅ **Export Functionality** - PDF and CSV export for student lists and attendance reports
-- ✅ **Duplicate Prevention** - Automatic validation for roll numbers and face descriptors within classes
-- ✅ **Enhanced UI/UX** - Improved student editing with visual indicators and optional field updates
-- ✅ **Live Attendance Improvements** - Student ID display during attendance marking
-- ✅ **Professional Export** - Formatted PDF reports and structured CSV data with file sharing
-- ✅ **Attendance Status Tracking** - Dashboard shows "Attendance Taken" with stats and retake functionality
-- ✅ **Location Tracking** - GPS location capture and display for attendance sessions
-- ✅ **Student Attendance Analytics** - Individual student attendance percentages and session tracking
-- ✅ **Enhanced Settings** - Location permission management alongside camera permissions
-- ✅ **Flexible Time Slots** - Extended support for 24-hour time slots (1-24 hours)
-- ✅ **Empty Timetable Handling** - Better UX for empty timetables and no students registered scenarios
-- ✅ **Rate Limiting Improvements** - Reduced cooldown periods for better user experience
-- ✅ **Duplicate Marking Prevention** - Fixed issue where stopping/restarting detection would re-mark students
-- ✅ **Attendance Reports Enhancement** - Location display in reports with improved styling
-- ✅ **Session Details Modal** - Redesigned with back button navigation and centered titles
 
 ## 📈 Future Enhancements
 - On-device face quality checks and liveness hints

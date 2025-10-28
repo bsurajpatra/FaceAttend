@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, TextInput, Pressable, Modal, Alert, Platform, Image, SafeAreaView } from 'react-native';
+import { View, Text, TextInput, Pressable, Modal, Alert, Platform, Image, SafeAreaView, Linking } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { getTimetableApi, TimetableDay } from '@/api/timetable';
@@ -16,6 +16,7 @@ export default function StudentRegistrationScreen() {
   const [section, setSection] = useState<string | null>(null);
   const [sessionType, setSessionType] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [contextExpanded, setContextExpanded] = useState(true);
   const [faceDescriptor, setFaceDescriptor] = useState<number[] | null>(null);
   const [faceImageBase64, setFaceImageBase64] = useState<string | null>(null);
   const [capturedImageUri, setCapturedImageUri] = useState<string | null>(null);
@@ -87,11 +88,29 @@ export default function StudentRegistrationScreen() {
     }
 
     try {
-      // Request permission to access media library
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Please grant permission to access your photo library.');
-        return;
+      // Check current permission status first
+      const currentPermission = await ImagePicker.getMediaLibraryPermissionsAsync();
+      
+      if (!currentPermission.granted) {
+        // Request permission to access media library
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert(
+            'Permission Required', 
+            'Media library access is required to upload photos. Please grant permission in Settings.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Open Settings', onPress: () => { 
+                try { 
+                  Linking.openSettings(); 
+                } catch (error) {
+                  console.error('Failed to open settings:', error);
+                }
+              }},
+            ]
+          );
+          return;
+        }
       }
 
       // Launch image picker
@@ -219,6 +238,16 @@ export default function StudentRegistrationScreen() {
 
   const canSubmit = name && rollNumber && subject && section && sessionType && faceReady;
 
+  // Auto-minimize context card when all selections are completed
+  useEffect(() => {
+    if (subject && section && sessionType) {
+      const timer = setTimeout(() => {
+        setContextExpanded(false);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [subject, section, sessionType]);
+
   const onRegister = async () => {
     if (!canSubmit || !subject || !section || !sessionType || !faceReady) return;
     
@@ -274,12 +303,27 @@ export default function StudentRegistrationScreen() {
       
       <View style={{ flex: 1, padding: 16 }}>
         {/* Step 1: Select class context */}
-        <View style={{ backgroundColor: 'white', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, padding: 12, marginBottom: 16 }}>
-          <Text style={{ fontWeight: '700', marginBottom: 8 }}>Step 1: Select Class Context</Text>
-          <Dropdown label="Subject" value={subject} onChange={(v) => { setSubject(v); setSection(null); setSessionType(null); }} options={subjectOptions} />
-          <Dropdown label="Section" value={section} onChange={(v) => { setSection(v); setSessionType(null); }} options={sectionOptions} disabled={!subject} />
-          <Dropdown label="Component (Session Type)" value={sessionType} onChange={setSessionType} options={sessionOptions} disabled={!subject || !section} />
-        </View>
+        <Pressable 
+          onPress={() => setContextExpanded(!contextExpanded)}
+          style={{ backgroundColor: 'white', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, marginBottom: 16, overflow: 'hidden' }}
+        >
+          {contextExpanded || (!subject || !section || !sessionType) ? (
+            <View style={{ padding: 12 }}>
+              <Text style={{ fontWeight: '700', marginBottom: 8 }}>Step 1: Select Class Context</Text>
+              <Dropdown label="Subject" value={subject} onChange={(v) => { setSubject(v); setSection(null); setSessionType(null); }} options={subjectOptions} />
+              <Dropdown label="Section" value={section} onChange={(v) => { setSection(v); setSessionType(null); }} options={sectionOptions} disabled={!subject} />
+              <Dropdown label="Component (Session Type)" value={sessionType} onChange={setSessionType} options={sessionOptions} disabled={!subject || !section} />
+            </View>
+          ) : (
+            <View style={{ padding: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontWeight: '700', marginBottom: 4 }}>Step 1: Class Context</Text>
+                <Text style={{ color: '#6B7280', fontSize: 13 }}>{subject} • {section} • {sessionType}</Text>
+              </View>
+              <Text style={{ color: '#9CA3AF', fontSize: 16 }}>▲</Text>
+            </View>
+          )}
+        </Pressable>
 
         {/* Step 2: Student details & face capture (enabled after context) */}
         <View style={{ backgroundColor: 'white', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, padding: 12 }}>

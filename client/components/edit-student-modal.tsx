@@ -11,6 +11,7 @@ import {
   ScrollView,
   Platform,
   Image,
+  Linking,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import FaceCaptureModal from './face-capture-modal';
@@ -98,11 +99,29 @@ export default function EditStudentModal({
 
   const uploadPhoto = async () => {
     try {
-      // Request permission to access media library
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Please grant permission to access your photo library.');
-        return;
+      // Check current permission status first
+      const currentPermission = await ImagePicker.getMediaLibraryPermissionsAsync();
+      
+      if (!currentPermission.granted) {
+        // Request permission to access media library
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert(
+            'Permission Required', 
+            'Media library access is required to upload photos. Please grant permission in Settings.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Open Settings', onPress: () => { 
+                try { 
+                  Linking.openSettings(); 
+                } catch (error) {
+                  console.error('Failed to open settings:', error);
+                }
+              }},
+            ]
+          );
+          return;
+        }
       }
 
       // Launch image picker
