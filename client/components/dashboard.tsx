@@ -55,6 +55,7 @@ export default function Dashboard({
   const [isCheckingStudents, setIsCheckingStudents] = useState(false);
   const [attendanceStatus, setAttendanceStatus] = useState<any>(null);
   const [isCheckingAttendance, setIsCheckingAttendance] = useState(false);
+  const [currentLocation, setCurrentLocation] = useState<any>(null);
 
   // Format location to show both address and coordinates
   const formatLocation = (location: any) => {
@@ -168,6 +169,8 @@ export default function Dashboard({
         accuracy: position.coords.accuracy,
         address: addressText,
       };
+      // Store location separately so it displays even when attendance is not taken
+      setCurrentLocation(loc);
       setAttendanceStatus((prev: any) => ({ ...(prev || {}), location: loc }));
       // Persist location to current session if known
       try {
@@ -186,6 +189,10 @@ export default function Dashboard({
     setCurrentSession(session);
     checkRegisteredStudents(session);
     checkAttendanceStatus(session);
+    // Sync location automatically when session changes
+    if (session) {
+      syncCurrentLocation();
+    }
   }, [timetable]);
 
   // Update current session every 30 seconds to handle time changes and student updates
@@ -206,6 +213,7 @@ export default function Dashboard({
       if (currentSession) {
         checkRegisteredStudents(currentSession);
         checkAttendanceStatus(currentSession);
+        syncCurrentLocation();
       }
     }, [currentSession])
   );
@@ -277,11 +285,8 @@ export default function Dashboard({
                     <Text style={styles.detailText}>Section: {currentSession.section}</Text>
                     <Text style={styles.detailText}>Room: {currentSession.roomNumber}</Text>
                     <Text style={styles.detailText}>Time: {currentSession.timeSlot}</Text>
-                    {attendanceStatus?.location && (
-                      <Text style={styles.detailText}>
-                        {formatLocation(attendanceStatus.location)} 📍
-                      </Text>
-                    )}
+                    <Text style={styles.detailText}>Location: {formatLocation(currentLocation || attendanceStatus?.location)} 
+                    </Text>
                   </View>
                   {(() => {
                     if (hasRegisteredStudents === false) {

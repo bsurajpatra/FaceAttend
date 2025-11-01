@@ -9,6 +9,7 @@ import {
   SafeAreaView,
   Platform,
   Alert,
+  StatusBar,
 } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import Papa from 'papaparse';
@@ -228,7 +229,12 @@ export default function StudentDetailsModal({
     >
       <SafeAreaView style={styles.container}>
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[
+          styles.header,
+          Platform.OS === 'android' && {
+            paddingTop: (StatusBar.currentHeight || 0) + 12
+          }
+        ]}>
           <Pressable
             onPress={onClose}
             style={({ pressed }) => [
@@ -390,7 +396,7 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: 'white',
-    paddingTop: Platform.OS === 'android' ? 20 : 0,
+    paddingTop: Platform.OS === 'ios' ? 0 : 12,
     paddingBottom: 16,
     paddingHorizontal: 16,
     borderBottomWidth: 1,

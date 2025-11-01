@@ -247,7 +247,7 @@ export default function LiveAttendance({
         } finally {
           setIsProcessing(false);
         }
-      }, 3000); // Check every 3 seconds for stability
+      }, 1500); // Check every 3 seconds for stability
       }, 100); // Small delay to ensure state is set
     }, [sessionId, isInitialized, onAttendanceMarked]);
 
