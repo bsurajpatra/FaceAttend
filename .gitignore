@@ -16,6 +16,9 @@ node_modules/
 # =======================
 .expo/
 .expo-shared/
+# Native folders (for Prebuild/CNG workflow)
+client/android/
+client/ios/
 ios/Pods/
 android/.gradle/
 android/app/build/
