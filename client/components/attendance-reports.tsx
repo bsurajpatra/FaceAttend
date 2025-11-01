@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import Papa from 'papaparse';
-import { getAttendanceReportsApi, AttendanceReportsResponse } from '@/api/attendance';
+import { getAttendanceReportsApi, getAttendanceSessionApi, AttendanceReportsResponse } from '@/api/attendance';
 import { getTimeRange, getSessionDuration } from '@/utils/timeSlots';
 
 type AttendanceReportsProps = {
@@ -29,6 +29,27 @@ export default function AttendanceReports({ onClose }: AttendanceReportsProps) {
   const [selectedSession, setSelectedSession] = useState<any>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+
+  const handleSessionPress = async (session: any) => {
+    try {
+      const details = await getAttendanceSessionApi(session.id);
+      const full = {
+        ...details.session,
+        presentStudentsList: details.presentStudentsList || [],
+        absentStudentsList: details.absentStudentsList || [],
+      };
+      console.log('Session details:', {
+        present: details.presentStudentsList?.length || 0,
+        absent: details.absentStudentsList?.length || 0,
+        total: details.session.totalStudents,
+      });
+      setSelectedSession(full);
+    } catch (error) {
+      console.error('Failed to load session details:', error);
+      setSelectedSession(session);
+    }
+    setShowDetailsModal(true);
+  };
 
   // Helpers: Export
   const buildCsv = (session: any) => {
@@ -261,11 +282,6 @@ export default function AttendanceReports({ onClose }: AttendanceReportsProps) {
     if (percentage >= 80) return '#10B981'; // Green
     if (percentage >= 60) return '#F59E0B'; // Yellow
     return '#EF4444'; // Red
-  };
-
-  const handleSessionPress = (session: any) => {
-    setSelectedSession(session);
-    setShowDetailsModal(true);
   };
 
   const containerStyle = [styles.container, { paddingTop: Platform.OS === 'android' ? (StatusBar as any)?.currentHeight || 0 : 0 }];
@@ -680,6 +696,7 @@ const styles = StyleSheet.create({
   modalContainer: {
     flex: 1,
     backgroundColor: '#F9FAFB',
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -739,6 +756,7 @@ const styles = StyleSheet.create({
   modalContent: {
     flex: 1,
     padding: 16,
+    paddingTop: 24,
   },
   exportOverlay: {
     flex: 1,

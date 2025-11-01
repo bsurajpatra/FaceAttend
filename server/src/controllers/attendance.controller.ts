@@ -424,6 +424,34 @@ export async function checkAttendanceStatus(req: Request, res: Response): Promis
     });
     
     if (existingSession) {
+      // Reconcile totals with latest enrollment so DB and reports stay accurate
+      const enrolledStudents = await Student.find({
+        'enrollments.subject': subject as string,
+        'enrollments.section': section as string,
+        'enrollments.facultyId': new mongoose.Types.ObjectId(facultyId)
+      }).select('_id');
+
+      const latestTotal = enrolledStudents.length;
+      const presentCount = existingSession.records.filter(r => r.isPresent).length;
+      const reconciledAbsent = Math.max(0, latestTotal - presentCount);
+
+      let didChange = false;
+      if (existingSession.totalStudents !== latestTotal) {
+        existingSession.totalStudents = latestTotal;
+        didChange = true;
+      }
+      if (existingSession.presentStudents !== presentCount) {
+        existingSession.presentStudents = presentCount;
+        didChange = true;
+      }
+      if (existingSession.absentStudents !== reconciledAbsent) {
+        existingSession.absentStudents = reconciledAbsent;
+        didChange = true;
+      }
+      if (didChange) {
+        await existingSession.save();
+      }
+
       res.status(200).json({
         hasAttendance: true,
         sessionId: existingSession._id,
@@ -479,6 +507,20 @@ export async function getAttendanceSession(req: Request, res: Response): Promise
       return;
     }
     
+    // Get current enrolled students to reconcile with records
+    const enrolledStudents = await Student.find({
+      'enrollments.subject': session.subject,
+      'enrollments.section': session.section,
+      'enrollments.facultyId': session.facultyId
+    }).select('_id name rollNumber');
+
+    // Create a map of present student IDs from records
+    const presentStudentIds = new Set(
+      session.records
+        .filter(record => record.isPresent)
+        .map(record => String(record.studentId))
+    );
+
     // Separate present and absent students
     const presentStudents = session.records
       .filter(record => record.isPresent)
@@ -491,13 +533,31 @@ export async function getAttendanceSession(req: Request, res: Response): Promise
         markedVia: 'Face Detection'
       }));
 
-    const absentStudents = session.records
+    // Get absent students: those enrolled but not marked present
+    // First, try to get from records (for students with records but marked absent)
+    const absentFromRecords = session.records
       .filter(record => !record.isPresent)
       .map(record => ({
         id: record.studentId,
         name: record.studentName,
         rollNumber: record.rollNumber
       }));
+
+    // Also include enrolled students who aren't in present list (handles cases where enrollment changed)
+    const absentStudentIds = new Set(absentFromRecords.map(s => String(s.id)));
+    enrolledStudents.forEach(student => {
+      const studentId = String(student._id);
+      if (!presentStudentIds.has(studentId) && !absentStudentIds.has(studentId)) {
+        absentFromRecords.push({
+          id: student._id,
+          name: student.name,
+          rollNumber: student.rollNumber
+        });
+        absentStudentIds.add(studentId);
+      }
+    });
+
+    const absentStudents = absentFromRecords;
 
     res.json({
       session: {
@@ -533,6 +593,50 @@ export async function getAttendanceSession(req: Request, res: Response): Promise
   } catch (error) {
     console.error('Get attendance session error:', error);
     res.status(500).json({ message: 'Failed to get attendance session' });
+  }
+}
+// Update attendance session location
+export async function updateAttendanceLocation(req: Request, res: Response): Promise<void> {
+  try {
+    const facultyId = req.userId;
+    const { sessionId } = req.params;
+    const { latitude, longitude, address, accuracy } = req.body || {};
+
+    if (!facultyId || !mongoose.isValidObjectId(facultyId)) {
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+    if (!sessionId || !mongoose.isValidObjectId(sessionId)) {
+      res.status(400).json({ message: 'Valid sessionId is required' });
+      return;
+    }
+    if (typeof latitude !== 'number' || typeof longitude !== 'number') {
+      res.status(400).json({ message: 'latitude and longitude are required' });
+      return;
+    }
+
+    const session = await AttendanceSession.findById(sessionId);
+    if (!session) {
+      res.status(404).json({ message: 'Attendance session not found' });
+      return;
+    }
+    if (String(session.facultyId) !== String(facultyId)) {
+      res.status(403).json({ message: 'Unauthorized to update this session' });
+      return;
+    }
+
+    session.location = {
+      latitude,
+      longitude,
+      address,
+      accuracy,
+    } as any;
+    await session.save();
+
+    res.status(200).json({ message: 'Location updated', location: session.location });
+  } catch (error) {
+    console.error('Update attendance location error:', error);
+    res.status(500).json({ message: 'Failed to update location' });
   }
 }
 

@@ -63,6 +63,19 @@ export type AttendanceSessionResponse = {
     createdAt: string;
     updatedAt: string;
   };
+  presentStudentsList?: Array<{
+    id: string;
+    name: string;
+    rollNumber: string;
+    markedAt: string;
+    confidence?: number;
+    markedVia?: string;
+  }>;
+  absentStudentsList?: Array<{
+    id: string;
+    name: string;
+    rollNumber: string;
+  }>;
   records: Array<{
     studentId: string;
     studentName: string;
@@ -120,6 +133,11 @@ export async function markAttendanceApi(data: MarkAttendanceInput): Promise<Mark
 // Get attendance session details
 export async function getAttendanceSessionApi(sessionId: string): Promise<AttendanceSessionResponse> {
   const res = await http.get<AttendanceSessionResponse>(`/api/attendance/session/${sessionId}`);
+  return res.data;
+}
+
+export async function updateAttendanceLocationApi(sessionId: string, location: { latitude: number; longitude: number; address?: string; accuracy?: number }): Promise<{ message: string; location: { latitude: number; longitude: number; address?: string; accuracy?: number } }> {
+  const res = await http.put<{ message: string; location: { latitude: number; longitude: number; address?: string; accuracy?: number } }>(`/api/attendance/session/${sessionId}/location`, location);
   return res.data;
 }
 

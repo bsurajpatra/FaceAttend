@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
+import * as Location from 'expo-location';
 import { Image } from 'expo-image';
 import { useFocusEffect } from '@react-navigation/native';
 import { styles } from './styles/dashboard-styles';
@@ -8,7 +9,7 @@ import AttendanceReports from './attendance-reports';
 import { TimetableDay as ApiTimetableDay, Session as ApiSession } from '@/api/timetable';
 import { TIME_SLOTS, getCurrentSession } from '@/utils/timeSlots';
 import { getStudentsApi } from '@/api/students';
-import { checkAttendanceStatusApi } from '@/api/attendance';
+import { checkAttendanceStatusApi, updateAttendanceLocationApi } from '@/api/attendance';
 
 type User = {
   id: string;
@@ -50,6 +51,7 @@ export default function Dashboard({
   const [isHoursModalVisible, setHoursModalVisible] = useState(false);
   const [currentSession, setCurrentSession] = useState<any>(null);
   const [hasRegisteredStudents, setHasRegisteredStudents] = useState<boolean | null>(null);
+  const [registeredCount, setRegisteredCount] = useState<number | null>(null);
   const [isCheckingStudents, setIsCheckingStudents] = useState(false);
   const [attendanceStatus, setAttendanceStatus] = useState<any>(null);
   const [isCheckingAttendance, setIsCheckingAttendance] = useState(false);
@@ -82,7 +84,14 @@ export default function Dashboard({
     setIsCheckingStudents(true);
     try {
       const response = await getStudentsApi(session.subject, session.section);
-      setHasRegisteredStudents(response.students.length > 0);
+      const count = response.students.length;
+      setRegisteredCount(count);
+      setHasRegisteredStudents(count > 0);
+      // If we already have attendance status, align totalStudents to latest registered count for display
+      setAttendanceStatus((prev: any) => {
+        if (!prev) return prev;
+        return { ...prev, totalStudents: count };
+      });
     } catch (error: any) {
       // Handle 401 errors (logged out) gracefully
       if (error?.response?.status === 401) {
@@ -107,7 +116,15 @@ export default function Dashboard({
     setIsCheckingAttendance(true);
     try {
       const response = await checkAttendanceStatusApi(session.subject, session.section, session.sessionType);
-      setAttendanceStatus(response);
+      // Merge latest registered count (if known) so totals reflect newly registered students
+      setAttendanceStatus((prev: any) => {
+        const merged = registeredCount != null ? { ...response, totalStudents: registeredCount } : response;
+        // Preserve last known location if server doesn't provide one
+        if (prev?.location && !merged.location) {
+          merged.location = prev.location;
+        }
+        return merged;
+      });
     } catch (error: any) {
       // Handle 401 errors (logged out) gracefully
       if (error?.response?.status === 401) {
@@ -119,6 +136,47 @@ export default function Dashboard({
       }
     } finally {
       setIsCheckingAttendance(false);
+    }
+  };
+
+  // Sync and show current device location on the card
+  const syncCurrentLocation = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        return;
+      }
+      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      let addressText = '';
+      try {
+        const geocodes = await Location.reverseGeocodeAsync({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        });
+        const first = geocodes && geocodes[0];
+        if (first) {
+          const parts = [first.name, first.street, first.district, first.city, first.region, first.postalCode]
+            .filter(Boolean)
+            .join(', ');
+          addressText = parts;
+        }
+      } catch {}
+
+      const loc = {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        accuracy: position.coords.accuracy,
+        address: addressText,
+      };
+      setAttendanceStatus((prev: any) => ({ ...(prev || {}), location: loc }));
+      // Persist location to current session if known
+      try {
+        if (attendanceStatus?.sessionId) {
+          await updateAttendanceLocationApi(attendanceStatus.sessionId, loc);
+        }
+      } catch {}
+    } catch (e) {
+      // Ignore location errors for silent UX
     }
   };
 
@@ -203,6 +261,7 @@ export default function Dashboard({
                       onPress={() => {
                         checkRegisteredStudents(currentSession);
                         checkAttendanceStatus(currentSession);
+                        syncCurrentLocation();
                       }}
                       style={({ pressed }) => [
                         styles.refreshButton,
