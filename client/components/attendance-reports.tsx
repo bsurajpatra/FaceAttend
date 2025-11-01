@@ -65,12 +65,7 @@ export default function AttendanceReports({ onClose }: AttendanceReportsProps) {
       session.absentStudents,
       session.totalStudents,
       session.attendancePercentage,
-      session.location ? (session.location.address || 
-        (session.location.latitude && session.location.longitude 
-          ? `${session.location.latitude}, ${session.location.longitude}`
-          : 'Location unavailable'
-        )
-      ) : 'N/A'
+      formatLocation(session.location)
     ]];
     const presentHeader = [['Present Students']];
     const presentRows = [['Name','Roll','Marked At','Confidence'], ...(
@@ -187,7 +182,7 @@ export default function AttendanceReports({ onClose }: AttendanceReportsProps) {
             <div><strong>Date:</strong> ${fmt(session.date)}</div>
             <div><strong>Hours:</strong> ${getTimeRange(session.hours || [])} (${getSessionDuration(session.hours || [])})</div>
             <div><strong>Summary:</strong> <span class="pill">${session.presentStudents}/${session.totalStudents} present</span></div>
-            ${session.location ? `<div><strong>Location:</strong> 📍 ${formatLocation(session.location)}</div>` : ''}
+            <div><strong>Location:</strong> 📍 ${formatLocation(session.location)}</div>
           </div>
           <h2>Present Students</h2>
           <table>
