@@ -9,6 +9,7 @@ export default function SettingsScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [locationPermission, setLocationPermission] = React.useState<Location.LocationPermissionResponse | null>(null);
   const [mediaPermission, setMediaPermission] = React.useState<ImagePicker.MediaLibraryPermissionResponse | null>(null);
+  const [permissionsExpanded, setPermissionsExpanded] = React.useState(false);
 
   // Check location permission on component mount
   React.useEffect(() => {
@@ -157,94 +158,127 @@ export default function SettingsScreen() {
           } catch {}
         }} />
 
-        {/* Camera Permission Toggle */}
-        <View style={{ backgroundColor: 'white', paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB', marginBottom: 12 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <View style={{ flex: 1, paddingRight: 12 }}>
-              <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827' }}>Camera Permission</Text>
+        {/* Permissions Tab */}
+        <View style={{ backgroundColor: 'white', borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB', marginBottom: 12, overflow: 'hidden' }}>
+          {/* Permissions Header - Toggle */}
+          <Pressable
+            onPress={() => setPermissionsExpanded(!permissionsExpanded)}
+            style={({ pressed }) => ({
+              paddingVertical: 14,
+              paddingHorizontal: 16,
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              opacity: pressed ? 0.95 : 1
+            })}
+            accessibilityRole="button"
+            accessibilityLabel="Toggle Permissions"
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827' }}>Permissions</Text>
               <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>
-                {permission?.granted ? 'Granted' : 'Not granted'}
+                Camera, Location, Media Library
               </Text>
             </View>
-            <Switch
-              value={!!permission?.granted}
-              onValueChange={async (next) => {
-                if (next) {
-                  const res = await requestPermission();
-                  if (!res.granted) {
-                    Alert.alert('Permission Denied', 'Camera access is required for attendance. You can enable it in App Settings.');
-                  }
-                } else {
-                  Alert.alert(
-                    'Manage Permission',
-                    'To revoke camera permission, open your system App Settings.',
-                    [
-                      { text: 'Cancel', style: 'cancel' },
-                      { text: 'Open Settings', onPress: () => { try { Linking.openSettings(); } catch {} } },
-                    ]
-                  );
-                }
-              }}
-            />
-          </View>
-        </View>
+            <Text style={{ fontSize: 20, color: '#6B7280' }}>
+              {permissionsExpanded ? '▼' : '▶'}
+            </Text>
+          </Pressable>
 
-        {/* Location Permission */}
-        <View style={{ backgroundColor: 'white', paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB', marginBottom: 12 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <View style={{ flex: 1, paddingRight: 12 }}>
-              <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827' }}>Location Permission</Text>
-              <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>
-                {locationPermission?.granted ? 'Granted' : 'Not granted'}
-              </Text>
-            </View>
-            <Switch
-              value={!!locationPermission?.granted}
-              onValueChange={async (next) => {
-                if (next) {
-                  await requestLocationPermission();
-                } else {
-                  Alert.alert(
-                    'Manage Permission',
-                    'To revoke location permission, open your system App Settings.',
-                    [
-                      { text: 'Cancel', style: 'cancel' },
-                      { text: 'Open Settings', onPress: () => { try { Linking.openSettings(); } catch {} } },
-                    ]
-                  );
-                }
-              }}
-            />
-          </View>
-        </View>
+          {/* Permissions Content - Collapsible */}
+          {permissionsExpanded && (
+            <View style={{ borderTopWidth: 1, borderTopColor: '#E5E7EB', paddingTop: 12 }}>
+              {/* Camera Permission Toggle */}
+              <View style={{ paddingVertical: 14, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <View style={{ flex: 1, paddingRight: 12 }}>
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827' }}>Camera Permission</Text>
+                    <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>
+                      {permission?.granted ? 'Granted' : 'Not granted'}
+                    </Text>
+                  </View>
+                  <Switch
+                    value={!!permission?.granted}
+                    onValueChange={async (next) => {
+                      if (next) {
+                        const res = await requestPermission();
+                        if (!res.granted) {
+                          Alert.alert('Permission Denied', 'Camera access is required for attendance. You can enable it in App Settings.');
+                        }
+                      } else {
+                        Alert.alert(
+                          'Manage Permission',
+                          'To revoke camera permission, open your system App Settings.',
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            { text: 'Open Settings', onPress: () => { try { Linking.openSettings(); } catch {} } },
+                          ]
+                        );
+                      }
+                    }}
+                  />
+                </View>
+              </View>
 
-        {/* Media Library Permission */}
-        <View style={{ backgroundColor: 'white', paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB', marginBottom: 12 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <View style={{ flex: 1, paddingRight: 12 }}>
-              <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827' }}>Media Library Permission</Text>
-              <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>
-                {mediaPermission?.granted ? 'Granted' : 'Not granted'}
-              </Text>
+              {/* Location Permission */}
+              <View style={{ paddingVertical: 14, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <View style={{ flex: 1, paddingRight: 12 }}>
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827' }}>Location Permission</Text>
+                    <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>
+                      {locationPermission?.granted ? 'Granted' : 'Not granted'}
+                    </Text>
+                  </View>
+                  <Switch
+                    value={!!locationPermission?.granted}
+                    onValueChange={async (next) => {
+                      if (next) {
+                        await requestLocationPermission();
+                      } else {
+                        Alert.alert(
+                          'Manage Permission',
+                          'To revoke location permission, open your system App Settings.',
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            { text: 'Open Settings', onPress: () => { try { Linking.openSettings(); } catch {} } },
+                          ]
+                        );
+                      }
+                    }}
+                  />
+                </View>
+              </View>
+
+              {/* Media Library Permission */}
+              <View style={{ paddingVertical: 14, paddingHorizontal: 16 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <View style={{ flex: 1, paddingRight: 12 }}>
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827' }}>Media Library Permission</Text>
+                    <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>
+                      {mediaPermission?.granted ? 'Granted' : 'Not granted'}
+                    </Text>
+                  </View>
+                  <Switch
+                    value={!!mediaPermission?.granted}
+                    onValueChange={async (next) => {
+                      if (next) {
+                        await requestMediaPermission();
+                      } else {
+                        Alert.alert(
+                          'Manage Permission',
+                          'To revoke media library permission, open your system App Settings.',
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            { text: 'Open Settings', onPress: () => { try { Linking.openSettings(); } catch {} } },
+                          ]
+                        );
+                      }
+                    }}
+                  />
+                </View>
+              </View>
             </View>
-            <Switch
-              value={!!mediaPermission?.granted}
-              onValueChange={async (next) => {
-                if (next) {
-                  await requestMediaPermission();
-                } else {
-                  Alert.alert(
-                    'Manage Permission',
-                    'To revoke media library permission, open your system App Settings.',
-                    [
-                      { text: 'Cancel', style: 'cancel' },
-                      { text: 'Open Settings', onPress: () => { try { Linking.openSettings(); } catch {} } },
-                    ]
-                  );
-                }
-              }}
-            />
-          </View>
+          )}
         </View>
 
         <View style={{ marginTop: 24, borderTopWidth: 1, borderTopColor: '#E5E7EB', paddingTop: 16 }}>

@@ -533,31 +533,71 @@ export async function getAttendanceSession(req: Request, res: Response): Promise
         markedVia: 'Face Detection'
       }));
 
-    // Get absent students: those enrolled but not marked present
-    // First, try to get from records (for students with records but marked absent)
-    const absentFromRecords = session.records
-      .filter(record => !record.isPresent)
-      .map(record => ({
-        id: record.studentId,
-        name: record.studentName,
-        rollNumber: record.rollNumber
-      }));
+    // Get all unique student IDs from records (in case enrollment query misses some)
+    const allRecordStudentIds = new Set(
+      session.records.map(record => String(record.studentId))
+    );
 
-    // Also include enrolled students who aren't in present list (handles cases where enrollment changed)
-    const absentStudentIds = new Set(absentFromRecords.map(s => String(s.id)));
+    // Get all unique enrolled student IDs
+    const enrolledStudentIds = new Set(
+      enrolledStudents.map(student => String(student._id))
+    );
+
+    // Combine both sets to get complete list of students (enrolled OR in records)
+    const allStudentIds = new Set([...enrolledStudentIds, ...allRecordStudentIds]);
+
+    // Get absent students: those enrolled but NOT marked present
+    // Build absent list from enrolled students, excluding those marked present
+    const absentStudents: Array<{
+      id: any;
+      name: string;
+      rollNumber: string;
+    }> = [];
+
+    // For each enrolled student, check if they're present
     enrolledStudents.forEach(student => {
       const studentId = String(student._id);
-      if (!presentStudentIds.has(studentId) && !absentStudentIds.has(studentId)) {
-        absentFromRecords.push({
+      
+      // If student is NOT in present list, they are absent
+      if (!presentStudentIds.has(studentId)) {
+        // Try to get name/roll from records if available (for consistency)
+        const record = session.records.find(r => String(r.studentId) === studentId);
+        
+        absentStudents.push({
           id: student._id,
-          name: student.name,
-          rollNumber: student.rollNumber
+          name: record ? record.studentName : student.name,
+          rollNumber: record ? record.rollNumber : student.rollNumber
         });
-        absentStudentIds.add(studentId);
       }
     });
 
-    const absentStudents = absentFromRecords;
+    // Also add any students from records who are not enrolled and not present (orphaned records)
+    session.records.forEach(record => {
+      const studentId = String(record.studentId);
+      if (!presentStudentIds.has(studentId) && !enrolledStudentIds.has(studentId)) {
+        absentStudents.push({
+          id: record.studentId,
+          name: record.studentName,
+          rollNumber: record.rollNumber
+        });
+      }
+    });
+
+    // Recalculate totals: use MAX of enrolled count and students in records
+    // This ensures total is never less than present count
+    const actualTotalStudents = Math.max(enrolledStudents.length, allStudentIds.size);
+    const actualPresentStudents = presentStudents.length;
+    const actualAbsentStudents = absentStudents.length;
+    
+    // Update session totals if they don't match (reconciliation)
+    if (session.totalStudents !== actualTotalStudents || 
+        session.presentStudents !== actualPresentStudents ||
+        session.absentStudents !== actualAbsentStudents) {
+      session.totalStudents = actualTotalStudents;
+      session.presentStudents = actualPresentStudents;
+      session.absentStudents = actualAbsentStudents;
+      await session.save();
+    }
 
     res.json({
       session: {
@@ -567,11 +607,11 @@ export async function getAttendanceSession(req: Request, res: Response): Promise
         sessionType: session.sessionType,
         hours: session.hours,
         date: session.date,
-        totalStudents: session.totalStudents,
-        presentStudents: session.presentStudents,
-        absentStudents: session.absentStudents,
-        attendancePercentage: session.totalStudents > 0 
-          ? Math.round((session.presentStudents / session.totalStudents) * 100) 
+        totalStudents: actualTotalStudents,
+        presentStudents: actualPresentStudents,
+        absentStudents: actualAbsentStudents,
+        attendancePercentage: actualTotalStudents > 0 
+          ? Math.round((actualPresentStudents / actualTotalStudents) * 100) 
           : 0,
         createdAt: session.createdAt,
         updatedAt: session.updatedAt
@@ -751,53 +791,127 @@ export async function getAttendanceReports(req: Request, res: Response): Promise
       .sort({ date: -1, createdAt: -1 })
       .limit(100); // Limit to prevent large responses
     
-    res.json({
-      sessions: sessions.map(session => {
-        // Separate present and absent students
-        const presentStudents = session.records
-          .filter(record => record.isPresent)
-          .map(record => ({
-            id: record.studentId,
-            name: record.studentName,
-            rollNumber: record.rollNumber,
-            markedAt: record.markedAt,
-            confidence: record.confidence,
-            markedVia: 'Face Detection' // All attendance is marked via face detection
-          }));
+    // Process sessions and reconcile totals
+    const processedSessions = await Promise.all(sessions.map(async (session) => {
+      // Get current enrolled students to reconcile with records
+      const enrolledStudents = await Student.find({
+        'enrollments.subject': session.subject,
+        'enrollments.section': session.section,
+        'enrollments.facultyId': session.facultyId
+      }).select('_id name rollNumber');
 
-        const absentStudents = session.records
-          .filter(record => !record.isPresent)
-          .map(record => ({
+      // Create a map of present student IDs from records
+      const presentStudentIds = new Set(
+        session.records
+          .filter(record => record.isPresent)
+          .map(record => String(record.studentId))
+      );
+
+      // Separate present and absent students
+      const presentStudents = session.records
+        .filter(record => record.isPresent)
+        .map(record => ({
+          id: record.studentId,
+          name: record.studentName,
+          rollNumber: record.rollNumber,
+          markedAt: record.markedAt,
+          confidence: record.confidence,
+          markedVia: 'Face Detection' // All attendance is marked via face detection
+        }));
+
+      // Get all unique student IDs from records (in case enrollment query misses some)
+      const allRecordStudentIds = new Set(
+        session.records.map(record => String(record.studentId))
+      );
+
+      // Get all unique enrolled student IDs
+      const enrolledStudentIds = new Set(
+        enrolledStudents.map(student => String(student._id))
+      );
+
+      // Combine both sets to get complete list of students (enrolled OR in records)
+      const allStudentIds = new Set([...enrolledStudentIds, ...allRecordStudentIds]);
+
+      // Get absent students: those enrolled but NOT marked present
+      const absentStudents: Array<{
+        id: any;
+        name: string;
+        rollNumber: string;
+      }> = [];
+
+      // For each enrolled student, check if they're present
+      enrolledStudents.forEach(student => {
+        const studentId = String(student._id);
+        
+        // If student is NOT in present list, they are absent
+        if (!presentStudentIds.has(studentId)) {
+          // Try to get name/roll from records if available (for consistency)
+          const record = session.records.find(r => String(r.studentId) === studentId);
+          
+          absentStudents.push({
+            id: student._id,
+            name: record ? record.studentName : student.name,
+            rollNumber: record ? record.rollNumber : student.rollNumber
+          });
+        }
+      });
+
+      // Also add any students from records who are not enrolled and not present (orphaned records)
+      session.records.forEach(record => {
+        const studentId = String(record.studentId);
+        if (!presentStudentIds.has(studentId) && !enrolledStudentIds.has(studentId)) {
+          absentStudents.push({
             id: record.studentId,
             name: record.studentName,
             rollNumber: record.rollNumber
-          }));
+          });
+        }
+      });
 
-        return {
-          id: session._id,
-          subject: session.subject,
-          section: session.section,
-          sessionType: session.sessionType,
-          hours: session.hours,
-          date: session.date,
-          totalStudents: session.totalStudents,
-          presentStudents: session.presentStudents,
-          absentStudents: session.absentStudents,
-          attendancePercentage: session.totalStudents > 0 
-            ? Math.round((session.presentStudents / session.totalStudents) * 100) 
-            : 0,
-          location: session.location ? {
-            latitude: session.location.latitude,
-            longitude: session.location.longitude,
-            address: session.location.address,
-            accuracy: session.location.accuracy
-          } : null,
-          createdAt: session.createdAt,
-          // Detailed student lists
-          presentStudentsList: presentStudents,
-          absentStudentsList: absentStudents
-        };
-      })
+      // Recalculate totals: use MAX of enrolled count and students in records
+      // This ensures total is never less than present count
+      const actualTotalStudents = Math.max(enrolledStudents.length, allStudentIds.size);
+      const actualPresentStudents = presentStudents.length;
+      const actualAbsentStudents = absentStudents.length;
+      
+      // Update session totals if they don't match (reconciliation)
+      if (session.totalStudents !== actualTotalStudents || 
+          session.presentStudents !== actualPresentStudents ||
+          session.absentStudents !== actualAbsentStudents) {
+        session.totalStudents = actualTotalStudents;
+        session.presentStudents = actualPresentStudents;
+        session.absentStudents = actualAbsentStudents;
+        await session.save();
+      }
+
+      return {
+        id: session._id,
+        subject: session.subject,
+        section: session.section,
+        sessionType: session.sessionType,
+        hours: session.hours,
+        date: session.date,
+        totalStudents: actualTotalStudents,
+        presentStudents: actualPresentStudents,
+        absentStudents: actualAbsentStudents,
+        attendancePercentage: actualTotalStudents > 0 
+          ? Math.round((actualPresentStudents / actualTotalStudents) * 100) 
+          : 0,
+        location: session.location ? {
+          latitude: session.location.latitude,
+          longitude: session.location.longitude,
+          address: session.location.address,
+          accuracy: session.location.accuracy
+        } : null,
+        createdAt: session.createdAt,
+        // Detailed student lists
+        presentStudentsList: presentStudents,
+        absentStudentsList: absentStudents
+      };
+    }));
+
+    res.json({
+      sessions: processedSessions
     });
     
   } catch (error) {
