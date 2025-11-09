@@ -11,14 +11,12 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
-      },
-      "node": "20.x.x"
+      }
     },
     "production": {
       "android": {
         "buildType": "apk"
-      },
-      "node": "20.x.x"
+      }
     }
   },
   "submit": {
