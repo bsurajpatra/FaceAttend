@@ -80,4 +80,24 @@ export const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  serverUrlButton: {
+    marginTop: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  serverUrlButtonPressed: {
+    opacity: 0.7,
+    backgroundColor: '#E5E7EB',
+  },
+  serverUrlButtonText: {
+    color: '#6B7280',
+    fontSize: 13,
+    fontWeight: '500',
+  },
 });
