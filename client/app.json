@@ -19,7 +19,8 @@
       "softwareKeyboardLayoutMode": "resize",
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.faceattend"
+      "package": "com.anonymous.faceattend",
+      "usesCleartextTraffic": true
     },
     "web": {
       "output": "static",
