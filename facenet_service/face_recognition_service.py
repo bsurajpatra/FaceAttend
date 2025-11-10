@@ -122,5 +122,8 @@ def health_check():
     return jsonify({"status": "healthy", "service": "facenet-recognition"}), 200
 
 if __name__ == "__main__":
-    print("Starting FaceNet Recognition Service on port 5001…")
-    app.run(host="0.0.0.0", port=5001, debug=True)
+    import os
+    port = int(os.environ.get("PORT", 5001))
+    print(f"Starting FaceNet Recognition Service on port {port}…")
+    # Use Flask dev server only for local dev; Render will use gunicorn entrypoint
+    app.run(host="0.0.0.0", port=port, debug=False)
