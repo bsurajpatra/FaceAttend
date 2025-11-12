@@ -1,19 +1,22 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
-  Modal,
   ScrollView,
   Pressable,
   StyleSheet,
-  SafeAreaView,
-  Platform,
   Alert,
-  StatusBar,
+  ActivityIndicator,
+  Modal
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as FileSystem from 'expo-file-system/legacy';
 import Papa from 'papaparse';
-import { StudentAttendanceData } from '@/api/attendance';
+
+import EditStudentModal from '@/components/edit-student-modal';
+import { getStudentsApi, updateStudentApi, deleteStudentApi } from '@/api/students';
+import { getStudentAttendanceDataApi, StudentAttendanceData } from '@/api/attendance';
 
 type Student = {
   id: string;
@@ -25,28 +28,59 @@ type Student = {
   createdAt: string;
 };
 
-type StudentDetailsModalProps = {
-  visible: boolean;
-  onClose: () => void;
-  students: Student[];
-  attendanceData: StudentAttendanceData[];
-  classInfo: {
-    subject: string;
-    section: string;
-    sessionType: string;
-  };
-  onEditStudent: (student: Student) => void;
-};
+export default function StudentDetailsScreen() {
+  const router = useRouter();
+  const params = useLocalSearchParams<{ subject?: string; section?: string; sessionType?: string }>();
+  const insets = useSafeAreaInsets();
 
-export default function StudentDetailsModal({
-  visible,
-  onClose,
-  students,
-  attendanceData,
-  classInfo,
-  onEditStudent
-}: StudentDetailsModalProps) {
+  const [students, setStudents] = useState<Student[]>([]);
+  const [attendanceData, setAttendanceData] = useState<StudentAttendanceData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingStudent, setEditingStudent] = useState<Student | null>(null);
+
   const [showExportModal, setShowExportModal] = useState(false);
+
+  const subject = params.subject || '';
+  const section = params.section || '';
+  const sessionType = params.sessionType || '';
+
+  const classInfo = useMemo(() => ({
+    subject,
+    section,
+    sessionType,
+  }), [subject, section, sessionType]);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const [studentsResponse, attendanceResponse] = await Promise.all([
+        getStudentsApi(subject, section),
+        getStudentAttendanceDataApi(subject, section, sessionType),
+      ]);
+
+      setStudents(studentsResponse.students);
+      setAttendanceData(attendanceResponse.students);
+    } catch (err: any) {
+      console.error('Failed to load student details:', err);
+      setError(err?.response?.data?.message || 'Failed to load student details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!subject || !section || !sessionType) {
+      setError('Missing class information. Please select a class again.');
+      setLoading(false);
+      return;
+    }
+    loadData();
+  }, [subject, section, sessionType]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -73,12 +107,11 @@ export default function StudentDetailsModal({
   };
 
   const getAttendanceColor = (percentage: number) => {
-    if (percentage >= 80) return '#10B981'; // Green
-    if (percentage >= 60) return '#F59E0B'; // Amber
-    return '#EF4444'; // Red
+    if (percentage >= 80) return '#10B981';
+    if (percentage >= 60) return '#F59E0B';
+    return '#EF4444';
   };
 
-  // Export functions
   const buildCsv = () => {
     const headerSection = [[
       'Subject', 'Section', 'Session Type', 'Total Students', 'Export Date'
@@ -89,7 +122,7 @@ export default function StudentDetailsModal({
       students.length,
       new Date().toISOString()
     ]];
-    
+
     const studentHeader = [['Student Details']];
     const studentRows = [['Name', 'Roll Number', 'Registered Date', 'Attendance %', 'Present Sessions', 'Total Sessions', 'Last Present Date'], ...(
       students.map((student) => {
@@ -121,7 +154,7 @@ export default function StudentDetailsModal({
       const fileName = `students_${classInfo.subject}_${classInfo.section}_${new Date().toISOString().split('T')[0]}.csv`;
       const fileUri = FileSystem.documentDirectory + fileName;
       await FileSystem.writeAsStringAsync(fileUri, csv);
-      
+
       const Sharing = require('expo-sharing');
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(fileUri, { mimeType: 'text/csv', dialogTitle: 'Export Students (CSV)' });
@@ -146,9 +179,9 @@ export default function StudentDetailsModal({
             ${attendance ? `${attendance.attendancePercentage}%` : 'N/A'}
           </td>
           <td>${attendance ? `${attendance.presentSessions}/${attendance.totalSessions}` : 'N/A'}</td>
-          <td>${attendance && attendance.lastAttendanceDate ? 
-            new Date(attendance.lastAttendanceDate).toLocaleDateString() + 
-            (attendance.lastPresentSessionHours ? ` (${attendance.lastPresentSessionHours})` : '') 
+          <td>${attendance && attendance.lastAttendanceDate ?
+            new Date(attendance.lastAttendanceDate).toLocaleDateString() +
+            (attendance.lastPresentSessionHours ? ` (${attendance.lastPresentSessionHours})` : '')
             : 'N/A'}</td>
         </tr>
       `;
@@ -220,172 +253,245 @@ export default function StudentDetailsModal({
     }
   };
 
-  return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={onClose}
-    >
-      <SafeAreaView style={styles.container}>
-        {/* Header */}
-        <View style={[
-          styles.header,
-          Platform.OS === 'android' && {
-            paddingTop: (StatusBar.currentHeight || 0) + 12
+  const handleEditStudent = (student: Student) => {
+    setEditingStudent(student);
+    setShowEditModal(true);
+  };
+
+  const handleUpdateStudent = async (studentId: string, data: { name: string; rollNumber: string; faceImageBase64?: string }) => {
+    try {
+      await updateStudentApi(studentId, data);
+      Alert.alert('Success', 'Student updated successfully');
+      setShowEditModal(false);
+      setEditingStudent(null);
+      loadData();
+    } catch (error: any) {
+      const errorMessage = error?.response?.data?.message || 'Failed to update student';
+      Alert.alert('Error', errorMessage);
+      throw error;
+    }
+  };
+
+  const handleDeleteStudent = (studentId: string, studentName: string) => {
+    Alert.alert(
+      'Delete Student',
+      `Are you sure you want to delete ${studentName}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteStudentApi(studentId);
+              Alert.alert('Success', 'Student deleted successfully');
+              loadData();
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete student');
+            }
           }
-        ]}>
+        }
+      ]
+    );
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]} edges={['left', 'right']}>
+        <ActivityIndicator size="large" color="#10B981" />
+        <Text style={{ marginTop: 16, fontSize: 16, color: '#6B7280' }}>
+          Loading student details...
+        </Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 }]} edges={['left', 'right']}>
+        <Text style={{ fontSize: 18, color: '#EF4444', textAlign: 'center', marginBottom: 16 }}>
+          {error}
+        </Text>
+        <Pressable
+          onPress={() => router.back()}
+          style={({ pressed }) => [
+            styles.backInlineButton,
+            pressed && { opacity: 0.8 }
+          ]}
+        >
+          <Text style={styles.backInlineButtonText}>Go Back</Text>
+        </Pressable>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
+      {/* Header */}
+      <View style={[
+        styles.header,
+        { paddingTop: insets.top > 0 ? insets.top : 12 }
+      ]}>
+        <Pressable
+          onPress={() => router.back()}
+          style={({ pressed }) => [
+            styles.backButton,
+            pressed && styles.backButtonPressed
+          ]}
+        >
+          <Text style={styles.backButtonText}>← Back</Text>
+        </Pressable>
+        <Text style={styles.headerTitle}>Student Details</Text>
+        <View style={{ width: 60 }} />
+      </View>
+
+      {/* Class Info */}
+      <View style={styles.classInfoCard}>
+        <View style={styles.classInfoHeader}>
+          <Text style={styles.classInfoTitle}>Class Information</Text>
           <Pressable
-            onPress={onClose}
+            onPress={() => setShowExportModal(true)}
             style={({ pressed }) => [
-              styles.backButton,
-              pressed && styles.backButtonPressed
+              styles.exportButton,
+              pressed && styles.exportButtonPressed
             ]}
           >
-            <Text style={styles.backButtonText}>← Back</Text>
+            <Text style={styles.exportButtonText}>Export</Text>
           </Pressable>
-          <Text style={styles.headerTitle}>Student Details</Text>
-          <View style={{ width: 60 }} />
         </View>
+        <Text style={styles.classInfoText}>
+          {classInfo.subject} - Section {classInfo.section}
+        </Text>
+        <Text style={styles.sessionTypeText}>
+          Session Type: {classInfo.sessionType}
+        </Text>
+        <Text style={styles.studentCountText}>
+          Total Students: {students.length}
+        </Text>
+      </View>
 
-        {/* Class Info */}
-        <View style={styles.classInfoCard}>
-          <View style={styles.classInfoHeader}>
-            <Text style={styles.classInfoTitle}>Class Information</Text>
+      {/* Students List */}
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {students.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No students found</Text>
+            <Text style={styles.emptySubtext}>
+              Students registered for this class will appear here
+            </Text>
+          </View>
+        ) : (
+          students.map((student, index) => {
+            const attendance = getStudentAttendance(student.id);
+            return (
+              <View key={student.id} style={styles.studentCard}>
+                <View style={styles.studentHeader}>
+                  <Text style={styles.studentNumber}>#{index + 1}</Text>
+                  <Text style={styles.studentName}>{student.name}</Text>
+                  <Pressable
+                    onPress={() => handleEditStudent(student)}
+                    style={({ pressed }) => [
+                      styles.editButton,
+                      pressed && styles.editButtonPressed
+                    ]}
+                  >
+                    <Text style={styles.editButtonText}>Edit</Text>
+                  </Pressable>
+                </View>
+                <View style={styles.studentDetails}>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Roll Number:</Text>
+                    <Text style={styles.detailValue}>{student.rollNumber}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Registered:</Text>
+                    <Text style={styles.detailValue}>{formatDate(student.createdAt)}</Text>
+                  </View>
+                  {attendance && (
+                    <>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Attendance:</Text>
+                        <View style={styles.attendanceContainer}>
+                          <Text style={[
+                            styles.attendancePercentage,
+                            { color: getAttendanceColor(attendance.attendancePercentage) }
+                          ]}>
+                            {attendance.attendancePercentage}%
+                          </Text>
+                          <Text style={styles.attendanceDetails}>
+                            ({attendance.presentSessions}/{attendance.totalSessions} sessions)
+                          </Text>
+                        </View>
+                      </View>
+                      {attendance.lastAttendanceDate && (
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailLabel}>Last Present:</Text>
+                          <Text style={styles.detailValue}>
+                            {formatDateOnly(attendance.lastAttendanceDate)}
+                            {attendance.lastPresentSessionHours && (
+                              <Text style={styles.sessionHoursText}>
+                                {' '}({attendance.lastPresentSessionHours})
+                              </Text>
+                            )}
+                          </Text>
+                        </View>
+                      )}
+                    </>
+                  )}
+                </View>
+              </View>
+            );
+          })
+        )}
+      </ScrollView>
+
+      <EditStudentModal
+        visible={showEditModal}
+        onClose={() => {
+          setShowEditModal(false);
+          setEditingStudent(null);
+        }}
+        onSave={handleUpdateStudent}
+        onDelete={handleDeleteStudent}
+        student={editingStudent}
+      />
+
+      <Modal
+        visible={showExportModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowExportModal(false)}
+      >
+        <View style={styles.exportOverlay}>
+          <View style={styles.exportSheet}>
+            <Text style={styles.exportTitle}>Export as</Text>
             <Pressable
-              onPress={() => setShowExportModal(true)}
-              style={({ pressed }) => [
-                styles.exportButton,
-                pressed && styles.exportButtonPressed
-              ]}
+              onPress={async () => {
+                setShowExportModal(false);
+                await exportAsPdf();
+              }}
+              style={({ pressed }) => [styles.exportOption, pressed && { opacity: 0.9 }]}
             >
-              <Text style={styles.exportButtonText}>Export</Text>
+              <Text style={styles.exportOptionText}>PDF</Text>
+            </Pressable>
+            <Pressable
+              onPress={async () => {
+                setShowExportModal(false);
+                await exportAsCsv();
+              }}
+              style={({ pressed }) => [styles.exportOption, pressed && { opacity: 0.9 }]}
+            >
+              <Text style={styles.exportOptionText}>CSV</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setShowExportModal(false)}
+              style={({ pressed }) => [styles.exportCancel, pressed && { opacity: 0.9 }]}
+            >
+              <Text style={styles.exportCancelText}>Cancel</Text>
             </Pressable>
           </View>
-          <Text style={styles.classInfoText}>
-            {classInfo.subject} - Section {classInfo.section}
-          </Text>
-          <Text style={styles.sessionTypeText}>
-            Session Type: {classInfo.sessionType}
-          </Text>
-          <Text style={styles.studentCountText}>
-            Total Students: {students.length}
-          </Text>
         </View>
-
-        {/* Students List */}
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          {students.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No students found</Text>
-              <Text style={styles.emptySubtext}>
-                Students registered for this class will appear here
-              </Text>
-            </View>
-          ) : (
-            students.map((student, index) => {
-              const attendance = getStudentAttendance(student.id);
-              return (
-                <View key={student.id} style={styles.studentCard}>
-                  <View style={styles.studentHeader}>
-                    <Text style={styles.studentNumber}>#{index + 1}</Text>
-                    <Text style={styles.studentName}>{student.name}</Text>
-                    <Pressable
-                      onPress={() => onEditStudent(student)}
-                      style={({ pressed }) => [
-                        styles.editButton,
-                        pressed && styles.editButtonPressed
-                      ]}
-                    >
-                      <Text style={styles.editButtonText}>Edit</Text>
-                    </Pressable>
-                  </View>
-                  <View style={styles.studentDetails}>
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Roll Number:</Text>
-                      <Text style={styles.detailValue}>{student.rollNumber}</Text>
-                    </View>
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Registered:</Text>
-                      <Text style={styles.detailValue}>{formatDate(student.createdAt)}</Text>
-                    </View>
-                    {attendance && (
-                      <>
-                        <View style={styles.detailRow}>
-                          <Text style={styles.detailLabel}>Attendance:</Text>
-                          <View style={styles.attendanceContainer}>
-                            <Text style={[
-                              styles.attendancePercentage,
-                              { color: getAttendanceColor(attendance.attendancePercentage) }
-                            ]}>
-                              {attendance.attendancePercentage}%
-                            </Text>
-                            <Text style={styles.attendanceDetails}>
-                              ({attendance.presentSessions}/{attendance.totalSessions} sessions)
-                            </Text>
-                          </View>
-                        </View>
-                        {attendance.lastAttendanceDate && (
-                          <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>Last Present:</Text>
-                            <Text style={styles.detailValue}>
-                              {formatDateOnly(attendance.lastAttendanceDate)}
-                              {attendance.lastPresentSessionHours && (
-                                <Text style={styles.sessionHoursText}>
-                                  {' '}({attendance.lastPresentSessionHours})
-                                </Text>
-                              )}
-                            </Text>
-                          </View>
-                        )}
-                      </>
-                    )}
-                  </View>
-                </View>
-              );
-            })
-          )}
-        </ScrollView>
-
-        {/* Export Modal */}
-        <Modal
-          visible={showExportModal}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setShowExportModal(false)}
-        >
-          <View style={styles.exportOverlay}>
-            <View style={styles.exportSheet}>
-              <Text style={styles.exportTitle}>Export as</Text>
-              <Pressable
-                onPress={async () => {
-                  setShowExportModal(false);
-                  await exportAsPdf();
-                }}
-                style={({ pressed }) => [styles.exportOption, pressed && { opacity: 0.9 }]}
-              >
-                <Text style={styles.exportOptionText}>PDF</Text>
-              </Pressable>
-              <Pressable
-                onPress={async () => {
-                  setShowExportModal(false);
-                  await exportAsCsv();
-                }}
-                style={({ pressed }) => [styles.exportOption, pressed && { opacity: 0.9 }]}
-              >
-                <Text style={styles.exportOptionText}>CSV</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => setShowExportModal(false)}
-                style={({ pressed }) => [styles.exportCancel, pressed && { opacity: 0.9 }]}
-              >
-                <Text style={styles.exportCancelText}>Cancel</Text>
-              </Pressable>
-            </View>
-          </View>
-        </Modal>
-      </SafeAreaView>
-    </Modal>
+      </Modal>
+    </SafeAreaView>
   );
 }
 
@@ -396,7 +502,7 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: 'white',
-    paddingTop: Platform.OS === 'ios' ? 0 : 12,
+    paddingTop: 12,
     paddingBottom: 16,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
@@ -422,6 +528,17 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: '#111827',
+  },
+  backInlineButton: {
+    backgroundColor: '#EF4444',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  backInlineButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
   classInfoCard: {
     backgroundColor: 'white',
@@ -586,7 +703,6 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     fontWeight: '500',
   },
-  // Export modal styles
   exportOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -639,3 +755,5 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+
+

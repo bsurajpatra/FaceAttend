@@ -6,15 +6,13 @@ import {
   Pressable, 
   StyleSheet, 
   Alert,
-  SafeAreaView,
   Modal
 } from 'react-native';
 import { router } from 'expo-router';
 import { getStudentsApi, deleteStudentApi, updateStudentApi } from '@/api/students';
 import { getFacultySubjectsApi } from '@/api/auth';
-import { getStudentAttendanceDataApi, StudentAttendanceData } from '@/api/attendance';
 import EditStudentModal from '@/components/edit-student-modal';
-import StudentDetailsModal from '@/components/student-details-modal';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type Student = {
   id: string;
@@ -28,7 +26,6 @@ type Student = {
 
 export default function ManageStudentsScreen() {
   const [students, setStudents] = useState<Student[]>([]);
-  const [attendanceData, setAttendanceData] = useState<StudentAttendanceData[]>([]);
   const [selectedSubject, setSelectedSubject] = useState<string>('');
   const [selectedSection, setSelectedSection] = useState<string>('');
   const [selectedSessionType, setSelectedSessionType] = useState<string>('');
@@ -40,8 +37,7 @@ export default function ManageStudentsScreen() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   
-  // Student details modal state
-  const [showStudentDetailsModal, setShowStudentDetailsModal] = useState(false);
+  const insets = useSafeAreaInsets();
   
   type ActiveDropdown = 'subject' | 'section' | 'sessionType' | null;
   const [activeDropdown, setActiveDropdown] = useState<ActiveDropdown>(null);
@@ -65,21 +61,11 @@ export default function ManageStudentsScreen() {
     try {
       if (!selectedSubject || !selectedSection || !selectedSessionType) {
         setStudents([]);
-        setAttendanceData([]);
         return;
       }
 
       const response = await getStudentsApi(selectedSubject, selectedSection);
       setStudents(response.students);
-      
-      // Load attendance data
-      try {
-        const attendanceResponse = await getStudentAttendanceDataApi(selectedSubject, selectedSection, selectedSessionType);
-        setAttendanceData(attendanceResponse.students);
-      } catch (attendanceErr) {
-        console.error('Failed to load attendance data:', attendanceErr);
-        setAttendanceData([]);
-      }
     } catch (err: any) {
       console.error('Failed to load students:', err);
       Alert.alert('Error', err?.response?.data?.message || 'Failed to load students');
@@ -270,9 +256,12 @@ export default function ManageStudentsScreen() {
   const containerStyle = styles.container;
 
   return (
-    <SafeAreaView style={containerStyle}>
+    <SafeAreaView style={containerStyle} edges={['left', 'right', 'bottom']}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[
+        styles.header,
+        { paddingTop: insets.top > 0 ? insets.top : 12 }
+      ]}>
         <Pressable
           onPress={() => router.back()}
           style={({ pressed }) => [
@@ -370,7 +359,14 @@ export default function ManageStudentsScreen() {
             <Text style={styles.studentCount}>{students.length} students</Text>
           </View>
           <Pressable
-            onPress={() => setShowStudentDetailsModal(true)}
+            onPress={() => router.push({
+              pathname: '/student-details',
+              params: {
+                subject: selectedSubject,
+                section: selectedSection,
+                sessionType: selectedSessionType
+              }
+            })}
             style={({ pressed }) => [
               styles.viewButton,
               pressed && styles.viewButtonPressed
@@ -405,19 +401,6 @@ export default function ManageStudentsScreen() {
           student={editingStudent}
         />
         
-        {/* Student Details Modal */}
-        <StudentDetailsModal
-          visible={showStudentDetailsModal}
-          onClose={() => setShowStudentDetailsModal(false)}
-          students={students}
-          attendanceData={attendanceData}
-          classInfo={{
-            subject: selectedSubject,
-            section: selectedSection,
-            sessionType: selectedSessionType
-          }}
-          onEditStudent={handleEditStudent}
-        />
       </SafeAreaView>
     );
   }
@@ -429,7 +412,7 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: 'white',
-    paddingTop: 50,
+    paddingTop: 16,
     paddingBottom: 16,
     paddingHorizontal: 16,
     borderBottomWidth: 1,

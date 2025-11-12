@@ -21,6 +21,7 @@ export default function RootLayout() {
           <Stack.Screen name="edit-profile" options={{ headerShown: false }} />
           <Stack.Screen name="change-password" options={{ headerShown: false }} />
           <Stack.Screen name="manage-students" options={{ headerShown: false }} />
+          <Stack.Screen name="student-details" options={{ headerShown: false }} />
         </Stack>
         <StatusBar style="auto" />
       </ThemeProvider>
