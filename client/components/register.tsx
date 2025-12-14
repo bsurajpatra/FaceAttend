@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, Pressable, ActivityIndicator } from 'react-native';
 import { styles } from './styles/register-styles';
-import { ServerUrlConfig } from '@/components/server-url-config';
 
 type RegisterProps = {
   onSubmit?: (data: { name: string; email: string; username: string; password: string; confirmPassword: string }) => Promise<void> | void;
@@ -16,7 +15,6 @@ export default function Register({ onSubmit, onLoginPress, isSubmitting = false,
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [showServerUrlConfig, setShowServerUrlConfig] = useState(false);
 
   const handleSubmit = async () => {
     if (onSubmit) {
@@ -137,20 +135,6 @@ export default function Register({ onSubmit, onLoginPress, isSubmitting = false,
           <Text style={styles.linkText}>Already have an account? Login</Text>
         </Pressable>
       </View>
-
-      <Pressable
-        onPress={() => setShowServerUrlConfig(true)}
-        style={({ pressed }) => [styles.serverUrlButton, pressed && styles.serverUrlButtonPressed]}
-        accessibilityRole="button"
-        accessibilityLabel="Configure server URL"
-      >
-        <Text style={styles.serverUrlButtonText}>Configure Server URL</Text>
-      </Pressable>
-
-      <ServerUrlConfig
-        visible={showServerUrlConfig}
-        onClose={() => setShowServerUrlConfig(false)}
-      />
     </View>
   );
 }

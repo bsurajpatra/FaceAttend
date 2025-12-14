@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, Pressable, ActivityIndicator } from 'react-native';
 import { styles } from '@/components/styles/login-styles';
 import { loginApi } from '@/api/auth';
-import { ServerUrlConfig } from '@/components/server-url-config';
 
 type LoginProps = {
   onSubmit?: (credentials: { username: string; password: string }) => Promise<void> | void;
@@ -17,7 +16,6 @@ export default function Login({ onSubmit, onRegisterPress, onForgotPasswordPress
   const [password, setPassword] = useState('');
   const [localSubmitting, setLocalSubmitting] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
-  const [showServerUrlConfig, setShowServerUrlConfig] = useState(false);
 
   const handleSubmit = async () => {
     if (onSubmit) {
@@ -104,20 +102,6 @@ export default function Login({ onSubmit, onRegisterPress, onForgotPasswordPress
           <Text style={styles.linkText}>Forgot password</Text>
         </Pressable>
       </View>
-
-      <Pressable
-        onPress={() => setShowServerUrlConfig(true)}
-        style={({ pressed }) => [styles.serverUrlButton, pressed && styles.serverUrlButtonPressed]}
-        accessibilityRole="button"
-        accessibilityLabel="Configure server URL"
-      >
-        <Text style={styles.serverUrlButtonText}>Configure Server URL</Text>
-      </Pressable>
-
-      <ServerUrlConfig
-        visible={showServerUrlConfig}
-        onClose={() => setShowServerUrlConfig(false)}
-      />
     </View>
   );
 }
