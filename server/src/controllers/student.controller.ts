@@ -4,31 +4,14 @@ import { Student } from '../models/Student';
 import { Faculty } from '../models/Faculty';
 import { getFaceEmbedding } from '../services/facenet.service';
 
-// Calculate cosine similarity between two face descriptors
-function cosineSimilarity(a: number[], b: number[]): number {
-  if (a.length !== b.length) return 0;
-  
-  let dotProduct = 0;
-  let normA = 0;
-  let normB = 0;
-  
-  for (let i = 0; i < a.length; i++) {
-    dotProduct += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
-  }
-  
-  if (normA === 0 || normB === 0) return 0;
-  
-  return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
-}
+import { cosineSimilarity } from '../utils/math';
 
 export async function registerStudent(req: Request, res: Response): Promise<void> {
   console.log('=== STUDENT REGISTRATION REQUEST ===');
   console.log('Headers:', req.headers);
   console.log('Body:', JSON.stringify(req.body, null, 2));
   console.log('Faculty ID:', req.userId);
-  
+
   try {
     const facultyId = req.userId;
     if (!facultyId || !mongoose.isValidObjectId(facultyId)) {
@@ -36,7 +19,7 @@ export async function registerStudent(req: Request, res: Response): Promise<void
       res.status(401).json({ message: 'Unauthorized' });
       return;
     }
-    
+
     console.log('✅ Faculty ID valid:', facultyId);
 
     const { name, rollNumber, subject, section, sessionType, faceDescriptor, faceImageBase64 } = req.body as {
@@ -54,29 +37,29 @@ export async function registerStudent(req: Request, res: Response): Promise<void
       res.status(400).json({ message: 'name, rollNumber, subject, section and sessionType are required' });
       return;
     }
-    
+
     console.log('✅ All required fields present');
 
     // Face data is MANDATORY for student registration
     if (!faceImageBase64) {
       console.log('❌ No face image provided - face processing is mandatory');
-      res.status(400).json({ 
+      res.status(400).json({
         message: 'Face image is required for student registration',
         hint: 'Please capture a face image using the camera.'
       });
       return;
     }
-    
+
     // Generate FaceNet embedding from the image
     console.log('🔄 Processing face image with FaceNet...');
     let faceEmbedding: number[];
-    
+
     try {
       faceEmbedding = await getFaceEmbedding(faceImageBase64);
       console.log('✅ FaceNet embedding generated, length:', faceEmbedding.length);
     } catch (error: any) {
       console.error('❌ FaceNet processing error:', error);
-      res.status(400).json({ 
+      res.status(400).json({
         message: error.message || 'Failed to process face image',
         hint: 'Please ensure the image contains a clear face and try again'
       });
@@ -93,7 +76,7 @@ export async function registerStudent(req: Request, res: Response): Promise<void
     }
 
     console.log('✅ Faculty found, timetable sessions:', faculty.timetable?.length || 0);
-    
+
     // Check if faculty has any timetable data
     if (!faculty.timetable || faculty.timetable.length === 0) {
       console.log('⚠️ Faculty has no timetable - allowing registration for testing');
@@ -105,13 +88,13 @@ export async function registerStudent(req: Request, res: Response): Promise<void
 
       if (!isValidOffering) {
         console.log('❌ Invalid offering - not in timetable');
-        res.status(400).json({ 
+        res.status(400).json({
           message: 'Selected subject/section/sessionType is not in your timetable. Please set up your timetable first.',
           hint: 'Go to the Timetable section in the app to add this subject/section/sessionType combination.'
         });
         return;
       }
-      
+
       console.log('✅ Offering verified in timetable');
     }
 
@@ -126,7 +109,7 @@ export async function registerStudent(req: Request, res: Response): Promise<void
 
     if (duplicateRollNumber) {
       console.log('❌ Duplicate roll number found in same class');
-      res.status(400).json({ 
+      res.status(400).json({
         message: 'Roll number already exists in this class',
         hint: `Student with roll number ${rollNumber} is already registered for ${subject} - Section ${section}`
       });
@@ -163,7 +146,7 @@ export async function registerStudent(req: Request, res: Response): Promise<void
 
       if (isDuplicateFace) {
         console.log('❌ Duplicate face descriptor found in same class');
-        res.status(400).json({ 
+        res.status(400).json({
           message: 'Face data already exists in this class',
           hint: `A student with similar face data is already registered for ${subject} - Section ${section}. Please ensure the face is different.`
         });
@@ -224,7 +207,7 @@ export async function getStudents(req: Request, res: Response): Promise<void> {
     }
 
     const { subject, section } = req.query as { subject?: string; section?: string };
-    
+
     if (!subject || !section) {
       res.status(400).json({ message: 'subject and section are required' });
       return;
@@ -239,12 +222,12 @@ export async function getStudents(req: Request, res: Response): Promise<void> {
 
     // Transform the data to include session type from enrollments
     const transformedStudents = students.map(student => {
-      const enrollment = student.enrollments.find(e => 
-        e.subject === subject && 
-        e.section === section && 
+      const enrollment = student.enrollments.find(e =>
+        e.subject === subject &&
+        e.section === section &&
         String(e.facultyId) === String(facultyId)
       );
-      
+
       return {
         id: student._id.toString(),
         name: student.name,
@@ -285,8 +268,8 @@ export async function updateStudent(req: Request, res: Response): Promise<void> 
 
     // Check if at least one field is provided for update
     if (!name && !rollNumber && !faceImageBase64) {
-      res.status(400).json({ 
-        message: 'At least one field (name, rollNumber, or faceImageBase64) must be provided for update' 
+      res.status(400).json({
+        message: 'At least one field (name, rollNumber, or faceImageBase64) must be provided for update'
       });
       return;
     }
@@ -299,7 +282,7 @@ export async function updateStudent(req: Request, res: Response): Promise<void> 
     }
 
     // Check if student is enrolled with this faculty
-    const hasEnrollment = student.enrollments.some(e => 
+    const hasEnrollment = student.enrollments.some(e =>
       String(e.facultyId) === String(facultyId)
     );
 
@@ -322,13 +305,13 @@ export async function updateStudent(req: Request, res: Response): Promise<void> 
       try {
         const faceEmbedding = await getFaceEmbedding(faceImageBase64);
         console.log('✅ FaceNet embedding generated for update, length:', faceEmbedding.length);
-        
+
         // Update both legacy and new embedding fields
         student.faceDescriptor = faceEmbedding;
         student.embeddings = [faceEmbedding];
       } catch (error: any) {
         console.error('❌ FaceNet processing error during update:', error);
-        res.status(400).json({ 
+        res.status(400).json({
           message: error.message || 'Failed to process face image',
           hint: 'Please ensure the image contains a clear face and try again'
         });
@@ -366,7 +349,7 @@ export async function deleteStudent(req: Request, res: Response): Promise<void> 
     }
 
     // Check if student is enrolled with this faculty
-    const hasEnrollment = student.enrollments.some(e => 
+    const hasEnrollment = student.enrollments.some(e =>
       String(e.facultyId) === String(facultyId)
     );
 
@@ -376,7 +359,7 @@ export async function deleteStudent(req: Request, res: Response): Promise<void> 
     }
 
     // Remove enrollment for this faculty
-    student.enrollments = student.enrollments.filter(e => 
+    student.enrollments = student.enrollments.filter(e =>
       String(e.facultyId) !== String(facultyId)
     );
 

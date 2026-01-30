@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
+import {
+  View,
+  Text,
   ScrollView,
-  Pressable, 
-  StyleSheet, 
+  Pressable,
+  StyleSheet,
   Alert,
   Modal
 } from 'react-native';
@@ -32,13 +32,13 @@ export default function ManageStudentsScreen() {
   const [facultySubjects, setFacultySubjects] = useState<string[]>([]);
   const [subjectSections, setSubjectSections] = useState<{ [key: string]: string[] }>({});
   const [subjectSessionTypes, setSubjectSessionTypes] = useState<{ [key: string]: string[] }>({});
-  
+
   // Edit modal state
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
-  
+
   const insets = useSafeAreaInsets();
-  
+
   type ActiveDropdown = 'subject' | 'section' | 'sessionType' | null;
   const [activeDropdown, setActiveDropdown] = useState<ActiveDropdown>(null);
 
@@ -121,7 +121,7 @@ export default function ManageStudentsScreen() {
     setShowEditModal(true);
   };
 
-  const handleUpdateStudent = async (studentId: string, data: { name: string; rollNumber: string; faceImageBase64?: string }) => {
+  const handleUpdateStudent = async (studentId: string, data: { name?: string; rollNumber?: string; faceImageBase64?: string }) => {
     try {
       await updateStudentApi(studentId, data);
       Alert.alert('Success', 'Student updated successfully');
@@ -139,8 +139,8 @@ export default function ManageStudentsScreen() {
       `Are you sure you want to delete ${studentName}?`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete', 
+        {
+          text: 'Delete',
           style: 'destructive',
           onPress: async () => {
             try {
@@ -187,7 +187,7 @@ export default function ManageStudentsScreen() {
     };
 
     const modalData = getModalData();
-    
+
     if (!modalData) {
       return null;
     }
@@ -200,11 +200,11 @@ export default function ManageStudentsScreen() {
         onRequestClose={closeDropdown}
         statusBarTranslucent={true}
       >
-        <Pressable 
+        <Pressable
           style={styles.modalOverlay}
           onPress={closeDropdown}
         >
-          <Pressable 
+          <Pressable
             style={styles.modalContent}
             onPress={(e) => e.stopPropagation()}
           >
@@ -226,14 +226,14 @@ export default function ManageStudentsScreen() {
               ) : (
                 <View style={styles.emptyModalState}>
                   <Text style={styles.emptyModalTitle}>
-                    {activeDropdown === 'subject' ? 'No Subjects Found' : 
-                     activeDropdown === 'section' ? 'No Sections Found' : 
-                     'No Session Types Found'}
+                    {activeDropdown === 'subject' ? 'No Subjects Found' :
+                      activeDropdown === 'section' ? 'No Sections Found' :
+                        'No Session Types Found'}
                   </Text>
                   <Text style={styles.emptyModalSubtitle}>
                     {activeDropdown === 'subject' ? 'Go to dashboard to setup timetable.' :
-                     activeDropdown === 'section' ? 'Please select a subject first to view available sections.' :
-                     'Please select a subject and section first to view session types.'}
+                      activeDropdown === 'section' ? 'Please select a subject first to view available sections.' :
+                        'Please select a subject and section first to view session types.'}
                   </Text>
                 </View>
               )}
@@ -279,7 +279,7 @@ export default function ManageStudentsScreen() {
       <View style={styles.selectionWrapper}>
         <View style={styles.selectionContainer}>
           <Text style={styles.selectionTitle}>Select Class</Text>
-          
+
           {/* Subject Dropdown */}
           <View style={styles.dropdownWrapper}>
             <Text style={styles.dropdownLabel}>Subject</Text>
@@ -387,23 +387,23 @@ export default function ManageStudentsScreen() {
         </View>
       ) : null}
 
-        <SingleDropdownModal />
-        
-        {/* Edit Student Modal */}
-        <EditStudentModal
-          visible={showEditModal}
-          onClose={() => {
-            setShowEditModal(false);
-            setEditingStudent(null);
-          }}
-          onSave={handleUpdateStudent}
-          onDelete={handleDeleteStudent}
-          student={editingStudent}
-        />
-        
-      </SafeAreaView>
-    );
-  }
+      <SingleDropdownModal />
+
+      {/* Edit Student Modal */}
+      <EditStudentModal
+        visible={showEditModal}
+        onClose={() => {
+          setShowEditModal(false);
+          setEditingStudent(null);
+        }}
+        onSave={handleUpdateStudent}
+        onDelete={handleDeleteStudent}
+        student={editingStudent}
+      />
+
+    </SafeAreaView>
+  );
+}
 
 const styles = StyleSheet.create({
   container: {

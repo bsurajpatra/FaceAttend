@@ -29,7 +29,7 @@ type Student = {
 type EditStudentModalProps = {
   visible: boolean;
   onClose: () => void;
-  onSave: (studentId: string, data: { name: string; rollNumber: string; faceImageBase64?: string }) => Promise<void>;
+  onSave: (studentId: string, data: { name?: string; rollNumber?: string; faceImageBase64?: string }) => Promise<void>;
   onDelete: (studentId: string, studentName: string) => void;
   student: Student | null;
 };
@@ -72,7 +72,7 @@ export default function EditStudentModal({
     setIsSaving(true);
     try {
       const updateData: { name?: string; rollNumber?: string; faceImageBase64?: string } = {};
-      
+
       if (hasNameChange && name.trim()) {
         updateData.name = name.trim();
       }
@@ -101,23 +101,25 @@ export default function EditStudentModal({
     try {
       // Check current permission status first
       const currentPermission = await ImagePicker.getMediaLibraryPermissionsAsync();
-      
+
       if (!currentPermission.granted) {
         // Request permission to access media library
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
           Alert.alert(
-            'Permission Required', 
+            'Permission Required',
             'Media library access is required to upload photos. Please grant permission in Settings.',
             [
               { text: 'Cancel', style: 'cancel' },
-              { text: 'Open Settings', onPress: () => { 
-                try { 
-                  Linking.openSettings(); 
-                } catch (error) {
-                  console.error('Failed to open settings:', error);
+              {
+                text: 'Open Settings', onPress: () => {
+                  try {
+                    Linking.openSettings();
+                  } catch (error) {
+                    console.error('Failed to open settings:', error);
+                  }
                 }
-              }},
+              },
             ]
           );
           return;
@@ -148,7 +150,7 @@ export default function EditStudentModal({
 
   const handleDelete = () => {
     if (!student) return;
-    
+
     // Call the parent's delete handler directly - it will show the confirmation
     onDelete(student.id, student.name);
     onClose();
@@ -257,7 +259,7 @@ export default function EditStudentModal({
                           📷 Capture
                         </Text>
                       </TouchableOpacity>
-                      
+
                       <TouchableOpacity
                         style={[styles.faceCaptureButton, styles.uploadButton]}
                         onPress={uploadPhoto}
@@ -274,7 +276,7 @@ export default function EditStudentModal({
                       </Text>
                     )}
                     <Text style={styles.faceCaptureHint}>
-                      {capturedFaceImage 
+                      {capturedFaceImage
                         ? 'New face data will be used for attendance recognition'
                         : 'Optional: Capture new face data for better recognition'
                       }
@@ -300,7 +302,7 @@ export default function EditStudentModal({
                 >
                   <Text style={styles.deleteButtonText}>Delete</Text>
                 </TouchableOpacity>
-                
+
                 <TouchableOpacity
                   style={[styles.button, styles.cancelButton]}
                   onPress={handleClose}
@@ -308,7 +310,7 @@ export default function EditStudentModal({
                 >
                   <Text style={styles.cancelButtonText}>Cancel</Text>
                 </TouchableOpacity>
-                
+
                 <TouchableOpacity
                   style={[styles.button, styles.saveButton, isSaving && styles.saveButtonDisabled]}
                   onPress={handleSave}

@@ -4,6 +4,7 @@ import { AttendanceSession } from '../models/Attendance';
 import { Student } from '../models/Student';
 import { Faculty } from '../models/Faculty';
 import { getFaceEmbedding } from '../services/facenet.service';
+import { cosineSimilarity } from '../utils/math';
 
 // Face matching threshold (cosine similarity) - higher threshold for FaceNet embeddings
 const FACE_MATCH_THRESHOLD = 0.6;
@@ -12,56 +13,37 @@ const FACE_MATCH_THRESHOLD = 0.6;
 const sessionCreationTimes = new Map<string, number>();
 const SESSION_CREATION_COOLDOWN = 1000; // 1 second
 
-// Calculate cosine similarity between two face descriptors
-function cosineSimilarity(a: number[], b: number[]): number {
-  if (a.length !== b.length) return 0;
-  
-  let dotProduct = 0;
-  let normA = 0;
-  let normB = 0;
-  
-  for (let i = 0; i < a.length; i++) {
-    dotProduct += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
-  }
-  
-  if (normA === 0 || normB === 0) return 0;
-  
-  return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
-}
-
 // Find best matching student for a face embedding
 async function findMatchingStudent(
-  faceEmbedding: number[], 
+  faceEmbedding: number[],
   enrolledStudents: any[]
 ): Promise<{ student: any; confidence: number } | null> {
   let bestMatch = null;
   let bestConfidence = 0;
-  
+
   console.log('🔍 Finding matching student using FaceNet embeddings...');
   console.log('Input embedding length:', faceEmbedding.length);
   console.log('Enrolled students count:', enrolledStudents.length);
-  
+
   for (const student of enrolledStudents) {
     // Check both embeddings and legacy faceDescriptor
     const embeddings = student.embeddings || [];
     const legacyDescriptor = student.faceDescriptor || [];
-    
+
     if (embeddings.length === 0 && legacyDescriptor.length === 0) {
       console.log(`⚠️ Student ${student.name} has no face data`);
       continue;
     }
-    
+
     // Try FaceNet embeddings first, then fall back to legacy descriptor
     const faceDataArray = embeddings.length > 0 ? embeddings : [legacyDescriptor];
-    
+
     for (const storedEmbedding of faceDataArray) {
       if (!storedEmbedding || storedEmbedding.length === 0) continue;
-      
+
       const similarity = cosineSimilarity(faceEmbedding, storedEmbedding);
       console.log(`📊 Comparing with ${student.name}: similarity = ${similarity.toFixed(4)}`);
-      
+
       if (similarity > bestConfidence && similarity >= FACE_MATCH_THRESHOLD) {
         bestConfidence = similarity;
         bestMatch = student;
@@ -69,7 +51,7 @@ async function findMatchingStudent(
       }
     }
   }
-  
+
   console.log(`🎯 Final result: ${bestMatch ? `Match found: ${bestMatch.name} (${bestConfidence.toFixed(4)})` : 'No match found'}`);
   return bestMatch ? { student: bestMatch, confidence: bestConfidence } : null;
 }
@@ -79,36 +61,36 @@ export async function startAttendanceSession(req: Request, res: Response): Promi
   try {
     const facultyId = req.userId;
     const { subject, section, sessionType, hours, location } = req.body;
-    
+
     if (!facultyId || !mongoose.isValidObjectId(facultyId)) {
       res.status(401).json({ message: 'Unauthorized' });
       return;
     }
-    
+
     // Rate limiting check
     const rateLimitKey = `${facultyId}-${subject}-${section}`;
     const lastCreationTime = sessionCreationTimes.get(rateLimitKey);
     const now = Date.now();
-    
+
     if (lastCreationTime && (now - lastCreationTime) < SESSION_CREATION_COOLDOWN) {
-      res.status(429).json({ 
+      res.status(429).json({
         message: 'Please wait before creating another session',
         retryAfter: Math.ceil((SESSION_CREATION_COOLDOWN - (now - lastCreationTime)) / 1000)
       });
       return;
     }
-    
+
     sessionCreationTimes.set(rateLimitKey, now);
-    
+
     if (!subject || !section || !sessionType || !hours || !Array.isArray(hours)) {
       res.status(400).json({ message: 'subject, section, sessionType, and hours are required' });
       return;
     }
-    
+
     // Check if session already exists for today
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
+
     const existingSession = await AttendanceSession.findOne({
       facultyId: new mongoose.Types.ObjectId(facultyId),
       subject,
@@ -116,7 +98,7 @@ export async function startAttendanceSession(req: Request, res: Response): Promi
       sessionType,
       date: today
     });
-    
+
     if (existingSession) {
       res.status(200).json({
         message: 'Attendance session already exists for today',
@@ -131,24 +113,24 @@ export async function startAttendanceSession(req: Request, res: Response): Promi
       });
       return;
     }
-    
+
     // Get enrolled students for this subject/section
     const enrolledStudents = await Student.find({
       'enrollments.subject': subject,
       'enrollments.section': section,
       'enrollments.facultyId': new mongoose.Types.ObjectId(facultyId)
     }).select('name rollNumber faceDescriptor embeddings');
-    
+
     if (enrolledStudents.length === 0) {
-      res.status(404).json({ 
+      res.status(404).json({
         message: 'No students enrolled in this subject/section',
         hint: 'Please register students for this subject/section first'
       });
       return;
     }
-    
+
     // Create attendance session
-    
+
     const attendanceSession = await AttendanceSession.create({
       facultyId: new mongoose.Types.ObjectId(facultyId),
       subject,
@@ -173,7 +155,7 @@ export async function startAttendanceSession(req: Request, res: Response): Promi
         markedAt: new Date()
       }))
     });
-    
+
     res.status(201).json({
       message: 'Attendance session started',
       sessionId: attendanceSession._id,
@@ -186,7 +168,7 @@ export async function startAttendanceSession(req: Request, res: Response): Promi
         hasFaceNetEmbeddings: !!(s.embeddings && s.embeddings.length > 0)
       }))
     });
-    
+
   } catch (error) {
     console.error('Start attendance session error:', error);
     res.status(500).json({ message: 'Failed to start attendance session' });
@@ -198,101 +180,101 @@ export async function markAttendance(req: Request, res: Response): Promise<void>
   try {
     const facultyId = req.userId;
     const { sessionId, faceImageBase64 } = req.body;
-    
+
     if (!facultyId || !mongoose.isValidObjectId(facultyId)) {
       res.status(401).json({ message: 'Unauthorized' });
       return;
     }
-    
+
     if (!sessionId || !mongoose.isValidObjectId(sessionId)) {
       res.status(400).json({ message: 'Valid sessionId is required' });
       return;
     }
-    
+
     if (!faceImageBase64) {
-      res.status(400).json({ 
+      res.status(400).json({
         message: 'Face image is required',
         hint: 'Please provide faceImageBase64'
       });
       return;
     }
-    
+
     // Get attendance session
     const session = await AttendanceSession.findById(sessionId);
     if (!session) {
       res.status(404).json({ message: 'Attendance session not found' });
       return;
     }
-    
+
     // Verify faculty owns this session
     if (String(session.facultyId) !== String(facultyId)) {
       res.status(403).json({ message: 'Unauthorized to access this session' });
       return;
     }
-    
+
     // Generate FaceNet embedding from the image
     console.log('🔄 Processing face image with FaceNet...');
     let faceEmbedding: number[];
-    
+
     try {
       faceEmbedding = await getFaceEmbedding(faceImageBase64);
       console.log('✅ FaceNet embedding generated, length:', faceEmbedding.length);
     } catch (error: any) {
       console.error('❌ FaceNet processing error:', error);
-      res.status(400).json({ 
+      res.status(400).json({
         message: error.message || 'Failed to process face image',
         hint: 'Please ensure the image contains a clear face and try again'
       });
       return;
     }
-    
+
     // Get enrolled students for matching
     const enrolledStudents = await Student.find({
       'enrollments.subject': session.subject,
       'enrollments.section': session.section,
       'enrollments.facultyId': session.facultyId
     }).select('_id name rollNumber faceDescriptor embeddings');
-    
+
     // Find matching student
     const match = await findMatchingStudent(faceEmbedding, enrolledStudents);
-    
+
     if (!match) {
-      res.status(404).json({ 
+      res.status(404).json({
         message: 'No matching student found',
         hint: 'Face does not match any enrolled student. Please ensure the student is registered for this subject/section.'
       });
       return;
     }
-    
+
     // Update attendance record
     console.log('🔍 Looking for student in session records...');
     console.log('Match student ID:', match.student._id);
     console.log('Session records count:', session.records.length);
     console.log('Session records:', session.records.map(r => ({ id: r.studentId, name: r.studentName })));
-    
+
     const recordIndex = session.records.findIndex(
       record => String(record.studentId) === String(match.student._id)
     );
-    
+
     console.log('Record index found:', recordIndex);
-    
+
     if (recordIndex === -1) {
       console.log('❌ Student not found in attendance session records');
       console.log('🔄 Attempting to refresh session with latest enrolled students...');
-      
+
       // Try to refresh the session with latest enrolled students
       const latestEnrolledStudents = await Student.find({
         'enrollments.subject': session.subject,
         'enrollments.section': session.section,
         'enrollments.facultyId': session.facultyId
       }).select('_id name rollNumber faceDescriptor embeddings');
-      
+
       // Check if the student exists in the latest enrollment
       const studentExists = latestEnrolledStudents.find(s => String(s._id) === String(match.student._id));
-      
+
       if (studentExists) {
         console.log('✅ Student found in latest enrollment, adding to session...');
-        
+
         // Add the student to the session records
         session.records.push({
           studentId: match.student._id,
@@ -301,25 +283,25 @@ export async function markAttendance(req: Request, res: Response): Promise<void>
           isPresent: false,
           markedAt: new Date()
         });
-        
+
         session.totalStudents += 1;
         session.absentStudents += 1;
-        
+
         await session.save();
-        
+
         // Now proceed with marking attendance
         const newRecordIndex = session.records.length - 1;
         const record = session.records[newRecordIndex];
-        
+
         record.isPresent = true;
         record.markedAt = new Date();
         record.confidence = Math.min(1.0, Math.max(0.0, match.confidence));
-        
+
         session.presentStudents += 1;
         session.absentStudents -= 1;
-        
+
         await session.save();
-        
+
         res.json({
           message: 'Attendance marked successfully (student added to session)',
           student: {
@@ -336,29 +318,29 @@ export async function markAttendance(req: Request, res: Response): Promise<void>
         });
         return;
       } else {
-        res.status(404).json({ 
+        res.status(404).json({
           message: 'Student not found in attendance session',
           hint: 'The student may have been registered after the session was created. Please restart the attendance session.'
         });
         return;
       }
     }
-    
+
     const record = session.records[recordIndex];
     const wasPresent = record.isPresent;
-    
+
     if (!wasPresent) {
       // Mark as present
       record.isPresent = true;
       record.markedAt = new Date();
       // Clamp confidence to prevent floating-point precision issues
       record.confidence = Math.min(1.0, Math.max(0.0, match.confidence));
-      
+
       session.presentStudents += 1;
       session.absentStudents -= 1;
-      
+
       await session.save();
-      
+
       res.json({
         message: 'Attendance marked successfully',
         student: {
@@ -388,7 +370,7 @@ export async function markAttendance(req: Request, res: Response): Promise<void>
         }
       });
     }
-    
+
   } catch (error) {
     console.error('Mark attendance error:', error);
     res.status(500).json({ message: 'Failed to mark attendance' });
@@ -400,21 +382,21 @@ export async function checkAttendanceStatus(req: Request, res: Response): Promis
   try {
     const facultyId = req.userId;
     const { subject, section, sessionType } = req.query;
-    
+
     if (!facultyId || !mongoose.isValidObjectId(facultyId)) {
       res.status(401).json({ message: 'Unauthorized' });
       return;
     }
-    
+
     if (!subject || !section || !sessionType) {
       res.status(400).json({ message: 'subject, section, and sessionType are required' });
       return;
     }
-    
+
     // Check if session exists for today
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
+
     const existingSession = await AttendanceSession.findOne({
       facultyId: new mongoose.Types.ObjectId(facultyId),
       subject: subject as string,
@@ -422,7 +404,7 @@ export async function checkAttendanceStatus(req: Request, res: Response): Promis
       sessionType: sessionType as string,
       date: today
     });
-    
+
     if (existingSession) {
       // Reconcile totals with latest enrollment so DB and reports stay accurate
       const enrolledStudents = await Student.find({
@@ -472,7 +454,7 @@ export async function checkAttendanceStatus(req: Request, res: Response): Promis
         hasAttendance: false
       });
     }
-    
+
   } catch (error) {
     console.error('Check attendance status error:', error);
     res.status(500).json({ message: 'Failed to check attendance status' });
@@ -484,29 +466,29 @@ export async function getAttendanceSession(req: Request, res: Response): Promise
   try {
     const facultyId = req.userId;
     const { sessionId } = req.params;
-    
+
     if (!facultyId || !mongoose.isValidObjectId(facultyId)) {
       res.status(401).json({ message: 'Unauthorized' });
       return;
     }
-    
+
     if (!sessionId || !mongoose.isValidObjectId(sessionId)) {
       res.status(400).json({ message: 'Valid sessionId is required' });
       return;
     }
-    
+
     const session = await AttendanceSession.findById(sessionId);
     if (!session) {
       res.status(404).json({ message: 'Attendance session not found' });
       return;
     }
-    
+
     // Verify faculty owns this session
     if (String(session.facultyId) !== String(facultyId)) {
       res.status(403).json({ message: 'Unauthorized to access this session' });
       return;
     }
-    
+
     // Get current enrolled students to reconcile with records
     const enrolledStudents = await Student.find({
       'enrollments.subject': session.subject,
@@ -557,12 +539,12 @@ export async function getAttendanceSession(req: Request, res: Response): Promise
     // For each enrolled student, check if they're present
     enrolledStudents.forEach(student => {
       const studentId = String(student._id);
-      
+
       // If student is NOT in present list, they are absent
       if (!presentStudentIds.has(studentId)) {
         // Try to get name/roll from records if available (for consistency)
         const record = session.records.find(r => String(r.studentId) === studentId);
-        
+
         absentStudents.push({
           id: student._id,
           name: record ? record.studentName : student.name,
@@ -588,11 +570,11 @@ export async function getAttendanceSession(req: Request, res: Response): Promise
     const actualTotalStudents = Math.max(enrolledStudents.length, allStudentIds.size);
     const actualPresentStudents = presentStudents.length;
     const actualAbsentStudents = absentStudents.length;
-    
+
     // Update session totals if they don't match (reconciliation)
-    if (session.totalStudents !== actualTotalStudents || 
-        session.presentStudents !== actualPresentStudents ||
-        session.absentStudents !== actualAbsentStudents) {
+    if (session.totalStudents !== actualTotalStudents ||
+      session.presentStudents !== actualPresentStudents ||
+      session.absentStudents !== actualAbsentStudents) {
       session.totalStudents = actualTotalStudents;
       session.presentStudents = actualPresentStudents;
       session.absentStudents = actualAbsentStudents;
@@ -610,8 +592,8 @@ export async function getAttendanceSession(req: Request, res: Response): Promise
         totalStudents: actualTotalStudents,
         presentStudents: actualPresentStudents,
         absentStudents: actualAbsentStudents,
-        attendancePercentage: actualTotalStudents > 0 
-          ? Math.round((actualPresentStudents / actualTotalStudents) * 100) 
+        attendancePercentage: actualTotalStudents > 0
+          ? Math.round((actualPresentStudents / actualTotalStudents) * 100)
           : 0,
         createdAt: session.createdAt,
         updatedAt: session.updatedAt
@@ -629,7 +611,7 @@ export async function getAttendanceSession(req: Request, res: Response): Promise
         confidence: record.confidence
       }))
     });
-    
+
   } catch (error) {
     console.error('Get attendance session error:', error);
     res.status(500).json({ message: 'Failed to get attendance session' });
@@ -685,17 +667,17 @@ export async function getStudentAttendanceData(req: Request, res: Response): Pro
   try {
     const facultyId = req.userId;
     const { subject, section, sessionType } = req.query;
-    
+
     if (!facultyId || !mongoose.isValidObjectId(facultyId)) {
       res.status(401).json({ message: 'Unauthorized' });
       return;
     }
-    
+
     if (!subject || !section || !sessionType) {
       res.status(400).json({ message: 'subject, section, and sessionType are required' });
       return;
     }
-    
+
     // Get all attendance sessions for this subject/section/sessionType
     const sessions = await AttendanceSession.find({
       facultyId: new mongoose.Types.ObjectId(facultyId),
@@ -703,25 +685,25 @@ export async function getStudentAttendanceData(req: Request, res: Response): Pro
       section: section as string,
       sessionType: sessionType as string
     }).sort({ date: -1 }); // Most recent first
-    
+
     // Get all students for this subject/section
     const students = await Student.find({
       'enrollments.subject': subject as string,
       'enrollments.section': section as string,
       'enrollments.facultyId': new mongoose.Types.ObjectId(facultyId)
     }).select('name rollNumber');
-    
+
     // Calculate attendance for each student
     const studentAttendanceData = students.map(student => {
       let totalSessions = 0;
       let presentSessions = 0;
       let lastPresentDate: Date | null = null;
       let lastPresentSessionHours: string | null = null;
-      
+
       sessions.forEach(session => {
         totalSessions++;
-        const studentRecord = session.records.find(record => 
-          record.studentId.toString() === student._id.toString()
+        const studentRecord = session.records.find(record =>
+          record.studentId.toString() === (student as any)._id.toString()
         );
         if (studentRecord && studentRecord.isPresent) {
           presentSessions++;
@@ -733,11 +715,11 @@ export async function getStudentAttendanceData(req: Request, res: Response): Pro
           }
         }
       });
-      
+
       const attendancePercentage = totalSessions > 0 ? Math.round((presentSessions / totalSessions) * 100) : 0;
-      
+
       return {
-        studentId: student._id,
+        studentId: (student as any)._id,
         name: student.name,
         rollNumber: student.rollNumber,
         totalSessions,
@@ -748,7 +730,7 @@ export async function getStudentAttendanceData(req: Request, res: Response): Pro
         lastPresentSessionHours: lastPresentSessionHours
       };
     });
-    
+
     res.status(200).json({
       students: studentAttendanceData,
       totalSessions: sessions.length,
@@ -757,7 +739,7 @@ export async function getStudentAttendanceData(req: Request, res: Response): Pro
         to: sessions[0].date
       } : null
     });
-    
+
   } catch (error) {
     console.error('Get student attendance data error:', error);
     res.status(500).json({ message: 'Failed to get student attendance data' });
@@ -769,28 +751,28 @@ export async function getAttendanceReports(req: Request, res: Response): Promise
   try {
     const facultyId = req.userId;
     const { subject, section, startDate, endDate } = req.query;
-    
+
     if (!facultyId || !mongoose.isValidObjectId(facultyId)) {
       res.status(401).json({ message: 'Unauthorized' });
       return;
     }
-    
+
     // Build query
     const query: any = { facultyId: new mongoose.Types.ObjectId(facultyId) };
-    
+
     if (subject) query.subject = subject;
     if (section) query.section = section;
-    
+
     if (startDate || endDate) {
       query.date = {};
       if (startDate) query.date.$gte = new Date(startDate as string);
       if (endDate) query.date.$lte = new Date(endDate as string);
     }
-    
+
     const sessions = await AttendanceSession.find(query)
       .sort({ date: -1, createdAt: -1 })
       .limit(100); // Limit to prevent large responses
-    
+
     // Process sessions and reconcile totals
     const processedSessions = await Promise.all(sessions.map(async (session) => {
       // Get current enrolled students to reconcile with records
@@ -842,12 +824,12 @@ export async function getAttendanceReports(req: Request, res: Response): Promise
       // For each enrolled student, check if they're present
       enrolledStudents.forEach(student => {
         const studentId = String(student._id);
-        
+
         // If student is NOT in present list, they are absent
         if (!presentStudentIds.has(studentId)) {
           // Try to get name/roll from records if available (for consistency)
           const record = session.records.find(r => String(r.studentId) === studentId);
-          
+
           absentStudents.push({
             id: student._id,
             name: record ? record.studentName : student.name,
@@ -873,11 +855,11 @@ export async function getAttendanceReports(req: Request, res: Response): Promise
       const actualTotalStudents = Math.max(enrolledStudents.length, allStudentIds.size);
       const actualPresentStudents = presentStudents.length;
       const actualAbsentStudents = absentStudents.length;
-      
+
       // Update session totals if they don't match (reconciliation)
-      if (session.totalStudents !== actualTotalStudents || 
-          session.presentStudents !== actualPresentStudents ||
-          session.absentStudents !== actualAbsentStudents) {
+      if (session.totalStudents !== actualTotalStudents ||
+        session.presentStudents !== actualPresentStudents ||
+        session.absentStudents !== actualAbsentStudents) {
         session.totalStudents = actualTotalStudents;
         session.presentStudents = actualPresentStudents;
         session.absentStudents = actualAbsentStudents;
@@ -894,8 +876,8 @@ export async function getAttendanceReports(req: Request, res: Response): Promise
         totalStudents: actualTotalStudents,
         presentStudents: actualPresentStudents,
         absentStudents: actualAbsentStudents,
-        attendancePercentage: actualTotalStudents > 0 
-          ? Math.round((actualPresentStudents / actualTotalStudents) * 100) 
+        attendancePercentage: actualTotalStudents > 0
+          ? Math.round((actualPresentStudents / actualTotalStudents) * 100)
           : 0,
         location: session.location ? {
           latitude: session.location.latitude,
@@ -913,7 +895,7 @@ export async function getAttendanceReports(req: Request, res: Response): Promise
     res.json({
       sessions: processedSessions
     });
-    
+
   } catch (error) {
     console.error('Get attendance reports error:', error);
     res.status(500).json({ message: 'Failed to get attendance reports' });

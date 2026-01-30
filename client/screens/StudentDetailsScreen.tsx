@@ -180,9 +180,9 @@ export default function StudentDetailsScreen() {
           </td>
           <td>${attendance ? `${attendance.presentSessions}/${attendance.totalSessions}` : 'N/A'}</td>
           <td>${attendance && attendance.lastAttendanceDate ?
-            new Date(attendance.lastAttendanceDate).toLocaleDateString() +
-            (attendance.lastPresentSessionHours ? ` (${attendance.lastPresentSessionHours})` : '')
-            : 'N/A'}</td>
+          new Date(attendance.lastAttendanceDate).toLocaleDateString() +
+          (attendance.lastPresentSessionHours ? ` (${attendance.lastPresentSessionHours})` : '')
+          : 'N/A'}</td>
         </tr>
       `;
     }).join('');
@@ -258,7 +258,7 @@ export default function StudentDetailsScreen() {
     setShowEditModal(true);
   };
 
-  const handleUpdateStudent = async (studentId: string, data: { name: string; rollNumber: string; faceImageBase64?: string }) => {
+  const handleUpdateStudent = async (studentId: string, data: { name?: string; rollNumber?: string; faceImageBase64?: string }) => {
     try {
       await updateStudentApi(studentId, data);
       Alert.alert('Success', 'Student updated successfully');

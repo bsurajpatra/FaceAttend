@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  Alert, 
-  Platform, 
-  StatusBar, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  Alert,
+  Platform,
+  StatusBar,
   Dimensions,
   TouchableOpacity,
   ActivityIndicator
@@ -43,12 +43,12 @@ type AttendanceStats = {
   total: number;
 };
 
-export default function LiveAttendance({ 
-  sessionId, 
-  subject, 
-  section, 
-  sessionType, 
-  hours, 
+export default function LiveAttendance({
+  sessionId,
+  subject,
+  section,
+  sessionType,
+  hours,
   totalStudents,
   onAttendanceMarked,
   onClose,
@@ -79,7 +79,7 @@ export default function LiveAttendance({
   const [isButtonDisabled, setIsButtonDisabled] = useState(false);
   const [lastProcessedImage, setLastProcessedImage] = useState<string | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
-  
+
   const cameraRef = useRef<CameraView>(null);
   const detectionIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const markedStudentsRef = useRef<Set<string>>(new Set());
@@ -96,7 +96,7 @@ export default function LiveAttendance({
       );
       markedStudentsRef.current = alreadyMarked;
       setMarkedStudents(alreadyMarked);
-      
+
       // Add recently marked students to the display
       const recentlyMarkedNames = existingAttendance.markedStudents
         .filter(student => student.isPresent)
@@ -122,154 +122,110 @@ export default function LiveAttendance({
     initializeKioskMode();
   }, []);
 
-  // Start continuous face detection
-  const startFaceDetection = useCallback(() => {
-    
-    if (detectionIntervalRef.current) {
-      clearInterval(detectionIntervalRef.current);
-      detectionIntervalRef.current = null;
-      setIsDetecting(false);
-      isDetectingRef.current = false;
-    }
-    
-    if (!isInitialized) {
+  // Handle starting/stopping face detection based on state
+  useEffect(() => {
+    if (!isDetecting || !isInitialized || !cameraRef.current) {
+      if (detectionIntervalRef.current) {
+        clearInterval(detectionIntervalRef.current);
+        detectionIntervalRef.current = null;
+      }
       return;
     }
-    
-    setIsDetecting(true);
-    isDetectingRef.current = true;
-    
-    // Small delay to ensure state is set
-    setTimeout(() => {
-      detectionIntervalRef.current = setInterval(async () => {
-      
-      if (isProcessing || !cameraRef.current || !isInitialized || !isDetectingRef.current) {
+
+    // Start interval
+    detectionIntervalRef.current = setInterval(async () => {
+      if (isProcessing || !cameraRef.current || !isDetecting) {
         return;
       }
-      
+
       try {
         setIsProcessing(true);
-        
-        // Capture frame
+
+        // Capture frame from camera component directly
         const photo = await cameraRef.current.takePictureAsync({
-          quality: 0.7,
+          quality: 0.5, // Reduced quality for faster processing
           base64: true,
         });
-        
+
         if (!photo?.base64) {
-          setIsProcessing(false);
           return;
         }
-        
-        // Prevent processing the same image multiple times
-        const imageHash = photo.base64.substring(0, 100); // Use first 100 chars as simple hash
+
+        // Simple hash check to avoid duplicate processing of the same frame
+        const imageHash = photo.base64.substring(0, 100);
         if (lastProcessedImage === imageHash) {
-          setIsProcessing(false);
           return;
         }
         setLastProcessedImage(imageHash);
-        
-        // Process face descriptor
-        // All face recognition is handled by the Python FaceNet microservice
-        // We'll send the image directly for server-side processing
-        
-        // Mark attendance with image data for server-side processing
-        const markData: MarkAttendanceInput = {
+
+        // Execute API call
+        const result = await markAttendanceApi({
           sessionId,
-          faceImageBase64: photo.base64 // Send image for server-side processing
-        };
-        
-        try {
-            const result = await markAttendanceApi(markData);
-            
-            // Check server response message to determine if it's a duplicate
-            const studentId = result.student.id;
-            const isAlreadyMarked = result.message === 'Student already marked present';
-            
-            if (!isAlreadyMarked) {
-              // Update UI
-              setAttendanceStats({
-                present: result.attendance.present,
-                absent: result.attendance.absent,
-                total: result.attendance.total
-              });
-              
-              // Add to marked students set
-              markedStudentsRef.current.add(studentId);
-              setMarkedStudents(new Set(markedStudentsRef.current));
-              
-              // Show success feedback
-              setStatusType('success');
-              setStatusMessage(`✅ ${result.student.name} (ID: ${result.student.rollNumber}) marked present!`);
-              setRecentlyMarked(prev => [`${result.student.name} (${result.student.rollNumber})`, ...prev.slice(0, 4)]);
-              onAttendanceMarked(result);
-              
-              // Clear success message after 2 seconds
-              setTimeout(() => {
-                setStatusMessage(null);
-                setStatusType(null);
-              }, 2000);
-              
-              // Clear recent list after 5 seconds
-              setTimeout(() => {
-                setRecentlyMarked(prev => prev.slice(1));
-              }, 5000);
-            } else {
-              // Show duplicate punch message
-              setStatusType('duplicate');
-              setStatusMessage(`⚠️ ${result.student.name} (ID: ${result.student.rollNumber}) already marked`);
-              setTimeout(() => {
-                setStatusMessage(null);
-                setStatusType(null);
-              }, 1500);
-            }
-          } catch (apiError: any) {
-            
-            // Show user-friendly error message
-            if (apiError.response?.status === 404) {
-              setStatusType('notfound');
-              setStatusMessage('❌ No matching student found');
-            } else if (apiError.response?.status === 400) {
-              setStatusType('notfound');
-              setStatusMessage('❌ Face not recognized');
-            } else {
-              setStatusType('error');
-              setStatusMessage('❌ Detection failed');
-            }
-            
-            setTimeout(() => {
-              setStatusMessage(null);
-              setStatusType(null);
-            }, 2000);
-          }
-        } catch (error: any) {
-          // Silently handle errors to avoid interrupting detection
-        } finally {
-          setIsProcessing(false);
+          faceImageBase64: photo.base64
+        });
+
+        const studentId = result.student.id;
+        const isAlreadyMarked = result.message === 'Student already marked present';
+
+        if (!isAlreadyMarked) {
+          // Update stats and UI
+          setAttendanceStats({
+            present: result.attendance.present,
+            absent: result.attendance.absent,
+            total: result.attendance.total
+          });
+
+          markedStudentsRef.current.add(studentId);
+          setMarkedStudents(new Set(markedStudentsRef.current));
+
+          setStatusType('success');
+          setStatusMessage(`✅ ${result.student.name} marked present!`);
+          setRecentlyMarked(prev => [`${result.student.name} (${result.student.rollNumber})`, ...prev.slice(0, 4)]);
+          onAttendanceMarked(result);
+
+          // Auto-clear messages
+          setTimeout(() => {
+            setStatusMessage(null);
+            setStatusType(null);
+          }, 2000);
+        } else {
+          setStatusType('duplicate');
+          setStatusMessage(`⚠️ ${result.student.name} already marked`);
+          setTimeout(() => {
+            setStatusMessage(null);
+            setStatusType(null);
+          }, 1500);
         }
-      }, 3000); // Check every 3 seconds for stability
-      }, 100); // Small delay to ensure state is set
-    }, [sessionId, isInitialized, onAttendanceMarked]);
+      } catch (apiError: any) {
+        console.error('[live-attendance] Detection error:', apiError.message);
 
-  // Stop face detection
-  const stopFaceDetection = useCallback(() => {
-    if (detectionIntervalRef.current) {
-      clearInterval(detectionIntervalRef.current);
-      detectionIntervalRef.current = null;
-    }
-    setIsDetecting(false);
-    isDetectingRef.current = false;
-    setIsProcessing(false);
-    setLastProcessedImage(null); // Clear image hash
-    // DO NOT clear markedStudentsRef - we want to maintain the list of already marked students
-  }, []);
+        if (apiError.response?.status === 404) {
+          setStatusType('notfound');
+          setStatusMessage('❓ No matching student found');
+        } else if (apiError.response?.status === 400) {
+          setStatusType('notfound');
+          setStatusMessage('❌ Face not recognized');
+        } else {
+          setStatusType('error');
+          setStatusMessage('❌ Connection error');
+        }
 
-  // Cleanup on unmount
-  useEffect(() => {
+        setTimeout(() => {
+          setStatusMessage(null);
+          setStatusType(null);
+        }, 2000);
+      } finally {
+        setIsProcessing(false);
+      }
+    }, 3000);
+
     return () => {
-      stopFaceDetection();
+      if (detectionIntervalRef.current) {
+        clearInterval(detectionIntervalRef.current);
+        detectionIntervalRef.current = null;
+      }
     };
-  }, [stopFaceDetection]);
+  }, [isDetecting, isInitialized, sessionId, lastProcessedImage, isProcessing, onAttendanceMarked]);
 
   // Initialize after permission is granted and camera is ready
   useEffect(() => {
@@ -277,9 +233,8 @@ export default function LiveAttendance({
       const timer = setTimeout(() => {
         setIsInitialized(true);
         console.log('Camera fully initialized and ready');
-        // Don't auto-start detection - let user control it
-      }, 1000); // Reduced wait time since camera is already ready
-      
+      }, 1000);
+
       return () => clearTimeout(timer);
     }
   }, [permission?.granted, cameraReady, isInitialized]);
@@ -293,17 +248,11 @@ export default function LiveAttendance({
   };
 
   const toggleDetection = () => {
-    if (isButtonDisabled) return;
-    
+    if (isButtonDisabled || !isInitialized) return;
+
     setIsButtonDisabled(true);
-    
-    if (isDetecting) {
-      stopFaceDetection();
-    } else if (isInitialized) {
-      startFaceDetection();
-    }
-    
-    // Re-enable button after a short delay
+    setIsDetecting(prev => !prev);
+
     setTimeout(() => {
       setIsButtonDisabled(false);
     }, 1000);
@@ -323,14 +272,14 @@ export default function LiveAttendance({
       <View style={styles.container}>
         <StatusBar hidden />
         <Text style={styles.permissionText}>No access to camera</Text>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.permissionButton}
           onPress={requestPermission}
         >
           <Text style={styles.permissionButtonText}>Grant Permission</Text>
         </TouchableOpacity>
         {!isKioskMode && (
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.permissionButton, { backgroundColor: '#666', marginTop: 10 }]}
             onPress={onClose}
           >
@@ -344,7 +293,7 @@ export default function LiveAttendance({
   return (
     <View style={styles.container}>
       <StatusBar hidden />
-      
+
       {/* Camera View */}
       <CameraView
         ref={cameraRef}
@@ -358,7 +307,7 @@ export default function LiveAttendance({
           console.error('Camera mount error:', error);
         }}
       />
-      
+
       {/* Overlay UI */}
       <View style={styles.overlay}>
         {/* Top Controls */}
@@ -369,7 +318,7 @@ export default function LiveAttendance({
           >
             <Text style={styles.backButtonText}>← Back</Text>
           </TouchableOpacity>
-          
+
           <View style={styles.sessionInfo}>
             <Text style={styles.sessionText}>{subject} - {section}</Text>
             <Text style={styles.sessionSubtext}>{sessionType} • {getTimeRange(hours)} ({getSessionDuration(hours)})</Text>
@@ -432,9 +381,9 @@ export default function LiveAttendance({
           )}
           <TouchableOpacity
             style={[
-              styles.controlButton, 
-              !isInitialized || isButtonDisabled ? styles.controlButtonDisabled : 
-              isDetecting ? styles.stopButton : styles.startButton
+              styles.controlButton,
+              !isInitialized || isButtonDisabled ? styles.controlButtonDisabled :
+                isDetecting ? styles.stopButton : styles.startButton
             ]}
             onPress={toggleDetection}
             disabled={!isInitialized || isButtonDisabled}
@@ -444,10 +393,10 @@ export default function LiveAttendance({
               (!isInitialized || isButtonDisabled) && styles.controlButtonTextDisabled
             ]}>
               {!permission?.granted ? '⏳ Requesting Permission...' :
-               !cameraReady ? '⏳ Starting Camera...' :
-               !isInitialized ? '⏳ Initializing...' : 
-               isButtonDisabled ? '⏳ Processing...' :
-               isDetecting ? '⏸️ Pause Detection' : '▶️ Start Detection'}
+                !cameraReady ? '⏳ Starting Camera...' :
+                  !isInitialized ? '⏳ Initializing...' :
+                    isButtonDisabled ? '⏳ Processing...' :
+                      isDetecting ? '⏸️ Pause Detection' : '▶️ Start Detection'}
             </Text>
           </TouchableOpacity>
         </View>
