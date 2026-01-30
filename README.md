@@ -21,11 +21,11 @@ FaceAttend is designed specifically for faculty to take classroom attendance usi
 - Real-time live camera detection with 0.5s capture loop (silent)
 - Student enrollment with face capture and subject/section association
 - Faculty dashboard with current-session detection and one-tap "Take Attendance"
-- Timetable setup and editing (supports hours 1–24)
+- Timetable viewing (read-only) - Configuration via ERP Portal
 - Attendance sessions and detailed reports with location tracking
 - Secure kiosk mode for dedicated devices (Android orientation lock, UI blocking, back button handling)
 - JWT authentication and protected APIs
-- Settings & Profile Management: Camera and location permissions, faculty profile updates, password management
+- Settings & Permissions: Camera and location permissions management
 - Advanced Student Management: View, edit, and delete student records with comprehensive filtering and export capabilities
 - Export Functionality: PDF and CSV export for student lists and attendance reports with location data
 - Duplicate Prevention: Automatic validation for duplicate roll numbers and face descriptors within classes
@@ -33,18 +33,42 @@ FaceAttend is designed specifically for faculty to take classroom attendance usi
 - Student Attendance Analytics: Individual student attendance percentages and session tracking
 - Attendance Status Management: Dashboard acknowledgment of taken attendance with retake functionality
 - Flexible Time Management: Support for 24-hour time slots and empty timetable handling
+- Unified Sidebar Navigation: Consistent navigation menu across Dashboard, Timetable, Registration, and Settings screens
+
+## 🔄 Separation of Concerns: ERP & Mobile Client
+To streamline the attendance process and improve security, administrative features have been moved to a dedicated Web ERP Portal.
+
+**Moved to ERP Portal:**
+- **Timetable Configuration:** Creating and editing class schedules.
+- **Profile Management:** Editing faculty details (name, email).
+- **Security:** Password changes and account recovery.
+
+**Removed from Mobile Client:**
+- In-app profile editing screens.
+- In-app password change forms.
+- Timetable creation/editing UI.
+
+**Mobile Client Focus:**
+The React Native mobile client is now strictly focused on **Day-to-Day Operations**:
+- Taking Attendance (Kiosk Mode).
+- Registering/Managing Students.
+- Viewing Schedules.
+- Generating Reports.
 
 ## 🏗️ Architecture
 ### Client (React Native / Expo)
 ```
 client/
 ├── app/                       # Routing and screens
-│   ├── index.tsx              # Welcome/login
+│   ├── index.tsx              # Welcome/login (Dashboard hub)
 │   ├── take-attendance.tsx    # Attendance capture screen
 │   ├── student-registration.tsx
-│   └── manage-students.tsx    # Student management with export
+│   ├── manage-students.tsx    # Student management with export
+│   ├── timetable.tsx          # Dedicated timetable view
+│   └── settings.tsx           # App settings and permissions
 ├── components/
-│   ├── dashboard.tsx          # Faculty dashboard (current session)
+│   ├── sidebar.tsx            # Reusable sidebar navigation
+│   ├── dashboard.tsx          # Faculty dashboard component
 │   ├── live-attendance.tsx    # Live detection UI (status banners)
 │   ├── camera-view.tsx        # Silent 0.5s capture loop
 │   ├── hour-select-modal.tsx  # Hour picker
@@ -163,9 +187,8 @@ A dedicated section within the app for faculty and administrators to manage app-
 
 **Features:**
 - **Camera Permissions Management** – Allows checking and re-requesting permissions directly within the app for smoother kiosk setup.  
-- **Profile Management** – Update faculty profile details such as name, email, and password securely via JWT-protected endpoints.  
-- **Forgot Password Flow** – Supports secure password reset through email verification or admin reset (depending on role).  
 - **Device Settings (Kiosk Mode)** – Optional device lock, orientation lock, and inactivity timeout to prevent misuse in kiosk environments.
+- **ERP Integration** – Direct links to the ERP Portal for profile updates and password management.
 
 ### Student Management
 Comprehensive tools to manage student data efficiently with advanced filtering, editing, and export capabilities.
@@ -353,8 +376,8 @@ Advanced analytics system for tracking individual student attendance patterns an
 - Client: `POST /api/auth/login` → stores JWT in AsyncStorage; axios adds `Authorization` header.
 
 2) Timetable
-- Faculty configures sessions (subject, section, type, hours). Server validates `hours` (min 1, max 20).
-- Dashboard computes “current session” based on time using `TIME_SLOTS` (now includes hour 12).
+- Faculty visits **ERP Portal** to configure sessions (subject, section, type, hours). Server validates `hours`.
+- Mobile Dashboard computes “current session” based on time using `TIME_SLOTS` (read-only view).
 
 3) Student Registration
 - Client captures face image (base64) or uploads photo from gallery and calls `POST /api/students/register`.
