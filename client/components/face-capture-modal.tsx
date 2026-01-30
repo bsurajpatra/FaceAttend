@@ -4,7 +4,7 @@ import {
   Text,
   Modal,
   StyleSheet,
-  TouchableOpacity,
+  Pressable,
   Alert,
   ActivityIndicator,
   Platform,
@@ -12,6 +12,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { Ionicons } from '@expo/vector-icons';
 import { useKiosk } from '../contexts/KioskContext';
 
 type FaceCaptureModalProps = {
@@ -64,10 +65,9 @@ export default function FaceCaptureModal({
 
   const startAutoCapture = () => {
     if (autoCaptureStarted || !cameraReady) return;
-    
     setAutoCaptureStarted(true);
     setCountdown(5);
-    
+
     countdownRef.current = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
@@ -98,30 +98,23 @@ export default function FaceCaptureModal({
     onClose();
   };
 
-  // Start auto-capture when camera is ready
   useEffect(() => {
     if (visible && cameraReady && !autoCaptureStarted) {
-      const timer = setTimeout(() => {
-        startAutoCapture();
-      }, 1000); // Small delay to ensure camera is fully ready
-      
+      const timer = setTimeout(() => startAutoCapture(), 1000);
       return () => clearTimeout(timer);
     }
   }, [visible, cameraReady, autoCaptureStarted]);
 
-  // Cleanup on unmount
   useEffect(() => {
-    return () => {
-      stopAutoCapture();
-    };
+    return () => stopAutoCapture();
   }, []);
 
   if (!permission) {
     return (
       <Modal visible={visible} transparent animationType="fade">
-        <View style={styles.container}>
-          <StatusBar hidden />
-          <Text style={styles.permissionText}>Requesting camera permission...</Text>
+        <View style={styles.centerOverlay}>
+          <ActivityIndicator size="large" color="#2563EB" />
+          <Text style={styles.permissionText}>Initializing Camera...</Text>
         </View>
       </Modal>
     );
@@ -130,15 +123,18 @@ export default function FaceCaptureModal({
   if (!permission.granted) {
     return (
       <Modal visible={visible} transparent animationType="fade">
-        <View style={styles.container}>
-          <StatusBar hidden />
-          <Text style={styles.permissionText}>Camera permission required</Text>
-          <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
-            <Text style={styles.permissionButtonText}>Grant Permission</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.permissionButton, styles.cancelButton]} onPress={handleClose}>
-            <Text style={styles.permissionButtonText}>Cancel</Text>
-          </TouchableOpacity>
+        <View style={styles.centerOverlay}>
+          <View style={styles.permissionCard}>
+            <Ionicons name="camera" size={64} color="#2563EB" />
+            <Text style={styles.permissionCardTitle}>Camera Access Required</Text>
+            <Text style={styles.permissionCardSub}>To register faces, we need access to your camera.</Text>
+            <Pressable style={styles.btnPrimary} onPress={requestPermission}>
+              <Text style={styles.btnPrimaryText}>GRANT PERMISSION</Text>
+            </Pressable>
+            <Pressable style={styles.btnSecondary} onPress={handleClose}>
+              <Text style={styles.btnSecondaryText}>CANCEL</Text>
+            </Pressable>
+          </View>
         </View>
       </Modal>
     );
@@ -148,32 +144,36 @@ export default function FaceCaptureModal({
     <Modal visible={visible} transparent animationType="fade">
       <View style={styles.container}>
         <StatusBar hidden />
-        
-        {/* Camera View */}
         <CameraView
           ref={cameraRef}
           style={styles.camera}
           facing="front"
-          onCameraReady={() => {
-            setCameraReady(true);
-          }}
+          onCameraReady={() => setCameraReady(true)}
         />
-        
-        {/* Overlay */}
+
         <View style={styles.overlay}>
-          {/* Header */}
-          <View style={styles.header}>
-            <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
-              <Text style={styles.closeButtonText}>✕</Text>
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>Capture Face</Text>
-            <View style={{ width: 40 }} />
+          <View style={[styles.header, { paddingTop: Platform.OS === 'ios' ? 60 : 40 }]}>
+            <Pressable onPress={handleClose} style={styles.closeBtn}>
+              <Ionicons name="close" size={24} color="white" />
+            </Pressable>
+            <Text style={styles.headerTitle}>Position your face</Text>
+            <View style={{ width: 44 }} />
           </View>
 
-          {/* Countdown Display - Only at the very top */}
+          <View style={styles.guideContainer}>
+            <View style={styles.faceGuide} />
+          </View>
+
           {countdown > 0 && (
-            <View style={styles.countdownTopContainer}>
-              <Text style={styles.countdownTopNumber}>{countdown}</Text>
+            <View style={styles.countdownContainer}>
+              <Text style={styles.countdownValue}>{countdown}</Text>
+              <Text style={styles.countdownLabel}>CAPTURING IN...</Text>
+            </View>
+          )}
+
+          {isCapturing && (
+            <View style={styles.capturingOverlay}>
+              <ActivityIndicator size="large" color="white" />
             </View>
           )}
         </View>
@@ -182,84 +182,141 @@ export default function FaceCaptureModal({
   );
 }
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'black',
+    backgroundColor: '#0F172A',
   },
   camera: {
     flex: 1,
   },
+  centerOverlay: {
+    flex: 1,
+    backgroundColor: '#0F172A',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  permissionCard: {
+    backgroundColor: 'white',
+    borderRadius: 32,
+    padding: 32,
+    width: '100%',
+    maxWidth: 340,
+    alignItems: 'center',
+  },
+  permissionCardTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#1E293B',
+    marginTop: 24,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  permissionCardSub: {
+    fontSize: 14,
+    color: '#64748B',
+    textAlign: 'center',
+    marginBottom: 32,
+    lineHeight: 20,
+  },
+  btnPrimary: {
+    backgroundColor: '#2563EB',
+    width: '100%',
+    height: 56,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  btnPrimaryText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  btnSecondary: {
+    width: '100%',
+    height: 56,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  btnSecondaryText: {
+    color: '#64748B',
+    fontSize: 14,
+    fontWeight: '800',
+  },
   overlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    pointerEvents: 'box-none',
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(15, 23, 42, 0.4)',
   },
   header: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: Platform.OS === 'android' ? 20 : 50,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-  },
-  closeButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  closeButtonText: {
-    color: 'white',
-    fontSize: 20,
-    fontWeight: 'bold',
+    paddingHorizontal: 24,
   },
   headerTitle: {
     color: 'white',
     fontSize: 18,
-    fontWeight: '600',
-  },
-  countdownTopContainer: {
-    position: 'absolute',
-    top: Platform.OS === 'android' ? 20 : 50,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    zIndex: 10,
-  },
-  countdownTopNumber: {
-    fontSize: 72,
-    fontWeight: 'bold',
-    color: '#10B981',
-    textShadowColor: 'rgba(0, 0, 0, 0.8)',
-    textShadowOffset: { width: 2, height: 2 },
+    fontWeight: '900',
+    letterSpacing: -0.5,
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
+  },
+  closeBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  guideContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  faceGuide: {
+    width: width * 0.7,
+    height: width * 0.9,
+    borderRadius: 120,
+    borderWidth: 3,
+    borderColor: 'rgba(255, 255, 255, 0.5)',
+    borderStyle: 'dashed',
+  },
+  countdownContainer: {
+    marginBottom: 80,
+    alignItems: 'center',
+  },
+  countdownValue: {
+    fontSize: 80,
+    fontWeight: '900',
+    color: '#2563EB',
+    textShadowColor: 'white',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 10,
+  },
+  countdownLabel: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: 'white',
+    letterSpacing: 3,
+    marginTop: -10,
+  },
+  capturingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(15, 23, 42, 0.8)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   permissionText: {
     color: 'white',
-    fontSize: 18,
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  permissionButton: {
-    backgroundColor: '#10B981',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-    marginBottom: 10,
-  },
-  cancelButton: {
-    backgroundColor: '#6B7280',
-  },
-  permissionButtonText: {
-    color: 'white',
+    marginTop: 16,
     fontSize: 16,
     fontWeight: '600',
   },

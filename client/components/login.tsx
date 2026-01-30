@@ -1,17 +1,15 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, Pressable, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { styles } from '@/components/styles/login-styles';
 import { loginApi } from '@/api/auth';
 
 type LoginProps = {
   onSubmit?: (credentials: { username: string; password: string }) => Promise<void> | void;
-  onRegisterPress?: () => void;
-  onForgotPasswordPress?: () => void;
   isSubmitting?: boolean;
   errorMessage?: string | null;
 };
 
-export default function Login({ onSubmit, onRegisterPress, onForgotPasswordPress, isSubmitting = false, errorMessage = null }: LoginProps) {
+export default function Login({ onSubmit, isSubmitting = false, errorMessage = null }: LoginProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [localSubmitting, setLocalSubmitting] = useState(false);
@@ -37,7 +35,8 @@ export default function Login({ onSubmit, onRegisterPress, onForgotPasswordPress
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Login</Text>
+      <Text style={styles.title}>Welcome Back</Text>
+      <Text style={styles.subtitle}>Sign in to continue to FaceAttend</Text>
 
       <View style={styles.fieldGroup}>
         <Text style={styles.label}>Username</Text>
@@ -83,27 +82,6 @@ export default function Login({ onSubmit, onRegisterPress, onForgotPasswordPress
           <Text style={styles.buttonText}>Login</Text>
         )}
       </Pressable>
-
-      <View style={styles.linksRow}>
-        <Pressable
-          onPress={onRegisterPress}
-          style={({ pressed }) => [styles.linkButton, pressed && styles.linkButtonPressed]}
-          accessibilityRole="button"
-          accessibilityLabel="Register"
-        >
-          <Text style={styles.linkText}>Register</Text>
-        </Pressable>
-        <Pressable
-          onPress={onForgotPasswordPress}
-          style={({ pressed }) => [styles.linkButton, pressed && styles.linkButtonPressed]}
-          accessibilityRole="button"
-          accessibilityLabel="Forgot password"
-        >
-          <Text style={styles.linkText}>Forgot password</Text>
-        </Pressable>
-      </View>
     </View>
   );
 }
-
-

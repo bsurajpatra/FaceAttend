@@ -5,9 +5,9 @@ import { env } from './config/env';
 async function bootstrap(): Promise<void> {
   await connectToDatabase();
   const app = createApp();
-  app.listen(env.port, () => {
+  app.listen(env.port, '0.0.0.0', () => {
     // eslint-disable-next-line no-console
-    console.log(`Server running on http://localhost:${env.port}`);
+    console.log(`Server running on all interfaces at port ${env.port}`);
   });
 }
 

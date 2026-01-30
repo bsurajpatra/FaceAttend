@@ -70,14 +70,14 @@ export default function SignupPage() {
     };
 
     return (
-        <div className="min-h-screen bg-white flex font-sans selection:bg-blue-100">
+        <div className="h-screen w-full overflow-hidden bg-white flex font-sans selection:bg-blue-100">
             {/* Background Decorative Elements */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
                 <div className="absolute -top-[10%] -left-[10%] w-[40%] h-[40%] bg-blue-50 rounded-full blur-3xl opacity-40" />
                 <div className="absolute -bottom-[10%] -right-[10%] w-[40%] h-[40%] bg-indigo-50 rounded-full blur-3xl opacity-40" />
             </div>
 
-            <div className="w-full grid grid-cols-1 md:grid-cols-2 min-h-screen relative z-10">
+            <div className="w-full h-full grid grid-cols-1 md:grid-cols-2 relative z-10">
 
                 {/* Left Side: Branding/Visuals (Same as Login) */}
                 <div className="hidden md:flex flex-col justify-between p-12 bg-slate-900 text-white relative overflow-hidden">
@@ -92,8 +92,8 @@ export default function SignupPage() {
                         </div>
 
                         <h2 className="text-4xl font-extrabold leading-tight mb-6">
-                            Join the <br />
-                            <span className="text-blue-400 text-5xl">ERP Portal</span>
+                            Join the
+                            <span className="text-blue-400 text-5xl">  ERP Portal</span>
                         </h2>
                         <p className="text-slate-400 text-lg leading-relaxed max-w-sm opacity-90">
                             Create your account to start managing sessions and security.
@@ -128,7 +128,7 @@ export default function SignupPage() {
                 </div>
 
                 {/* Right Side: Signup Form */}
-                <div className="p-8 md:p-16 flex flex-col justify-center items-center bg-white overflow-y-auto">
+                <div className="h-full p-6 md:p-10 flex flex-col justify-center items-center bg-white overflow-y-auto">
                     <div className="w-full max-w-md my-auto">
                         <div className="mb-8 block md:hidden text-center">
                             <div className="flex items-center justify-center gap-4 mb-4">

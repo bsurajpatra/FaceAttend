@@ -1,5 +1,6 @@
 import LoginPage from './components/LoginPage'
 import SignupPage from './components/SignupPage'
+import Dashboard from './components/Dashboard'
 
 function App() {
   // Simple routing logic based on URL
@@ -7,6 +8,10 @@ function App() {
 
   if (path === '/signup') {
     return <SignupPage />;
+  }
+
+  if (path === '/dashboard') {
+    return <Dashboard />;
   }
 
   if (path === '/login' || path === '/') {

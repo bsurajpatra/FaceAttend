@@ -16,10 +16,7 @@ export default function RootLayout() {
           <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="student-registration" options={{ headerShown: false }} />
           <Stack.Screen name="take-attendance" options={{ headerShown: false }} />
-          <Stack.Screen name="attendance-reports" options={{ headerShown: false }} />
           <Stack.Screen name="settings" options={{ headerShown: false }} />
-          <Stack.Screen name="edit-profile" options={{ headerShown: false }} />
-          <Stack.Screen name="change-password" options={{ headerShown: false }} />
           <Stack.Screen name="manage-students" options={{ headerShown: false }} />
           <Stack.Screen name="student-details" options={{ headerShown: false }} />
         </Stack>

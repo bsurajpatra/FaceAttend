@@ -5,7 +5,7 @@ import {
   Modal,
   StyleSheet,
   TextInput,
-  TouchableOpacity,
+  Pressable,
   Alert,
   ActivityIndicator,
   ScrollView,
@@ -14,6 +14,7 @@ import {
   Linking,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { Ionicons } from '@expo/vector-icons';
 import FaceCaptureModal from './face-capture-modal';
 
 type Student = {
@@ -47,7 +48,6 @@ export default function EditStudentModal({
   const [showFaceCapture, setShowFaceCapture] = useState(false);
   const [capturedFaceImage, setCapturedFaceImage] = useState<string | null>(null);
 
-  // Update form when student changes
   React.useEffect(() => {
     if (student) {
       setName(student.name);
@@ -59,7 +59,6 @@ export default function EditStudentModal({
   const handleSave = async () => {
     if (!student) return;
 
-    // Check if at least one field has been modified
     const hasNameChange = name.trim() !== student.name;
     const hasRollNumberChange = rollNumber.trim() !== student.rollNumber;
     const hasFaceChange = capturedFaceImage !== null;
@@ -73,15 +72,9 @@ export default function EditStudentModal({
     try {
       const updateData: { name?: string; rollNumber?: string; faceImageBase64?: string } = {};
 
-      if (hasNameChange && name.trim()) {
-        updateData.name = name.trim();
-      }
-      if (hasRollNumberChange && rollNumber.trim()) {
-        updateData.rollNumber = rollNumber.trim();
-      }
-      if (hasFaceChange && capturedFaceImage) {
-        updateData.faceImageBase64 = capturedFaceImage;
-      }
+      if (hasNameChange && name.trim()) updateData.name = name.trim();
+      if (hasRollNumberChange && rollNumber.trim()) updateData.rollNumber = rollNumber.trim();
+      if (hasFaceChange && capturedFaceImage) updateData.faceImageBase64 = capturedFaceImage;
 
       await onSave(student.id, updateData);
       onClose();
@@ -99,34 +92,12 @@ export default function EditStudentModal({
 
   const uploadPhoto = async () => {
     try {
-      // Check current permission status first
-      const currentPermission = await ImagePicker.getMediaLibraryPermissionsAsync();
-
-      if (!currentPermission.granted) {
-        // Request permission to access media library
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== 'granted') {
-          Alert.alert(
-            'Permission Required',
-            'Media library access is required to upload photos. Please grant permission in Settings.',
-            [
-              { text: 'Cancel', style: 'cancel' },
-              {
-                text: 'Open Settings', onPress: () => {
-                  try {
-                    Linking.openSettings();
-                  } catch (error) {
-                    console.error('Failed to open settings:', error);
-                  }
-                }
-              },
-            ]
-          );
-          return;
-        }
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Library access is needed.');
+        return;
       }
 
-      // Launch image picker
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
@@ -135,32 +106,23 @@ export default function EditStudentModal({
         base64: true,
       });
 
-      if (!result.canceled && result.assets[0]) {
-        const asset = result.assets[0];
-        if (asset.base64) {
-          setCapturedFaceImage(asset.base64);
-          Alert.alert('Success', 'Photo uploaded successfully! New face data will be used for attendance recognition.');
-        }
+      if (!result.canceled && result.assets[0].base64) {
+        setCapturedFaceImage(result.assets[0].base64);
+        Alert.alert('Success', 'Photo uploaded successfully!');
       }
     } catch (error) {
-      console.error('Error uploading photo:', error);
-      Alert.alert('Error', 'Failed to upload photo. Please try again.');
+      Alert.alert('Error', 'Failed to upload photo.');
     }
   };
 
   const handleDelete = () => {
     if (!student) return;
-
-    // Call the parent's delete handler directly - it will show the confirmation
     onDelete(student.id, student.name);
     onClose();
   };
 
   const handleClose = () => {
     if (isSaving) return;
-    setName('');
-    setRollNumber('');
-    setCapturedFaceImage(null);
     onClose();
   };
 
@@ -168,167 +130,137 @@ export default function EditStudentModal({
 
   return (
     <>
-      <Modal
-        visible={visible}
-        transparent
-        animationType="fade"
-        onRequestClose={handleClose}
-        statusBarTranslucent={true}
-      >
+      <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Header */}
-              <View style={styles.header}>
-                <Text style={styles.headerTitle}>Edit Student</Text>
-                <TouchableOpacity
-                  style={styles.closeButton}
-                  onPress={handleClose}
-                  disabled={isSaving}
-                >
-                  <Text style={styles.closeButtonText}>✕</Text>
-                </TouchableOpacity>
-              </View>
+            <View style={styles.header}>
+              <Text style={styles.headerTitle}>Edit Student</Text>
+              <Pressable onPress={handleClose} style={styles.closeButton}>
+                <Ionicons name="close" size={24} color="#64748B" />
+              </Pressable>
+            </View>
 
-              {/* Form */}
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.scroll}>
               <View style={styles.form}>
-                {/* Name Input */}
+                {/* Inputs */}
                 <View style={styles.inputGroup}>
-                  <View style={styles.labelContainer}>
-                    <Text style={styles.inputLabel}>Name</Text>
-                    {name.trim() !== student?.name && name.trim() && (
-                      <Text style={styles.modifiedIndicator}>Modified</Text>
-                    )}
+                  <View style={styles.labelRow}>
+                    <Text style={styles.label}>FULL NAME</Text>
+                    {name.trim() !== student.name && <Text style={styles.modifiedBadge}>MODIFIED</Text>}
                   </View>
                   <TextInput
-                    style={[
-                      styles.textInput,
-                      name.trim() !== student?.name && name.trim() && styles.modifiedInput
-                    ]}
+                    style={styles.input}
                     value={name}
                     onChangeText={setName}
-                    placeholder="Enter student name (optional)"
+                    placeholder="Student Name"
                     editable={!isSaving}
-                    autoCapitalize="words"
                   />
                 </View>
 
-                {/* Roll Number Input */}
                 <View style={styles.inputGroup}>
-                  <View style={styles.labelContainer}>
-                    <Text style={styles.inputLabel}>Roll Number</Text>
-                    {rollNumber.trim() !== student?.rollNumber && rollNumber.trim() && (
-                      <Text style={styles.modifiedIndicator}>Modified</Text>
-                    )}
+                  <View style={styles.labelRow}>
+                    <Text style={styles.label}>ROLL NUMBER</Text>
+                    {rollNumber.trim() !== student.rollNumber && <Text style={styles.modifiedBadge}>MODIFIED</Text>}
                   </View>
                   <TextInput
-                    style={[
-                      styles.textInput,
-                      rollNumber.trim() !== student?.rollNumber && rollNumber.trim() && styles.modifiedInput
-                    ]}
+                    style={styles.input}
                     value={rollNumber}
                     onChangeText={setRollNumber}
-                    placeholder="Enter roll number (optional)"
+                    placeholder="Roll Number"
                     editable={!isSaving}
                     autoCapitalize="characters"
                   />
                 </View>
 
-                {/* Face Capture Section */}
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Face Data</Text>
-                  <View style={styles.faceCaptureContainer}>
+                {/* Face Data */}
+                <View style={styles.faceSection}>
+                  <Text style={styles.label}>FACE DATA</Text>
+                  <View style={styles.faceCard}>
                     {capturedFaceImage ? (
-                      <View style={styles.avatarContainer}>
+                      <View style={styles.previewContainer}>
                         <Image
                           source={{ uri: `data:image/jpeg;base64,${capturedFaceImage}` }}
-                          style={styles.avatar}
+                          style={styles.facePreview}
                         />
-                        <View style={styles.avatarOverlay}>
-                          <Text style={styles.avatarText}>New Face</Text>
+                        <View style={styles.badge}>
+                          <Text style={styles.badgeText}>NEW</Text>
                         </View>
                       </View>
-                    ) : null}
-                    <View style={styles.faceCaptureButtons}>
-                      <TouchableOpacity
-                        style={[styles.faceCaptureButton, styles.captureButton]}
-                        onPress={() => setShowFaceCapture(true)}
-                        disabled={isSaving}
-                      >
-                        <Text style={styles.faceCaptureButtonText}>
-                          📷 Capture
-                        </Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={[styles.faceCaptureButton, styles.uploadButton]}
-                        onPress={uploadPhoto}
-                        disabled={isSaving}
-                      >
-                        <Text style={styles.faceCaptureButtonText}>
-                          📁 Upload
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                    {capturedFaceImage && (
-                      <Text style={styles.faceCaptureStatus}>
-                        ✅ New face data captured
-                      </Text>
+                    ) : (
+                      <View style={styles.previewContainer}>
+                        <View style={styles.facePlaceholder}>
+                          <Ionicons name="person" size={32} color="#CBD5E1" />
+                        </View>
+                      </View>
                     )}
-                    <Text style={styles.faceCaptureHint}>
-                      {capturedFaceImage
-                        ? 'New face data will be used for attendance recognition'
-                        : 'Optional: Capture new face data for better recognition'
-                      }
-                    </Text>
+
+                    <View style={styles.faceActions}>
+                      <Pressable
+                        style={({ pressed }) => [styles.faceBtn, styles.cameraBtn, pressed && styles.pressed]}
+                        onPress={() => setShowFaceCapture(true)}
+                      >
+                        <Ionicons name="camera" size={20} color="white" />
+                        <Text style={styles.faceBtnText}>CAPTURE</Text>
+                      </Pressable>
+                      <Pressable
+                        style={({ pressed }) => [styles.faceBtn, styles.uploadBtn, pressed && styles.pressed]}
+                        onPress={uploadPhoto}
+                      >
+                        <Ionicons name="image" size={20} color="#2563EB" />
+                        <Text style={[styles.faceBtnText, { color: '#2563EB' }]}>UPLOAD</Text>
+                      </Pressable>
+                    </View>
                   </View>
                 </View>
 
-                {/* Student Info */}
-                <View style={styles.studentInfo}>
-                  <Text style={styles.studentInfoTitle}>Current Class</Text>
-                  <Text style={styles.studentInfoText}>
-                    {student.subject} - Section {student.section} - {student.sessionType}
+                {/* Class Info */}
+                <View style={styles.classInfo}>
+                  <Ionicons name="information-circle-outline" size={18} color="#64748B" />
+                  <Text style={styles.classInfoText}>
+                    {student.subject} • Section {student.section}
                   </Text>
                 </View>
               </View>
+            </ScrollView>
 
-              {/* Action Buttons */}
-              <View style={styles.actions}>
-                <TouchableOpacity
-                  style={[styles.button, styles.deleteButton]}
-                  onPress={handleDelete}
-                  disabled={isSaving}
-                >
-                  <Text style={styles.deleteButtonText}>Delete</Text>
-                </TouchableOpacity>
+            <View style={styles.footer}>
+              <Pressable
+                style={({ pressed }) => [styles.actionButton, styles.deleteBtn, pressed && styles.pressed]}
+                onPress={handleDelete}
+              >
+                <Ionicons name="trash-outline" size={20} color="#EF4444" />
+              </Pressable>
 
-                <TouchableOpacity
-                  style={[styles.button, styles.cancelButton]}
+              <View style={styles.footerRight}>
+                <Pressable
+                  style={({ pressed }) => [styles.actionButton, styles.cancelBtn, pressed && styles.pressed]}
                   onPress={handleClose}
-                  disabled={isSaving}
                 >
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
+                  <Text style={styles.cancelBtnText}>CANCEL</Text>
+                </Pressable>
 
-                <TouchableOpacity
-                  style={[styles.button, styles.saveButton, isSaving && styles.saveButtonDisabled]}
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.actionButton,
+                    styles.saveBtn,
+                    isSaving && styles.btnDisabled,
+                    pressed && !isSaving && styles.pressed
+                  ]}
                   onPress={handleSave}
                   disabled={isSaving}
                 >
                   {isSaving ? (
                     <ActivityIndicator size="small" color="white" />
                   ) : (
-                    <Text style={styles.saveButtonText}>Save</Text>
+                    <Text style={styles.saveBtnText}>SAVE CHANGES</Text>
                   )}
-                </TouchableOpacity>
+                </Pressable>
               </View>
-            </ScrollView>
+            </View>
           </View>
         </View>
       </Modal>
 
-      {/* Face Capture Modal */}
       <FaceCaptureModal
         visible={showFaceCapture}
         onClose={() => setShowFaceCapture(false)}
@@ -342,221 +274,224 @@ export default function EditStudentModal({
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: 24,
   },
   modalContent: {
     backgroundColor: 'white',
-    borderRadius: 16,
+    borderRadius: 32,
     width: '100%',
-    maxWidth: 500,
-    maxHeight: '90%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    maxWidth: 450,
+    maxHeight: '85%',
+    shadowColor: '#2563EB',
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
     elevation: 8,
+    overflow: 'hidden',
   },
   header: {
+    padding: 24,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 16,
+    justifyContent: 'space-between',
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: '#F1F5F9',
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: '700',
-    color: '#111827',
+    fontWeight: '900',
+    color: '#1E293B',
+    letterSpacing: -0.5,
   },
   closeButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F3F4F6',
-    justifyContent: 'center',
-    alignItems: 'center',
+    padding: 4,
   },
-  closeButtonText: {
-    fontSize: 16,
-    color: '#6B7280',
-    fontWeight: '600',
+  scroll: {
+    maxHeight: 500,
   },
   form: {
-    padding: 20,
+    padding: 24,
   },
   inputGroup: {
-    marginBottom: 20,
+    marginBottom: 24,
   },
-  labelContainer: {
+  labelRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 8,
   },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
+  label: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#3B82F6',
+    letterSpacing: 2,
   },
-  modifiedIndicator: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#10B981',
-    backgroundColor: '#D1FAE5',
+  modifiedBadge: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: 'white',
+    backgroundColor: '#3B82F6',
     paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 4,
+    borderRadius: 6,
   },
-  textInput: {
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    fontSize: 16,
-    backgroundColor: '#F9FAFB',
-  },
-  modifiedInput: {
-    borderColor: '#10B981',
-    backgroundColor: '#F0FDF4',
-  },
-  faceCaptureContainer: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 8,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-  },
-  faceCaptureButton: {
-    backgroundColor: '#10B981',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  faceCaptureButtons: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 8,
-  },
-  captureButton: {
-    flex: 1,
-    backgroundColor: '#EF4444',
-    marginBottom: 0,
-  },
-  uploadButton: {
-    flex: 1,
-    backgroundColor: '#3B82F6',
-    marginBottom: 0,
-  },
-  faceCaptureButtonText: {
-    color: 'white',
+  input: {
+    height: 56,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    paddingHorizontal: 20,
     fontSize: 16,
     fontWeight: '600',
+    color: '#1E293B',
+    borderWidth: 1.5,
+    borderColor: '#F1F5F9',
   },
-  faceCaptureStatus: {
-    fontSize: 14,
-    color: '#059669',
-    fontWeight: '600',
-    textAlign: 'center',
-    marginBottom: 8,
+  faceSection: {
+    marginBottom: 24,
   },
-  faceCaptureHint: {
-    fontSize: 12,
-    color: '#6B7280',
-    textAlign: 'center',
-    lineHeight: 16,
-  },
-  avatarContainer: {
+  faceCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 24,
+    padding: 20,
+    marginTop: 12,
+    borderWidth: 1.5,
+    borderColor: '#F1F5F9',
     alignItems: 'center',
-    marginBottom: 12,
   },
-  avatar: {
+  previewContainer: {
     width: 80,
     height: 80,
-    borderRadius: 40,
+    marginBottom: 20,
+  },
+  facePreview: {
+    width: 80,
+    height: 80,
+    borderRadius: 24,
     borderWidth: 3,
-    borderColor: '#10B981',
+    borderColor: '#2563EB',
   },
-  avatarOverlay: {
-    position: 'absolute',
-    bottom: -2,
-    left: '50%',
-    marginLeft: -30,
-    backgroundColor: '#10B981',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-  },
-  avatarText: {
-    color: 'white',
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  studentInfo: {
-    backgroundColor: '#F3F4F6',
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 8,
-  },
-  studentInfoTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#6B7280',
-    marginBottom: 4,
-  },
-  studentInfoText: {
-    fontSize: 14,
-    color: '#374151',
-  },
-  actions: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    gap: 8,
-  },
-  button: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
+  facePlaceholder: {
+    width: 80,
+    height: 80,
+    borderRadius: 24,
+    backgroundColor: '#EFF6FF',
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 48,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: '#CBD5E1',
   },
-  cancelButton: {
-    backgroundColor: '#F3F4F6',
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
+  badge: {
+    position: 'absolute',
+    bottom: -8,
+    alignSelf: 'center',
+    backgroundColor: '#2563EB',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
   },
-  cancelButtonText: {
-    color: '#374151',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  saveButton: {
-    backgroundColor: '#10B981',
-  },
-  saveButtonDisabled: {
-    backgroundColor: '#9CA3AF',
-  },
-  saveButtonText: {
+  badgeText: {
     color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 10,
+    fontWeight: '900',
   },
-  deleteButton: {
-    backgroundColor: '#EF4444',
+  faceActions: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
   },
-  deleteButtonText: {
+  faceBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  cameraBtn: {
+    backgroundColor: '#2563EB',
+  },
+  uploadBtn: {
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1.5,
+    borderColor: '#DBEAFE',
+  },
+  faceBtnText: {
+    fontSize: 12,
+    fontWeight: '900',
     color: 'white',
-    fontSize: 16,
+  },
+  classInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#F1F5F9',
+    padding: 12,
+    borderRadius: 12,
+  },
+  classInfoText: {
+    fontSize: 12,
     fontWeight: '600',
+    color: '#64748B',
+  },
+  footer: {
+    padding: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    gap: 12,
+  },
+  footerRight: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: 12,
+  },
+  actionButton: {
+    height: 56,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteBtn: {
+    width: 56,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1.5,
+    borderColor: '#FEE2E2',
+  },
+  cancelBtn: {
+    flex: 1,
+    backgroundColor: '#F1F5F9',
+  },
+  cancelBtnText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#64748B',
+    letterSpacing: 1,
+  },
+  saveBtn: {
+    flex: 2,
+    backgroundColor: '#2563EB',
+  },
+  saveBtnText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: 'white',
+    letterSpacing: 1,
+  },
+  btnDisabled: {
+    backgroundColor: '#CBD5E1',
+  },
+  pressed: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.9,
   },
 });
+
+

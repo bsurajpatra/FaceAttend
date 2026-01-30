@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, Pressable, ScrollView, Animated, Dimensions, TouchableWithoutFeedback, PanResponder } from 'react-native';
 import * as Location from 'expo-location';
 import { Image } from 'expo-image';
 import { useFocusEffect } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { styles } from './styles/dashboard-styles';
 import { HourSelectModal } from './hour-select-modal';
-import AttendanceReports from './attendance-reports';
 import { TimetableDay as ApiTimetableDay, Session as ApiSession } from '@/api/timetable';
 import { TIME_SLOTS, getCurrentSession } from '@/utils/timeSlots';
 import { getStudentsApi } from '@/api/students';
@@ -36,17 +37,16 @@ type DashboardProps = {
   onLogout?: () => void;
   onTakeAttendance?: (hours: number[]) => void;
   onTimetablePress?: () => void;
-  onViewReports?: () => void;
 };
 
+const SCREEN_WIDTH = Dimensions.get('window').width;
 
-export default function Dashboard({ 
-  user, 
+export default function Dashboard({
+  user,
   timetable,
-  onLogout, 
-  onTakeAttendance, 
-  onTimetablePress,
-  onViewReports
+  onLogout,
+  onTakeAttendance,
+  onTimetablePress
 }: DashboardProps) {
   const [isHoursModalVisible, setHoursModalVisible] = useState(false);
   const [currentSession, setCurrentSession] = useState<any>(null);
@@ -57,13 +57,80 @@ export default function Dashboard({
   const [isCheckingAttendance, setIsCheckingAttendance] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<any>(null);
 
+  // Sidebar state
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const sidebarAnim = useRef(new Animated.Value(-280)).current;
+
+  const toggleSidebar = (open: boolean) => {
+    if (open) setSidebarOpen(true);
+
+    Animated.timing(sidebarAnim, {
+      toValue: open ? 0 : -280,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      // Only hide the overlay from React tree once fully closed
+      if (finished && !open) {
+        setSidebarOpen(false);
+      }
+    });
+  };
+
+  // Create smooth interpolation for the overlay opacity based on sidebar position
+  const overlayOpacity = sidebarAnim.interpolate({
+    inputRange: [-280, 0],
+    outputRange: [0, 1],
+    extrapolate: 'clamp',
+  });
+
+  // PanResponder to handle left swipe to close with live dragging
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        // Aggressively capture horizontal swipes to the left
+        return gestureState.dx < -5 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
+      },
+      onPanResponderGrant: () => {
+        // Disable termination from other components (like ScrollView)
+      },
+      onPanResponderMove: (_, gestureState) => {
+        // Live drag the sidebar as the user swipes left
+        if (gestureState.dx < 0) {
+          sidebarAnim.setValue(gestureState.dx);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        // Close if swiped enough or swiped fast
+        if (gestureState.dx < -100 || gestureState.vx < -0.5) {
+          toggleSidebar(false);
+        } else {
+          // Snap back to open position if swipe was too short
+          Animated.spring(sidebarAnim, {
+            toValue: 0,
+            useNativeDriver: true,
+            bounciness: 0,
+          }).start();
+        }
+      },
+      onPanResponderTerminate: () => {
+        // Snap back to open if gesture is interrupted
+        Animated.spring(sidebarAnim, {
+          toValue: 0,
+          useNativeDriver: true,
+          bounciness: 0,
+        }).start();
+      },
+      onPanResponderTerminationRequest: () => false, // Don't let other components steal the touch
+    })
+  ).current;
+
   // Format location to show both address and coordinates
   const formatLocation = (location: any) => {
     if (!location) return 'Location unavailable';
-    
+
     const hasAddress = location.address && location.address.trim() !== '';
     const hasCoordinates = location.latitude && location.longitude;
-    
+
     if (hasAddress && hasCoordinates) {
       return `${location.address} (${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)})`;
     } else if (hasAddress) {
@@ -161,12 +228,12 @@ export default function Dashboard({
             .join(', ');
           addressText = parts;
         }
-      } catch {}
+      } catch { }
 
       const loc = {
         latitude: position.coords.latitude,
         longitude: position.coords.longitude,
-        accuracy: position.coords.accuracy,
+        accuracy: position.coords.accuracy ?? undefined,
         address: addressText,
       };
       // Store location separately so it displays even when attendance is not taken
@@ -177,7 +244,7 @@ export default function Dashboard({
         if (attendanceStatus?.sessionId) {
           await updateAttendanceLocationApi(attendanceStatus.sessionId, loc);
         }
-      } catch {}
+      } catch { }
     } catch (e) {
       // Ignore location errors for silent UX
     }
@@ -217,32 +284,123 @@ export default function Dashboard({
       }
     }, [currentSession])
   );
+
+  const getProfileInitial = () => {
+    return user.name ? user.name.charAt(0).toUpperCase() : 'U';
+  };
+
+  const insets = useSafeAreaInsets();
+
   return (
-    <View style={styles.container}>
-      {/* Header with logo, app name, and logout */}
-      <View style={styles.topHeader}>
-        <View style={styles.headerLeft}>
+    <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
+      {/* Sidebar Overlay */}
+      {sidebarOpen && (
+        <TouchableWithoutFeedback onPress={() => toggleSidebar(false)}>
+          <Animated.View style={[styles.sidebarOverlay, { opacity: overlayOpacity }]} />
+        </TouchableWithoutFeedback>
+      )}
+
+      {/* Side Navbar (Sidebar) */}
+      <Animated.View
+        style={[styles.sidebar, { transform: [{ translateX: sidebarAnim }] }]}
+        {...panResponder.panHandlers}
+      >
+        <View style={styles.sidebarHeader}>
           <Image
             source={require('@/assets/images/logo.png')}
-            style={styles.headerLogo}
+            style={styles.sidebarLogo}
             contentFit="contain"
-            accessibilityLabel="FaceAttend logo"
           />
+          <Text style={styles.sidebarAppName}>FaceAttend</Text>
+        </View>
+
+        <ScrollView style={styles.sidebarContent}>
+          <Pressable
+            style={[styles.navItem, styles.navItemActive]}
+            onPress={() => toggleSidebar(false)}
+          >
+            <Ionicons name="home" size={22} color="#4F46E5" style={styles.navIcon} />
+            <Text style={[styles.navText, styles.navTextActive]}>Dashboard</Text>
+          </Pressable>
+
+          <Pressable
+            style={styles.navItem}
+            onPress={() => {
+              toggleSidebar(false);
+              onTimetablePress && onTimetablePress();
+            }}
+          >
+            <Ionicons name="calendar" size={22} color="#4B5563" style={styles.navIcon} />
+            <Text style={styles.navText}>Timetable</Text>
+          </Pressable>
+
+          <Pressable
+            style={styles.navItem}
+            onPress={() => {
+              toggleSidebar(false);
+              try { require('expo-router').router.push('/student-registration'); } catch { }
+            }}
+          >
+            <Ionicons name="person-add" size={22} color="#4B5563" style={styles.navIcon} />
+            <Text style={styles.navText}>Register Student</Text>
+          </Pressable>
+
+          <Pressable
+            style={styles.navItem}
+            onPress={() => {
+              toggleSidebar(false);
+              try { require('expo-router').router.push('/manage-students'); } catch { }
+            }}
+          >
+            <Ionicons name="people" size={22} color="#4B5563" style={styles.navIcon} />
+            <Text style={styles.navText}>Manage Students</Text>
+          </Pressable>
+
+
+          <Pressable
+            style={styles.navItem}
+            onPress={() => {
+              toggleSidebar(false);
+              try { require('expo-router').router.push('/settings'); } catch { }
+            }}
+          >
+            <Ionicons name="settings" size={22} color="#4B5563" style={styles.navIcon} />
+            <Text style={styles.navText}>Settings</Text>
+          </Pressable>
+        </ScrollView>
+
+        <View style={styles.sidebarFooter}>
+          <Pressable
+            style={styles.logoutNavItem}
+            onPress={() => {
+              toggleSidebar(false);
+              onLogout && onLogout();
+            }}
+          >
+            <Ionicons name="log-out" size={22} color="#EF4444" />
+            <Text style={styles.logoutNavText}>Logout</Text>
+          </Pressable>
+        </View>
+      </Animated.View>
+
+      {/* Header with sidebar trigger */}
+      <View style={[styles.topHeader, { paddingTop: insets.top + 12 }]}>
+        <Pressable
+          onPress={() => toggleSidebar(true)}
+          style={styles.menuButton}
+          accessibilityRole="button"
+          accessibilityLabel="Open Menu"
+        >
+          <Ionicons name="menu" size={24} color="#FFFFFF" />
+        </Pressable>
+
+        <View style={styles.headerCenter}>
           <Text style={styles.appName}>FaceAttend</Text>
         </View>
-        <Pressable
-          onPress={() => {
-            try {
-              // @ts-ignore using expo-router link via global import
-              require('expo-router').router.push('/settings');
-            } catch {}
-          }}
-          style={({ pressed }) => [styles.headerLogoutButton, pressed && styles.headerLogoutButtonPressed]}
-          accessibilityRole="button"
-          accessibilityLabel="Settings"
-        >
-          <Text style={styles.headerLogoutText}>Settings</Text>
-        </Pressable>
+
+        <View style={styles.profileCircle}>
+          <Text style={styles.profileInitial}>{getProfileInitial()}</Text>
+        </View>
       </View>
 
       <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.content}>
@@ -250,6 +408,7 @@ export default function Dashboard({
         <View style={styles.welcomeContainer}>
           <Text style={styles.welcomeGreeting}>Welcome back,</Text>
           <Text style={styles.welcomeName}>{user.name}</Text>
+          <Text style={styles.welcomeSubtext}>Have a productive day of teaching!</Text>
         </View>
 
         {/* Current Session Card */}
@@ -264,7 +423,6 @@ export default function Dashboard({
                     <View style={styles.sessionTypeBadge}>
                       <Text style={styles.sessionTypeText}>{currentSession.sessionType}</Text>
                     </View>
-                    {/* Refresh Button - Top Right */}
                     <Pressable
                       onPress={() => {
                         checkRegisteredStudents(currentSession);
@@ -278,14 +436,14 @@ export default function Dashboard({
                       accessibilityRole="button"
                       accessibilityLabel="Refresh student and attendance status"
                     >
-                      <Text style={styles.refreshButtonText}>🔄</Text>
+                      <Ionicons name="refresh" size={18} color="#2563EB" />
                     </Pressable>
                   </View>
                   <View style={styles.sessionDetails}>
                     <Text style={styles.detailText}>Section: {currentSession.section}</Text>
                     <Text style={styles.detailText}>Room: {currentSession.roomNumber}</Text>
                     <Text style={styles.detailText}>Time: {currentSession.timeSlot}</Text>
-                    <Text style={styles.detailText}>Location: {formatLocation(currentLocation || attendanceStatus?.location)} 
+                    <Text style={styles.detailText}>Location: {formatLocation(currentLocation || attendanceStatus?.location)}
                     </Text>
                   </View>
                   {(() => {
@@ -296,14 +454,17 @@ export default function Dashboard({
                         </View>
                       );
                     }
-                    
+
                     if (attendanceStatus?.hasAttendance) {
                       const attendancePercentage = Math.round((attendanceStatus.presentStudents / attendanceStatus.totalStudents) * 100);
                       const attendanceTime = new Date(attendanceStatus.updatedAt).toLocaleTimeString();
                       return (
                         <View style={styles.attendanceTakenContainer}>
                           <View style={styles.attendanceTakenInfo}>
-                            <Text style={styles.attendanceTakenButtonText}>✅ Attendance Taken</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                              <Ionicons name="checkmark-circle" size={20} color="#166534" style={{ marginRight: 8 }} />
+                              <Text style={styles.attendanceTakenButtonText}>Attendance Taken</Text>
+                            </View>
                             <Text style={styles.attendanceDetailsText}>
                               {attendanceStatus.presentStudents}/{attendanceStatus.totalStudents} present ({attendancePercentage}%)
                             </Text>
@@ -323,7 +484,7 @@ export default function Dashboard({
                         </View>
                       );
                     }
-                    
+
                     return (
                       <Pressable
                         onPress={() => setHoursModalVisible(true)}
@@ -359,54 +520,15 @@ export default function Dashboard({
           }
           return (
             <View style={styles.noSessionCard}>
-              <Text style={styles.noSessionText}>No ongoing session at the moment</Text>
+              <Ionicons name="time-outline" size={60} color="#CBD5E1" />
+              <Text style={styles.noSessionText}>No ongoing session</Text>
               <Text style={styles.noSessionSubtext}>Check your timetable for upcoming sessions</Text>
             </View>
           );
         })()}
 
-      <View style={styles.actionsContainer}>
 
-        <Pressable
-          onPress={onTimetablePress}
-          style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
-          accessibilityRole="button"
-          accessibilityLabel="Timetable"
-        >
-          <Text style={styles.actionButtonText}>Timetable</Text>
-        </Pressable>
-
-        <Pressable
-          onPress={() => {
-            // Navigate to student registration screen
-            try {
-              // @ts-ignore using expo-router link via global import
-              require('expo-router').router.push('/student-registration');
-            } catch {}
-          }}
-          style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
-          accessibilityRole="button"
-          accessibilityLabel="Register Student"
-        >
-          <Text style={styles.actionButtonText}>Register Student</Text>
-        </Pressable>
-
-        <Pressable
-          onPress={() => {
-            try {
-              // @ts-ignore using expo-router link via global import
-              require('expo-router').router.push('/attendance-reports');
-            } catch {}
-          }}
-          style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
-          accessibilityRole="button"
-          accessibilityLabel="View Reports"
-        >
-          <Text style={styles.actionButtonText}>View Attendance Reports</Text>
-        </Pressable>
-      </View>
       </ScrollView>
-
-    </View>
+    </SafeAreaView>
   );
 }

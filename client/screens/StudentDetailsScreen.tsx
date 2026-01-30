@@ -7,12 +7,14 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
-  Modal
+  Modal,
+  Platform
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as FileSystem from 'expo-file-system/legacy';
 import Papa from 'papaparse';
+import { Ionicons } from '@expo/vector-icons';
 
 import EditStudentModal from '@/components/edit-student-modal';
 import { getStudentsApi, updateStudentApi, deleteStudentApi } from '@/api/students';
@@ -88,17 +90,6 @@ export default function StudentDetailsScreen() {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  const formatDateOnly = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
     });
   };
 
@@ -106,10 +97,10 @@ export default function StudentDetailsScreen() {
     return attendanceData.find(att => att.studentId === studentId) || null;
   };
 
-  const getAttendanceColor = (percentage: number) => {
-    if (percentage >= 80) return '#10B981';
-    if (percentage >= 60) return '#F59E0B';
-    return '#EF4444';
+  const getAttendanceColors = (percentage: number) => {
+    if (percentage >= 80) return { bg: '#F0FDF4', text: '#166534', border: '#DCFCE7' };
+    if (percentage >= 60) return { bg: '#FFFBEB', text: '#92400E', border: '#FEF3C7' };
+    return { bg: '#FEF2F2', text: '#991B1B', border: '#FEE2E2' };
   };
 
   const buildCsv = () => {
@@ -123,8 +114,7 @@ export default function StudentDetailsScreen() {
       new Date().toISOString()
     ]];
 
-    const studentHeader = [['Student Details']];
-    const studentRows = [['Name', 'Roll Number', 'Registered Date', 'Attendance %', 'Present Sessions', 'Total Sessions', 'Last Present Date'], ...(
+    const studentRows = [['Name', 'Roll Number', 'Registered Date', 'Attendance %', 'Present Sessions', 'Total Sessions'], ...(
       students.map((student) => {
         const attendance = getStudentAttendance(student.id);
         return [
@@ -133,8 +123,7 @@ export default function StudentDetailsScreen() {
           new Date(student.createdAt).toISOString(),
           attendance ? `${attendance.attendancePercentage}%` : 'N/A',
           attendance ? attendance.presentSessions.toString() : 'N/A',
-          attendance ? attendance.totalSessions.toString() : 'N/A',
-          attendance && attendance.lastAttendanceDate ? new Date(attendance.lastAttendanceDate).toISOString() : 'N/A'
+          attendance ? attendance.totalSessions.toString() : 'N/A'
         ];
       })
     )];
@@ -142,7 +131,7 @@ export default function StudentDetailsScreen() {
     const all = [
       ...headerSection,
       [],
-      ...studentHeader,
+      ['Student Details'],
       ...studentRows,
     ];
     return Papa.unparse(all, { quotes: true });
@@ -169,20 +158,16 @@ export default function StudentDetailsScreen() {
   const buildHtml = () => {
     const studentRows = students.map(student => {
       const attendance = getStudentAttendance(student.id);
-      const attendanceColor = attendance ? getAttendanceColor(attendance.attendancePercentage) : '#6B7280';
+      const colors = attendance ? getAttendanceColors(attendance.attendancePercentage) : { text: '#64748B' };
       return `
         <tr>
           <td>${student.name}</td>
           <td>${student.rollNumber}</td>
-          <td>${new Date(student.createdAt).toLocaleString()}</td>
-          <td style="color: ${attendanceColor}; font-weight: 600;">
+          <td>${new Date(student.createdAt).toLocaleDateString()}</td>
+          <td style="color: ${colors.text}; font-weight: bold;">
             ${attendance ? `${attendance.attendancePercentage}%` : 'N/A'}
           </td>
           <td>${attendance ? `${attendance.presentSessions}/${attendance.totalSessions}` : 'N/A'}</td>
-          <td>${attendance && attendance.lastAttendanceDate ?
-          new Date(attendance.lastAttendanceDate).toLocaleDateString() +
-          (attendance.lastPresentSessionHours ? ` (${attendance.lastPresentSessionHours})` : '')
-          : 'N/A'}</td>
         </tr>
       `;
     }).join('');
@@ -192,45 +177,28 @@ export default function StudentDetailsScreen() {
       <html>
         <head>
           <title>Student List - ${classInfo.subject}</title>
-           <style>
-             body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; }
-             h1 { color: #111827; }
-             .class-info { background: #F3F4F6; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
-             .class-info div { margin-bottom: 8px; }
-             .class-info div:last-child { margin-bottom: 0; }
-             table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-             th, td { border: 1px solid #D1D5DB; padding: 12px; text-align: left; }
-             th { background: #F9FAFB; font-weight: 600; }
-             .pill { background: #10B981; color: white; padding: 4px 8px; border-radius: 4px; }
-             .attendance-good { color: #10B981; font-weight: 600; }
-             .attendance-average { color: #F59E0B; font-weight: 600; }
-             .attendance-poor { color: #EF4444; font-weight: 600; }
-           </style>
+          <style>
+            body { font-family: -apple-system, sans-serif; margin: 40px; color: #1e293b; }
+            h1 { color: #0f172a; margin-bottom: 20px; }
+            .info { background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 30px; }
+            table { width: 100%; border-collapse: collapse; }
+            th, td { border-bottom: 1px solid #e2e8f0; padding: 12px; text-align: left; }
+            th { background: #f1f5f9; color: #64748b; text-transform: uppercase; font-size: 11px; letter-spacing: 0.1em; }
+            td { font-size: 14px; }
+          </style>
         </head>
         <body>
-          <h1>Student List with Attendance</h1>
-          <div class="class-info">
+          <h1>Student Report</h1>
+          <div class="info">
             <div><strong>Subject:</strong> ${classInfo.subject}</div>
             <div><strong>Section:</strong> ${classInfo.section}</div>
-            <div><strong>Session Type:</strong> ${classInfo.sessionType}</div>
-            <div><strong>Total Students:</strong> <span class="pill">${students.length}</span></div>
-            <div><strong>Export Date:</strong> ${new Date().toLocaleString()}</div>
+            <div><strong>Type:</strong> ${classInfo.sessionType}</div>
           </div>
-          <h2>Student Details with Attendance</h2>
           <table>
             <thead>
-              <tr>
-                <th>Name</th>
-                <th>Roll Number</th>
-                <th>Registered Date</th>
-                <th>Attendance %</th>
-                <th>Sessions (Present/Total)</th>
-                <th>Last Present Date</th>
-              </tr>
+              <tr><th>Name</th><th>Roll</th><th>Joined</th><th>Attendance</th><th>Sessions</th></tr>
             </thead>
-            <tbody>
-              ${studentRows || '<tr><td colspan="6">No students found</td></tr>'}
-            </tbody>
+            <tbody>${studentRows}</tbody>
           </table>
         </body>
       </html>
@@ -245,8 +213,6 @@ export default function StudentDetailsScreen() {
       const { uri } = await Print.printToFileAsync({ html });
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Export Students (PDF)' });
-      } else {
-        Alert.alert('Saved', `PDF saved to: ${uri}`);
       }
     } catch (e) {
       Alert.alert('Export Failed', 'Could not export PDF.');
@@ -266,60 +232,45 @@ export default function StudentDetailsScreen() {
       setEditingStudent(null);
       loadData();
     } catch (error: any) {
-      const errorMessage = error?.response?.data?.message || 'Failed to update student';
-      Alert.alert('Error', errorMessage);
+      Alert.alert('Error', error?.response?.data?.message || 'Failed to update student');
       throw error;
     }
   };
 
   const handleDeleteStudent = (studentId: string, studentName: string) => {
-    Alert.alert(
-      'Delete Student',
-      `Are you sure you want to delete ${studentName}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteStudentApi(studentId);
-              Alert.alert('Success', 'Student deleted successfully');
-              loadData();
-            } catch (error) {
-              Alert.alert('Error', 'Failed to delete student');
-            }
+    Alert.alert('Delete Student', `Delete ${studentName}?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteStudentApi(studentId);
+            loadData();
+          } catch (error) {
+            Alert.alert('Error', 'Failed to delete student');
           }
         }
-      ]
-    );
+      }
+    ]);
   };
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]} edges={['left', 'right']}>
-        <ActivityIndicator size="large" color="#10B981" />
-        <Text style={{ marginTop: 16, fontSize: 16, color: '#6B7280' }}>
-          Loading student details...
-        </Text>
+      <SafeAreaView style={styles.centerContainer}>
+        <ActivityIndicator size="large" color="#2563EB" />
+        <Text style={styles.loadingText}>Loading details...</Text>
       </SafeAreaView>
     );
   }
 
   if (error) {
     return (
-      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 }]} edges={['left', 'right']}>
-        <Text style={{ fontSize: 18, color: '#EF4444', textAlign: 'center', marginBottom: 16 }}>
-          {error}
-        </Text>
-        <Pressable
-          onPress={() => router.back()}
-          style={({ pressed }) => [
-            styles.backInlineButton,
-            pressed && { opacity: 0.8 }
-          ]}
-        >
-          <Text style={styles.backInlineButtonText}>Go Back</Text>
+      <SafeAreaView style={styles.centerContainer}>
+        <Ionicons name="alert-circle" size={64} color="#EF4444" />
+        <Text style={styles.errorText}>{error}</Text>
+        <Pressable onPress={() => router.back()} style={styles.backButtonInline}>
+          <Text style={styles.backButtonInlineText}>Go Back</Text>
         </Pressable>
       </SafeAreaView>
     );
@@ -328,432 +279,525 @@ export default function StudentDetailsScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
       {/* Header */}
-      <View style={[
-        styles.header,
-        { paddingTop: insets.top > 0 ? insets.top : 12 }
-      ]}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <Pressable
           onPress={() => router.back()}
-          style={({ pressed }) => [
-            styles.backButton,
-            pressed && styles.backButtonPressed
-          ]}
+          style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
         >
-          <Text style={styles.backButtonText}>← Back</Text>
+          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
         </Pressable>
-        <Text style={styles.headerTitle}>Student Details</Text>
-        <View style={{ width: 60 }} />
+        <Text style={styles.headerTitle}>Class Details</Text>
+        <Pressable
+          onPress={() => setShowExportModal(true)}
+          style={({ pressed }) => [styles.headerActionButton, pressed && styles.headerActionButtonPressed]}
+        >
+          <Ionicons name="share-outline" size={24} color="#FFFFFF" />
+        </Pressable>
       </View>
 
-      {/* Class Info */}
-      <View style={styles.classInfoCard}>
-        <View style={styles.classInfoHeader}>
-          <Text style={styles.classInfoTitle}>Class Information</Text>
-          <Pressable
-            onPress={() => setShowExportModal(true)}
-            style={({ pressed }) => [
-              styles.exportButton,
-              pressed && styles.exportButtonPressed
-            ]}
-          >
-            <Text style={styles.exportButtonText}>Export</Text>
-          </Pressable>
-        </View>
-        <Text style={styles.classInfoText}>
-          {classInfo.subject} - Section {classInfo.section}
-        </Text>
-        <Text style={styles.sessionTypeText}>
-          Session Type: {classInfo.sessionType}
-        </Text>
-        <Text style={styles.studentCountText}>
-          Total Students: {students.length}
-        </Text>
-      </View>
-
-      {/* Students List */}
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Class Info Card */}
+        <View style={styles.infoCard}>
+          <View style={styles.infoBadge}>
+            <Text style={styles.infoBadgeText}>{classInfo.sessionType}</Text>
+          </View>
+          <Text style={styles.infoSubject}>{classInfo.subject}</Text>
+          <Text style={styles.infoSection}>SECTION {classInfo.section}</Text>
+
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <Text style={statStyles.statLabel}>STUDENTS</Text>
+              <Text style={statStyles.statValue}>{students.length}</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={statStyles.statLabel}>LAST EXPORT</Text>
+              <Text style={statStyles.statValue}>{new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Students List */}
+        <View style={styles.listHeader}>
+          <Text style={styles.listTitle}>Enrolled Students</Text>
+          <View style={styles.studentCountBadge}>
+            <Text style={styles.studentCountBadgeText}>{students.length}</Text>
+          </View>
+        </View>
+
         {students.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No students found</Text>
-            <Text style={styles.emptySubtext}>
-              Students registered for this class will appear here
-            </Text>
+          <View style={styles.emptyCard}>
+            <Ionicons name="people-outline" size={48} color="#CBD5E1" />
+            <Text style={styles.emptyText}>No students in this class</Text>
           </View>
         ) : (
           students.map((student, index) => {
             const attendance = getStudentAttendance(student.id);
+            const colors = attendance ? getAttendanceColors(attendance.attendancePercentage) : null;
+
             return (
               <View key={student.id} style={styles.studentCard}>
-                <View style={styles.studentHeader}>
-                  <Text style={styles.studentNumber}>#{index + 1}</Text>
-                  <Text style={styles.studentName}>{student.name}</Text>
+                <View style={styles.studentCardHeader}>
+                  <View style={styles.avatar}>
+                    <Text style={styles.avatarText}>{student.name.charAt(0)}</Text>
+                  </View>
+                  <View style={styles.studentMain}>
+                    <Text style={styles.studentName} numberOfLines={1}>{student.name}</Text>
+                    <Text style={styles.studentRoll}>{student.rollNumber}</Text>
+                  </View>
                   <Pressable
                     onPress={() => handleEditStudent(student)}
-                    style={({ pressed }) => [
-                      styles.editButton,
-                      pressed && styles.editButtonPressed
-                    ]}
+                    style={styles.editButton}
                   >
-                    <Text style={styles.editButtonText}>Edit</Text>
+                    <Ionicons name="ellipsis-vertical" size={20} color="#64748B" />
                   </Pressable>
                 </View>
-                <View style={styles.studentDetails}>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Roll Number:</Text>
-                    <Text style={styles.detailValue}>{student.rollNumber}</Text>
-                  </View>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Registered:</Text>
-                    <Text style={styles.detailValue}>{formatDate(student.createdAt)}</Text>
-                  </View>
-                  {attendance && (
-                    <>
-                      <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Attendance:</Text>
-                        <View style={styles.attendanceContainer}>
-                          <Text style={[
-                            styles.attendancePercentage,
-                            { color: getAttendanceColor(attendance.attendancePercentage) }
-                          ]}>
-                            {attendance.attendancePercentage}%
-                          </Text>
-                          <Text style={styles.attendanceDetails}>
-                            ({attendance.presentSessions}/{attendance.totalSessions} sessions)
-                          </Text>
-                        </View>
+
+                {attendance && (
+                  <View style={[styles.attendanceBar, { backgroundColor: colors?.bg, borderColor: colors?.border }]}>
+                    <View style={styles.attendanceLeft}>
+                      <Text style={[styles.attendanceLabel, { color: colors?.text }]}>ATTENDANCE</Text>
+                      <Text style={[styles.attendancePercent, { color: colors?.text }]}>{attendance.attendancePercentage}%</Text>
+                    </View>
+                    <View style={styles.attendanceRight}>
+                      <Text style={styles.attendanceSessions}>{attendance.presentSessions}/{attendance.totalSessions} Sessions</Text>
+                      <View style={styles.progressBarBg}>
+                        <View style={[styles.progressBarFill, { width: `${attendance.attendancePercentage}%`, backgroundColor: colors?.text }]} />
                       </View>
-                      {attendance.lastAttendanceDate && (
-                        <View style={styles.detailRow}>
-                          <Text style={styles.detailLabel}>Last Present:</Text>
-                          <Text style={styles.detailValue}>
-                            {formatDateOnly(attendance.lastAttendanceDate)}
-                            {attendance.lastPresentSessionHours && (
-                              <Text style={styles.sessionHoursText}>
-                                {' '}({attendance.lastPresentSessionHours})
-                              </Text>
-                            )}
-                          </Text>
-                        </View>
-                      )}
-                    </>
-                  )}
+                    </View>
+                  </View>
+                )}
+
+                <View style={styles.cardFooter}>
+                  <Ionicons name="calendar-outline" size={14} color="#94A3B8" />
+                  <Text style={styles.footerDate}>Joined {formatDate(student.createdAt)}</Text>
                 </View>
               </View>
             );
           })
         )}
+        <View style={{ height: 40 }} />
       </ScrollView>
 
-      <EditStudentModal
-        visible={showEditModal}
-        onClose={() => {
-          setShowEditModal(false);
-          setEditingStudent(null);
-        }}
-        onSave={handleUpdateStudent}
-        onDelete={handleDeleteStudent}
-        student={editingStudent}
-      />
-
+      {/* Export Modal */}
       <Modal
         visible={showExportModal}
         transparent
         animationType="fade"
         onRequestClose={() => setShowExportModal(false)}
       >
-        <View style={styles.exportOverlay}>
-          <View style={styles.exportSheet}>
-            <Text style={styles.exportTitle}>Export as</Text>
-            <Pressable
-              onPress={async () => {
-                setShowExportModal(false);
-                await exportAsPdf();
-              }}
-              style={({ pressed }) => [styles.exportOption, pressed && { opacity: 0.9 }]}
-            >
-              <Text style={styles.exportOptionText}>PDF</Text>
-            </Pressable>
-            <Pressable
-              onPress={async () => {
-                setShowExportModal(false);
-                await exportAsCsv();
-              }}
-              style={({ pressed }) => [styles.exportOption, pressed && { opacity: 0.9 }]}
-            >
-              <Text style={styles.exportOptionText}>CSV</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setShowExportModal(false)}
-              style={({ pressed }) => [styles.exportCancel, pressed && { opacity: 0.9 }]}
-            >
-              <Text style={styles.exportCancelText}>Cancel</Text>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowExportModal(false)}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>EXPORT REPORT</Text>
+            <View style={styles.exportOptions}>
+              <Pressable
+                onPress={async () => { setShowExportModal(false); await exportAsPdf(); }}
+                style={({ pressed }) => [styles.exportOption, pressed && styles.exportOptionPressed]}
+              >
+                <View style={[styles.exportIcon, { backgroundColor: '#FEF2F2' }]}>
+                  <Ionicons name="document-text" size={24} color="#EF4444" />
+                </View>
+                <Text style={styles.exportOptionText}>PDF Document</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={async () => { setShowExportModal(false); await exportAsCsv(); }}
+                style={({ pressed }) => [styles.exportOption, pressed && styles.exportOptionPressed]}
+              >
+                <View style={[styles.exportIcon, { backgroundColor: '#ECFDF5' }]}>
+                  <Ionicons name="grid" size={24} color="#10B981" />
+                </View>
+                <Text style={styles.exportOptionText}>CSV Spreadsheet</Text>
+              </Pressable>
+            </View>
+            <Pressable onPress={() => setShowExportModal(false)} style={styles.modalCloseButton}>
+              <Text style={styles.modalCloseButtonText}>CANCEL</Text>
             </Pressable>
           </View>
-        </View>
+        </Pressable>
       </Modal>
+
+      <EditStudentModal
+        visible={showEditModal}
+        onClose={() => { setShowEditModal(false); setEditingStudent(null); }}
+        onSave={handleUpdateStudent}
+        onDelete={handleDeleteStudent}
+        student={editingStudent}
+      />
     </SafeAreaView>
   );
 }
 
+const statStyles = StyleSheet.create({
+  statLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#94A3B8',
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#1E293B',
+  },
+});
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#F8FAFC',
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    padding: 24,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  errorText: {
+    fontSize: 18,
+    color: '#EF4444',
+    fontWeight: '800',
+    textAlign: 'center',
+    marginTop: 20,
+    marginBottom: 24,
   },
   header: {
-    backgroundColor: 'white',
-    paddingTop: 12,
-    paddingBottom: 16,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    backgroundColor: '#2563EB',
+    paddingBottom: 24,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    shadowColor: '#2563EB',
+    shadowOpacity: 0.3,
+    shadowRadius: 15,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 10,
   },
   backButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 6,
+    width: 44,
+    height: 44,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   backButtonPressed: {
-    opacity: 0.7,
-  },
-  backButtonText: {
-    fontSize: 16,
-    color: '#EF4444',
-    fontWeight: '600',
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    transform: [{ scale: 0.95 }],
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: '700',
-    color: '#111827',
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
-  backInlineButton: {
-    backgroundColor: '#EF4444',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  backInlineButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  classInfoCard: {
-    backgroundColor: 'white',
-    margin: 16,
-    padding: 16,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  classInfoHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  headerActionButton: {
+    width: 44,
+    height: 44,
     alignItems: 'center',
-    marginBottom: 12,
+    justifyContent: 'center',
   },
-  classInfoTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#111827',
+  headerActionButtonPressed: {
+    opacity: 0.7,
   },
-  exportButton: {
-    backgroundColor: '#111827',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
+  backButtonInline: {
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    backgroundColor: '#2563EB',
+    borderRadius: 16,
   },
-  exportButtonPressed: {
-    opacity: 0.9,
-  },
-  exportButtonText: {
+  backButtonInlineText: {
     color: 'white',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  classInfoText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 8,
-  },
-  sessionTypeText: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginBottom: 4,
-  },
-  studentCountText: {
-    fontSize: 14,
-    color: '#10B981',
-    fontWeight: '600',
+    fontWeight: '800',
   },
   content: {
     flex: 1,
-    paddingHorizontal: 16,
+    padding: 20,
   },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 40,
-  },
-  emptyText: {
-    fontSize: 18,
-    color: '#6B7280',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#9CA3AF',
-    textAlign: 'center',
-  },
-  studentCard: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+  infoCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 28,
+    padding: 24,
+    marginBottom: 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowOpacity: 0.05,
+    shadowRadius: 15,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
   },
-  studentHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  studentNumber: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#10B981',
-    backgroundColor: '#D1FAE5',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-    marginRight: 12,
-  },
-  studentName: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#111827',
-    flex: 1,
-    marginRight: 12,
-  },
-  editButton: {
-    backgroundColor: '#10B981',
+  infoBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#EFF6FF',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+    marginBottom: 12,
   },
-  editButtonPressed: {
-    opacity: 0.9,
+  infoBadgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#2563EB',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
-  editButtonText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '600',
+  infoSubject: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#1E293B',
+    letterSpacing: -0.5,
+    marginBottom: 4,
   },
-  studentDetails: {
-    gap: 8,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 4,
-  },
-  detailLabel: {
+  infoSection: {
     fontSize: 14,
-    color: '#6B7280',
-    fontWeight: '500',
-    flex: 1,
-  },
-  detailValue: {
-    fontSize: 14,
-    color: '#111827',
-    fontWeight: '600',
-    flex: 2,
-    textAlign: 'right',
-  },
-  sessionHoursText: {
-    fontSize: 12,
-    color: '#6B7280',
-    fontWeight: '400',
-  },
-  attendanceContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flex: 2,
-    justifyContent: 'flex-end',
-  },
-  attendancePercentage: {
-    fontSize: 16,
     fontWeight: '700',
-  },
-  attendanceDetails: {
-    fontSize: 12,
-    color: '#6B7280',
-    fontWeight: '500',
-  },
-  exportOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  exportSheet: {
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 20,
-    width: '100%',
-    maxWidth: 300,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  exportTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#111827',
-    textAlign: 'center',
+    color: '#64748B',
     marginBottom: 20,
   },
-  exportOption: {
-    backgroundColor: '#E5E7EB',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    marginBottom: 12,
+  statsRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 20,
+    padding: 16,
+  },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: '#E2E8F0',
+  },
+  listHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    paddingHorizontal: 4,
+  },
+  listTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#1E293B',
+    letterSpacing: -0.5,
+  },
+  studentCountBadge: {
+    backgroundColor: '#E2E8F0',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  studentCountBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#475569',
+  },
+  studentCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    shadowColor: '#000',
+    shadowOpacity: 0.02,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  studentCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#DBEAFE',
+  },
+  avatarText: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#2563EB',
+  },
+  studentMain: {
+    flex: 1,
+    marginLeft: 14,
+  },
+  studentName: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#1E293B',
+    marginBottom: 2,
+  },
+  studentRoll: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  editButton: {
+    padding: 8,
+  },
+  attendanceBar: {
+    flexDirection: 'row',
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  attendanceLeft: {
+    marginRight: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  attendanceLabel: {
+    fontSize: 8,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  attendancePercent: {
+    fontSize: 20,
+    fontWeight: '900',
+  },
+  attendanceRight: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  attendanceSessions: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+    marginBottom: 6,
+    textAlign: 'right',
+  },
+  progressBarBg: {
+    height: 6,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  footerDate: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#94A3B8',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderRadius: 28,
+    width: '100%',
+    maxWidth: 400,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 10,
+  },
+  modalTitle: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#1E293B',
+    letterSpacing: 2,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  exportOptions: {
+    gap: 12,
+    marginBottom: 24,
+  },
+  exportOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    padding: 16,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#F1F5F9',
+  },
+  exportOptionPressed: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#DBEAFE',
+  },
+  exportIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
   },
   exportOptionText: {
-    color: '#374151',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '800',
+    color: '#1E293B',
   },
-  exportCancel: {
-    backgroundColor: '#EF4444',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
+  modalCloseButton: {
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 18,
+    borderRadius: 16,
     alignItems: 'center',
   },
-  exportCancelText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
+  modalCloseButtonText: {
+    color: '#64748B',
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 1,
   },
+  emptyCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 28,
+    padding: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: '#E2E8F0',
+  },
+  emptyText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#94A3B8',
+    marginTop: 16,
+  }
 });
 
 

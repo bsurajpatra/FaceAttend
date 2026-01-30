@@ -61,6 +61,7 @@
   "devDependencies": {
     "@types/papaparse": "^5.3.16",
     "@types/react": "~19.1.0",
+    "baseline-browser-mapping": "^2.9.19",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
     "typescript": "~5.9.2"
@@ -68,7 +69,9 @@
   "expo": {
     "doctor": {
       "reactNativeDirectoryCheck": {
-        "exclude": ["react-native-fs"],
+        "exclude": [
+          "react-native-fs"
+        ],
         "listUnknownPackages": false
       }
     }

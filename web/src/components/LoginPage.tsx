@@ -66,14 +66,14 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="min-h-screen bg-white flex font-sans selection:bg-blue-100">
+        <div className="h-screen w-full overflow-hidden bg-white flex font-sans selection:bg-blue-100">
             {/* Background Decorative Elements */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
                 <div className="absolute -top-[10%] -left-[10%] w-[40%] h-[40%] bg-blue-50 rounded-full blur-3xl opacity-40" />
                 <div className="absolute -bottom-[10%] -right-[10%] w-[40%] h-[40%] bg-indigo-50 rounded-full blur-3xl opacity-40" />
             </div>
 
-            <div className="w-full grid grid-cols-1 md:grid-cols-2 min-h-screen relative z-10">
+            <div className="w-full h-full grid grid-cols-1 md:grid-cols-2 relative z-10">
 
                 {/* Left Side: Branding/Visuals */}
                 <div className="hidden md:flex flex-col justify-between p-12 bg-slate-900 text-white relative overflow-hidden">
@@ -89,8 +89,8 @@ export default function LoginPage() {
                         </div>
 
                         <h2 className="text-4xl font-extrabold leading-tight mb-6">
-                            Intelligent <br />
-                            <span className="text-blue-400 text-5xl">ERP Portal</span>
+                            Intelligent
+                            <span className="text-blue-400 text-5xl"> ERP Portal</span>
                         </h2>
                         <p className="text-slate-400 text-lg leading-relaxed max-w-sm opacity-90">
                             Centralized command center for management and security.
@@ -128,9 +128,9 @@ export default function LoginPage() {
                 </div>
 
                 {/* Right Side: Login Form */}
-                <div className="p-8 md:p-16 flex flex-col justify-center items-center bg-white">
+                <div className="h-full p-6 md:p-12 flex flex-col justify-center items-center bg-white overflow-y-auto">
                     <div className="w-full max-w-md">
-                        <div className="mb-12 block md:hidden text-center">
+                        <div className="mb-10 block md:hidden text-center">
                             <div className="flex items-center justify-center gap-4 mb-4">
                                 <img src={logoImg} alt="FaceAttend" className="w-16 h-16 object-contain" />
                                 <span className="text-4xl font-black tracking-tight text-slate-800 italic">FaceAttend</span>
@@ -142,8 +142,8 @@ export default function LoginPage() {
                             <p className="text-slate-500 text-lg">Log in to manage your sessions.</p>
                         </div>
 
-                        <form onSubmit={handleLogin} className="space-y-6 w-full">
-                            <div className="space-y-2">
+                        <form onSubmit={handleLogin} className="space-y-5 w-full">
+                            <div className="space-y-1.5">
                                 <label className="text-sm font-bold text-slate-700 ml-1 uppercase tracking-wider block text-center md:text-left">Username</label>
                                 <div className="relative group">
                                     <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
@@ -154,13 +154,13 @@ export default function LoginPage() {
                                         required
                                         value={username}
                                         onChange={(e) => setUsername(e.target.value)}
-                                        className="block w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 transition-all font-medium"
+                                        className="block w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 transition-all font-medium"
                                         placeholder="your_username"
                                     />
                                 </div>
                             </div>
 
-                            <div className="space-y-2">
+                            <div className="space-y-1.5">
                                 <label className="text-sm font-bold text-slate-700 ml-1 uppercase tracking-wider block text-center md:text-left">Password</label>
                                 <div className="relative group">
                                     <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
@@ -171,13 +171,13 @@ export default function LoginPage() {
                                         required
                                         value={password}
                                         onChange={(e) => setPassword(e.target.value)}
-                                        className="block w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 transition-all font-medium"
+                                        className="block w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 transition-all font-medium"
                                         placeholder="••••••••"
                                     />
                                 </div>
                             </div>
 
-                            <div className="space-y-3">
+                            <div className="space-y-2">
                                 <label className="text-sm font-bold text-slate-700 ml-1 uppercase tracking-wider block text-center md:text-left">Security Captcha</label>
                                 <div className="flex gap-4 items-center">
                                     <div className="flex-1 relative group">
@@ -186,14 +186,14 @@ export default function LoginPage() {
                                             required
                                             value={captchaInput}
                                             onChange={(e) => setCaptchaInput(e.target.value)}
-                                            className="block w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 transition-all font-bold tracking-[0.5em] text-center italic"
+                                            className="block w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 transition-all font-bold tracking-[0.5em] text-center italic"
                                             placeholder="CODE"
                                             maxLength={6}
                                         />
                                     </div>
                                     <div className="flex flex-col items-center gap-2">
                                         <div
-                                            className="h-14 w-32 bg-slate-900 rounded-xl flex items-center justify-center font-black text-xl italic tracking-widest text-white select-none relative overflow-hidden shadow-inner border-2 border-slate-800 cursor-not-allowed group"
+                                            className="h-12 w-32 bg-slate-900 rounded-xl flex items-center justify-center font-black text-xl italic tracking-widest text-white select-none relative overflow-hidden shadow-inner border-2 border-slate-800 cursor-not-allowed group"
                                             style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.5)' }}
                                         >
                                             <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'repeating-linear-gradient(45deg, #000 0px, #000 2px, transparent 2px, transparent 4px)' }} />
@@ -223,7 +223,7 @@ export default function LoginPage() {
                                 type="submit"
                                 disabled={isLoading || success}
                                 className={cn(
-                                    "w-full flex items-center justify-center gap-3 py-5 px-8 rounded-2xl text-white font-black text-lg shadow-2xl shadow-blue-200 transition-all active:scale-[0.97] mt-4",
+                                    "w-full flex items-center justify-center gap-3 py-4 px-8 rounded-2xl text-white font-black text-lg shadow-2xl shadow-blue-200 transition-all active:scale-[0.97] mt-4",
                                     success ? "bg-emerald-500 shadow-emerald-100" : "bg-blue-600 hover:bg-blue-700"
                                 )}
                             >

@@ -1,9 +1,9 @@
-import { StyleSheet } from 'react-native';
+import { StyleSheet, Platform } from 'react-native';
 
 export const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#F8FAFC',
   },
   content: {
     flex: 1,
@@ -14,25 +14,30 @@ export const styles = StyleSheet.create({
   headerContainer: {
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: Platform.OS === 'ios' ? 40 : 20,
   },
   logo: {
-    width: 160,
-    height: 160,
-    marginBottom: 16,
+    width: 200,
+    height: 200,
+    marginBottom: 4,
+    shadowColor: '#2563EB',
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
   },
   messageContainer: {
-    marginTop: 8,
+    marginTop: 0,
+    alignItems: 'center',
   },
   appName: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#111827',
+    fontSize: 42,
+    fontWeight: '900',
+    color: '#1E293B',
     textAlign: 'center',
-    marginBottom: 6,
+    letterSpacing: -1.5,
   },
   loginContainer: {
     width: '100%',
-    marginTop: 0,
+    marginTop: 20,
   },
 });
 
