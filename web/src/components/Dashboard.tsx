@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import {
     LayoutDashboard,
@@ -13,7 +14,9 @@ import {
     Clock,
     BookOpen,
     MapPin as MapPinIcon,
-    History
+    History,
+    UserPlus,
+    Users
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import logoImg from '../assets/logo.png';
@@ -23,6 +26,8 @@ import { getCurrentSession } from '../lib/timeSlots';
 import { Profile } from './Profile';
 import { AttendanceReports } from './AttendanceReports';
 import TimetableManager from './TimetableManager';
+import { StudentRegistration } from './StudentRegistration';
+import { StudentManagement } from './StudentManagement';
 
 export default function Dashboard() {
     const [activeTab, setActiveTab] = useState('overview');
@@ -99,6 +104,20 @@ export default function Dashboard() {
                         active={activeTab === 'overview'}
                         isOpen={isSidebarOpen}
                         onClick={() => setActiveTab('overview')}
+                    />
+                    <SidebarItem
+                        icon={<UserPlus />}
+                        label="Registration"
+                        active={activeTab === 'registration'}
+                        isOpen={isSidebarOpen}
+                        onClick={() => setActiveTab('registration')}
+                    />
+                    <SidebarItem
+                        icon={<Users />}
+                        label="Students"
+                        active={activeTab === 'students'}
+                        isOpen={isSidebarOpen}
+                        onClick={() => setActiveTab('students')}
                     />
                     <SidebarItem
                         icon={<BookOpen />}
@@ -180,6 +199,8 @@ export default function Dashboard() {
                 <div className="flex-1 overflow-y-auto p-4 sm:p-8">
                     <div className="max-w-7xl mx-auto h-full flex flex-col">
                         {activeTab === 'overview' && <OverviewSection user={user} timetable={timetable} />}
+                        {activeTab === 'registration' && <StudentRegistration user={user} timetable={timetable} />}
+                        {activeTab === 'students' && <StudentManagement user={user} timetable={timetable} />}
                         {activeTab === 'timetable' && <TimetableManager />}
                         {activeTab === 'reports' && <AttendanceReports />}
                         {activeTab === 'profile' && <Profile user={user} />}
@@ -270,6 +291,3 @@ function OverviewSection({ user, timetable }: any) {
         </div>
     );
 }
-
-
-

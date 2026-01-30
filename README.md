@@ -1,4 +1,4 @@
-# FaceAttend – Face Recognition Attendance System
+   # FaceAttend – Face Recognition Attendance System
 
 FaceAttend is a modern attendance management solution designed for educational institutions. The app leverages advanced face recognition technology to automatically identify and mark student attendance, eliminating the need for manual roll calls and preventing proxy attendance. With its intuitive mobile interface and secure kiosk mode, FaceAttend streamlines the attendance process while maintaining data integrity and security.
 

@@ -139,31 +139,7 @@ export function Sidebar({ isOpen, onClose, onLogout, onTimetablePress, activeRou
                         <Text style={[styles.navText, isActive('/timetable') && styles.navTextActive]}>Timetable</Text>
                     </Pressable>
 
-                    <Pressable
-                        style={[styles.navItem, isActive('/student-registration') && styles.navItemActive]}
-                        onPress={() => navigateTo('/student-registration')}
-                    >
-                        <Ionicons
-                            name="person-add"
-                            size={22}
-                            color={isActive('/student-registration') ? "#4F46E5" : "#4B5563"}
-                            style={styles.navIcon}
-                        />
-                        <Text style={[styles.navText, isActive('/student-registration') && styles.navTextActive]}>Register Student</Text>
-                    </Pressable>
 
-                    <Pressable
-                        style={[styles.navItem, isActive('/manage-students') && styles.navItemActive]}
-                        onPress={() => navigateTo('/manage-students')}
-                    >
-                        <Ionicons
-                            name="people"
-                            size={22}
-                            color={isActive('/manage-students') ? "#4F46E5" : "#4B5563"}
-                            style={styles.navIcon}
-                        />
-                        <Text style={[styles.navText, isActive('/manage-students') && styles.navTextActive]}>Manage Students</Text>
-                    </Pressable>
 
                     <Pressable
                         style={[styles.navItem, isActive('/settings') && styles.navItemActive]}

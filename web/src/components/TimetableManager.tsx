@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
     Plus,
     Trash2,
@@ -7,7 +7,8 @@ import {
     Save,
     AlertCircle,
     CheckCircle2,
-    Loader2
+    Loader2,
+    BookOpen
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { TIME_SLOTS, SESSION_TYPES, getSessionDuration, validateConsecutiveHours } from '../lib/timeSlots';
@@ -188,10 +189,10 @@ export default function TimetableManager() {
     return (
         <div className="space-y-6 pb-20">
             <div className="flex justify-between items-center mb-6">
-                <div>
-                    <h2 className="text-2xl font-bold text-slate-800">Timetable Manager</h2>
-                    <p className="text-slate-500">Configure your weekly teaching schedule.</p>
-                </div>
+                <h2 className="text-2xl font-black text-slate-900 tracking-tight uppercase italic flex items-center gap-3">
+                    <BookOpen size={28} className="text-blue-600" />
+                    Timetable Manager
+                </h2>
                 <button
                     onClick={handleSave}
                     disabled={isSaving}
