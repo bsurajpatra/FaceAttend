@@ -72,11 +72,12 @@ export default function LiveAttendance({
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [statusType, setStatusType] = useState<'success' | 'duplicate' | 'notfound' | 'error' | null>(null);
   const [isButtonDisabled, setIsButtonDisabled] = useState(false);
-  const [lastProcessedImage, setLastProcessedImage] = useState<string | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
 
   const cameraRef = useRef<CameraView>(null);
   const detectionIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isProcessingRef = useRef(false);
   const markedStudentsRef = useRef<Set<string>>(new Set());
   const { isKioskMode, enableKioskMode, showPasswordModal, setShowPasswordModal } = useKiosk();
 
@@ -107,20 +108,20 @@ export default function LiveAttendance({
     }
 
     detectionIntervalRef.current = setInterval(async () => {
-      if (isProcessing || !cameraRef.current || !isDetecting) return;
+      if (isProcessingRef.current || !cameraRef.current || !isDetecting) return;
 
       try {
+        isProcessingRef.current = true;
         setIsProcessing(true);
         const photo = await cameraRef.current.takePictureAsync({
           quality: 0.5,
           base64: true,
         });
 
-        if (!photo?.base64) return;
-
-        const imageHash = photo.base64.substring(0, 100);
-        if (lastProcessedImage === imageHash) return;
-        setLastProcessedImage(imageHash);
+        if (!photo?.base64) {
+          setIsProcessing(false);
+          return;
+        }
 
         const result = await markAttendanceApi({ sessionId, faceImageBase64: photo.base64 });
         const isAlreadyMarked = result.message === 'Student already marked present';
@@ -133,33 +134,39 @@ export default function LiveAttendance({
           });
           markedStudentsRef.current.add(result.student.id);
           setStatusType('success');
-          setStatusMessage(`${result.student.name} marked!`);
+          setStatusMessage(`${result.student.name} (${result.student.rollNumber || 'N/A'}) marked!`);
           onAttendanceMarked(result);
         } else {
           setStatusType('duplicate');
-          setStatusMessage(`${result.student.name} already marked`);
+          setStatusMessage(`Already marked: ${result.student.name} (${result.student.rollNumber || 'N/A'})`);
         }
       } catch (apiError: any) {
         if (apiError.response?.status === 404 || apiError.response?.status === 400) {
           setStatusType('notfound');
-          setStatusMessage('Face not recognized');
+          setStatusMessage('Not found');
         } else {
           setStatusType('error');
           setStatusMessage('Connection error');
         }
       } finally {
+        isProcessingRef.current = false;
         setIsProcessing(false);
-        setTimeout(() => {
+
+        // Handle status message clearing safely
+        if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
+        statusTimerRef.current = setTimeout(() => {
           setStatusMessage(null);
           setStatusType(null);
-        }, 2000);
+          statusTimerRef.current = null;
+        }, 2500);
       }
     }, 3000);
 
     return () => {
       if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current);
+      if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
     };
-  }, [isDetecting, isInitialized, sessionId, lastProcessedImage, isProcessing]);
+  }, [isDetecting, isInitialized, sessionId]);
 
   useEffect(() => {
     if (permission?.granted && cameraReady && !isInitialized) {

@@ -34,6 +34,16 @@ export function StudentRegistration({ user, timetable }: StudentRegistrationProp
     // Derive options from timetable
     const subjects = Array.from(new Set(timetable.flatMap(d => d.sessions.map((s: any) => s.subject))));
     const sections = Array.from(new Set(timetable.flatMap(d => d.sessions.filter((s: any) => !subject || s.subject === subject).map((s: any) => s.section))));
+    const types = Array.from(new Set(timetable.flatMap(d => d.sessions.filter((s: any) => (!subject || s.subject === subject) && (!section || s.section === section)).map((s: any) => s.sessionType))));
+
+    // Reset children when parent changes
+    useEffect(() => {
+        setSection('');
+    }, [subject]);
+
+    useEffect(() => {
+        setSessionType('');
+    }, [section]);
 
     useEffect(() => {
         // Determine Socket URL
@@ -233,10 +243,8 @@ export function StudentRegistration({ user, timetable }: StudentRegistrationProp
                                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 text-sm focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 transition-all appearance-none cursor-pointer"
                                 disabled={status === 'waiting_for_mobile' || status === 'photo_received' || status === 'success'}
                             >
-                                <option value="Lecture">Lecture</option>
-                                <option value="Tutorial">Tutorial</option>
-                                <option value="Practical">Practical</option>
-                                <option value="Skill">Skill</option>
+                                <option value="">Select...</option>
+                                {types.map((t: any) => <option key={t} value={t}>{t}</option>)}
                             </select>
                         </div>
                     </div>
