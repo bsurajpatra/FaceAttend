@@ -1,17 +1,30 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, Pressable, ScrollView, Switch, Alert, Linking, AppState, StyleSheet, Platform, Image } from 'react-native';
 import { router } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCameraPermissions } from 'expo-camera';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Sidebar } from '../components/sidebar';
 
 export default function SettingsScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [locationPermission, setLocationPermission] = React.useState<Location.LocationPermissionResponse | null>(null);
   const [mediaPermission, setMediaPermission] = React.useState<ImagePicker.MediaLibraryPermissionResponse | null>(null);
   const insets = useSafeAreaInsets();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const handleLogout = async () => {
+    try {
+      await AsyncStorage.removeItem('token');
+      await AsyncStorage.removeItem('user');
+      router.replace('/');
+    } catch (e) {
+      console.error('Logout failed', e);
+    }
+  };
 
   // Check permissions on mount
   React.useEffect(() => {
@@ -124,13 +137,19 @@ export default function SettingsScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
+      <Sidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        activeRoute="/settings"
+        onLogout={handleLogout}
+      />
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => setSidebarOpen(true)}
           style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
         >
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          <Ionicons name="menu" size={24} color="#FFFFFF" />
         </Pressable>
         <Text style={styles.headerTitle}>Settings</Text>
         <View style={{ width: 44 }} />

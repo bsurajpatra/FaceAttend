@@ -5,7 +5,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { styles } from '@/components/styles/welcome-styles';
 import Login from '@/components/login';
-import TimetableView from '@/components/timetable-view';
 import Dashboard from '@/components/dashboard';
 import { loginApi } from '@/api/auth';
 import { getTimetableApi, TimetableDay } from '@/api/timetable';
@@ -17,7 +16,6 @@ export default function WelcomeScreen() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [user, setUser] = useState<{ id: string; name: string; username: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [showTimetableView, setShowTimetableView] = useState(false);
   const { setStoredPassword } = useKiosk();
   // Initialize with proper empty timetable structure
   const getEmptyTimetable = (): TimetableDay[] => [
@@ -105,15 +103,6 @@ export default function WelcomeScreen() {
     );
   }
 
-  if (showTimetableView && user) {
-    return (
-      <TimetableView
-        timetable={timetable}
-        onBack={() => setShowTimetableView(false)}
-      />
-    );
-  }
-
   if (isLoggedIn && user) {
     return (
       <Dashboard
@@ -129,21 +118,6 @@ export default function WelcomeScreen() {
         }}
         onTakeAttendance={(hours) => {
           // The HourSelectModal will handle navigation to camera
-        }}
-        onTimetablePress={async () => {
-          try {
-            if (user) {
-              const response = await getTimetableApi(user.id);
-              const timetableData = response.timetable || getEmptyTimetable();
-              setTimetable(timetableData);
-              setShowTimetableView(true);
-            }
-          } catch (error) {
-            // Set empty timetable and show timetable view (will show empty state)
-            const emptyData = getEmptyTimetable();
-            setTimetable(emptyData);
-            setShowTimetableView(true);
-          }
         }}
       />
     );

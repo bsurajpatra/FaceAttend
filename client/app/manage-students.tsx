@@ -13,6 +13,9 @@ import { getStudentsApi, deleteStudentApi, updateStudentApi } from '@/api/studen
 import { getFacultySubjectsApi } from '@/api/auth';
 import EditStudentModal from '@/components/edit-student-modal';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { Sidebar } from '../components/sidebar';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Student = {
   id: string;
@@ -37,10 +40,21 @@ export default function ManageStudentsScreen() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
 
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const insets = useSafeAreaInsets();
 
   type ActiveDropdown = 'subject' | 'section' | 'sessionType' | null;
   const [activeDropdown, setActiveDropdown] = useState<ActiveDropdown>(null);
+
+  const handleLogout = async () => {
+    try {
+      await AsyncStorage.removeItem('token');
+      await AsyncStorage.removeItem('user');
+      router.replace('/');
+    } catch (e) {
+      console.error('Logout failed', e);
+    }
+  };
 
   useEffect(() => {
     const loadFacultySubjects = async () => {
@@ -257,22 +271,29 @@ export default function ManageStudentsScreen() {
 
   return (
     <SafeAreaView style={containerStyle} edges={['left', 'right', 'bottom']}>
+      <Sidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        activeRoute="/manage-students"
+        onLogout={handleLogout}
+      />
+
       {/* Header */}
       <View style={[
         styles.header,
         { paddingTop: insets.top > 0 ? insets.top : 12 }
       ]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => setSidebarOpen(true)}
           style={({ pressed }) => [
             styles.backButton,
             pressed && styles.backButtonPressed
           ]}
         >
-          <Text style={styles.backButtonText}>← Back</Text>
+          <Ionicons name="menu" size={24} color="#FFFFFF" />
         </Pressable>
         <Text style={styles.headerTitle}>Manage Students</Text>
-        <View style={{ width: 60 }} />
+        <View style={{ width: 44 }} />
       </View>
 
       {/* Selection Controls */}
@@ -424,6 +445,7 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
     elevation: 6,
+    zIndex: 10,
   },
   backButton: {
     padding: 10,

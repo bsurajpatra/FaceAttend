@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { styles } from './styles/dashboard-styles';
 import { HourSelectModal } from './hour-select-modal';
+import { Sidebar } from './sidebar';
 import { TimetableDay as ApiTimetableDay, Session as ApiSession } from '@/api/timetable';
 import { TIME_SLOTS, getCurrentSession } from '@/utils/timeSlots';
 import { getStudentsApi } from '@/api/students';
@@ -36,7 +37,6 @@ type DashboardProps = {
   timetable: ApiTimetableDay[];
   onLogout?: () => void;
   onTakeAttendance?: (hours: number[]) => void;
-  onTimetablePress?: () => void;
 };
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -45,8 +45,7 @@ export default function Dashboard({
   user,
   timetable,
   onLogout,
-  onTakeAttendance,
-  onTimetablePress
+  onTakeAttendance
 }: DashboardProps) {
   const [isHoursModalVisible, setHoursModalVisible] = useState(false);
   const [currentSession, setCurrentSession] = useState<any>(null);
@@ -59,70 +58,6 @@ export default function Dashboard({
 
   // Sidebar state
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const sidebarAnim = useRef(new Animated.Value(-280)).current;
-
-  const toggleSidebar = (open: boolean) => {
-    if (open) setSidebarOpen(true);
-
-    Animated.timing(sidebarAnim, {
-      toValue: open ? 0 : -280,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(({ finished }) => {
-      // Only hide the overlay from React tree once fully closed
-      if (finished && !open) {
-        setSidebarOpen(false);
-      }
-    });
-  };
-
-  // Create smooth interpolation for the overlay opacity based on sidebar position
-  const overlayOpacity = sidebarAnim.interpolate({
-    inputRange: [-280, 0],
-    outputRange: [0, 1],
-    extrapolate: 'clamp',
-  });
-
-  // PanResponder to handle left swipe to close with live dragging
-  const panResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        // Aggressively capture horizontal swipes to the left
-        return gestureState.dx < -5 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
-      },
-      onPanResponderGrant: () => {
-        // Disable termination from other components (like ScrollView)
-      },
-      onPanResponderMove: (_, gestureState) => {
-        // Live drag the sidebar as the user swipes left
-        if (gestureState.dx < 0) {
-          sidebarAnim.setValue(gestureState.dx);
-        }
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        // Close if swiped enough or swiped fast
-        if (gestureState.dx < -100 || gestureState.vx < -0.5) {
-          toggleSidebar(false);
-        } else {
-          // Snap back to open position if swipe was too short
-          Animated.spring(sidebarAnim, {
-            toValue: 0,
-            useNativeDriver: true,
-            bounciness: 0,
-          }).start();
-        }
-      },
-      onPanResponderTerminate: () => {
-        // Snap back to open if gesture is interrupted
-        Animated.spring(sidebarAnim, {
-          toValue: 0,
-          useNativeDriver: true,
-          bounciness: 0,
-        }).start();
-      },
-      onPanResponderTerminationRequest: () => false, // Don't let other components steal the touch
-    })
-  ).current;
 
   // Format location to show both address and coordinates
   const formatLocation = (location: any) => {
@@ -286,107 +221,24 @@ export default function Dashboard({
   );
 
   const getProfileInitial = () => {
-    return user.name ? user.name.charAt(0).toUpperCase() : 'U';
+    if (!user || !user.name) return 'U';
+    return user.name.charAt(0).toUpperCase();
   };
 
   const insets = useSafeAreaInsets();
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
-      {/* Sidebar Overlay */}
-      {sidebarOpen && (
-        <TouchableWithoutFeedback onPress={() => toggleSidebar(false)}>
-          <Animated.View style={[styles.sidebarOverlay, { opacity: overlayOpacity }]} />
-        </TouchableWithoutFeedback>
-      )}
+      <Sidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        activeRoute="/dashboard"
+        onLogout={onLogout}
+      />
 
-      {/* Side Navbar (Sidebar) */}
-      <Animated.View
-        style={[styles.sidebar, { transform: [{ translateX: sidebarAnim }] }]}
-        {...panResponder.panHandlers}
-      >
-        <View style={styles.sidebarHeader}>
-          <Image
-            source={require('@/assets/images/logo.png')}
-            style={styles.sidebarLogo}
-            contentFit="contain"
-          />
-          <Text style={styles.sidebarAppName}>FaceAttend</Text>
-        </View>
-
-        <ScrollView style={styles.sidebarContent}>
-          <Pressable
-            style={[styles.navItem, styles.navItemActive]}
-            onPress={() => toggleSidebar(false)}
-          >
-            <Ionicons name="home" size={22} color="#4F46E5" style={styles.navIcon} />
-            <Text style={[styles.navText, styles.navTextActive]}>Dashboard</Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.navItem}
-            onPress={() => {
-              toggleSidebar(false);
-              onTimetablePress && onTimetablePress();
-            }}
-          >
-            <Ionicons name="calendar" size={22} color="#4B5563" style={styles.navIcon} />
-            <Text style={styles.navText}>Timetable</Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.navItem}
-            onPress={() => {
-              toggleSidebar(false);
-              try { require('expo-router').router.push('/student-registration'); } catch { }
-            }}
-          >
-            <Ionicons name="person-add" size={22} color="#4B5563" style={styles.navIcon} />
-            <Text style={styles.navText}>Register Student</Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.navItem}
-            onPress={() => {
-              toggleSidebar(false);
-              try { require('expo-router').router.push('/manage-students'); } catch { }
-            }}
-          >
-            <Ionicons name="people" size={22} color="#4B5563" style={styles.navIcon} />
-            <Text style={styles.navText}>Manage Students</Text>
-          </Pressable>
-
-
-          <Pressable
-            style={styles.navItem}
-            onPress={() => {
-              toggleSidebar(false);
-              try { require('expo-router').router.push('/settings'); } catch { }
-            }}
-          >
-            <Ionicons name="settings" size={22} color="#4B5563" style={styles.navIcon} />
-            <Text style={styles.navText}>Settings</Text>
-          </Pressable>
-        </ScrollView>
-
-        <View style={styles.sidebarFooter}>
-          <Pressable
-            style={styles.logoutNavItem}
-            onPress={() => {
-              toggleSidebar(false);
-              onLogout && onLogout();
-            }}
-          >
-            <Ionicons name="log-out" size={22} color="#EF4444" />
-            <Text style={styles.logoutNavText}>Logout</Text>
-          </Pressable>
-        </View>
-      </Animated.View>
-
-      {/* Header with sidebar trigger */}
       <View style={[styles.topHeader, { paddingTop: insets.top + 12 }]}>
         <Pressable
-          onPress={() => toggleSidebar(true)}
+          onPress={() => setSidebarOpen(true)}
           style={styles.menuButton}
           accessibilityRole="button"
           accessibilityLabel="Open Menu"
@@ -407,7 +259,7 @@ export default function Dashboard({
         {/* Welcome Message */}
         <View style={styles.welcomeContainer}>
           <Text style={styles.welcomeGreeting}>Welcome back,</Text>
-          <Text style={styles.welcomeName}>{user.name}</Text>
+          <Text style={styles.welcomeName}>{user?.name}</Text>
           <Text style={styles.welcomeSubtext}>Have a productive day of teaching!</Text>
         </View>
 
@@ -526,8 +378,6 @@ export default function Dashboard({
             </View>
           );
         })()}
-
-
       </ScrollView>
     </SafeAreaView>
   );

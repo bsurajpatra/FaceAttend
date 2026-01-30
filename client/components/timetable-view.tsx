@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, Pressable, ScrollView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { styles } from './styles/timetable-view-styles';
 import { TIME_SLOTS, getTimeRange, getSessionDuration } from '@/utils/timeSlots';
+import { Sidebar } from './sidebar';
 
 type Session = {
   subject: string;
@@ -20,14 +21,14 @@ type TimetableDay = {
 
 type TimetableViewProps = {
   timetable: TimetableDay[];
-  onEdit?: () => void;
-  onAdd?: () => void;
   onBack?: () => void;
+  onLogout?: () => void;
 };
 
 
-export default function TimetableView({ timetable, onEdit, onAdd, onBack }: TimetableViewProps) {
+export default function TimetableView({ timetable, onBack, onLogout }: TimetableViewProps) {
   const insets = useSafeAreaInsets();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const hasTimetable = () => {
     if (!timetable || !Array.isArray(timetable)) return false;
@@ -36,13 +37,20 @@ export default function TimetableView({ timetable, onEdit, onAdd, onBack }: Time
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
+      <Sidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        activeRoute="/timetable"
+        onLogout={onLogout}
+      />
+
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <Pressable
-          onPress={onBack}
+          onPress={() => setSidebarOpen(true)}
           style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
         >
-          <Ionicons name="chevron-back" size={20} color="white" />
+          <Ionicons name="menu" size={24} color="white" />
         </Pressable>
         <Text style={styles.title}>Your Schedule</Text>
         <View style={{ width: 44 }} />

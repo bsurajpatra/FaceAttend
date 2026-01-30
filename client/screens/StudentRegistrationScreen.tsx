@@ -9,6 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
+import { Sidebar } from '../components/sidebar';
 
 export default function StudentRegistrationScreen() {
   const [name, setName] = useState('');
@@ -29,6 +30,17 @@ export default function StudentRegistrationScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
   const insets = useSafeAreaInsets();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const handleLogout = async () => {
+    try {
+      await AsyncStorage.removeItem('token');
+      await AsyncStorage.removeItem('user');
+      router.replace('/');
+    } catch (e) {
+      console.error('Logout failed', e);
+    }
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -176,12 +188,18 @@ export default function StudentRegistrationScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
+      <Sidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        activeRoute="/student-registration"
+        onLogout={handleLogout}
+      />
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => setSidebarOpen(true)}
           style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
         >
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          <Ionicons name="menu" size={24} color="#FFFFFF" />
         </Pressable>
         <Text style={styles.headerTitle}>Register Student</Text>
         <View style={{ width: 44 }} />

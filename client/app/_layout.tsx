@@ -19,6 +19,7 @@ export default function RootLayout() {
           <Stack.Screen name="settings" options={{ headerShown: false }} />
           <Stack.Screen name="manage-students" options={{ headerShown: false }} />
           <Stack.Screen name="student-details" options={{ headerShown: false }} />
+          <Stack.Screen name="timetable" options={{ headerShown: false }} />
         </Stack>
         <StatusBar style="auto" />
       </ThemeProvider>
