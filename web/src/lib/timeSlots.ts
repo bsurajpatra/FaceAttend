@@ -112,3 +112,14 @@ export const getCurrentSession = (timetable: any[], currentTime?: Date) => {
 
     return null;
 };
+
+export const validateConsecutiveHours = (hours: number[]) => {
+    if (hours.length === 0) return true;
+    const sorted = [...hours].sort((a, b) => a - b);
+    for (let i = 1; i < sorted.length; i++) {
+        if (sorted[i] !== sorted[i - 1] + 1) {
+            return false;
+        }
+    }
+    return true;
+};

@@ -22,6 +22,7 @@ import { getProfileApi } from '../api/auth';
 import { getCurrentSession } from '../lib/timeSlots';
 import { Profile } from './Profile';
 import { AttendanceReports } from './AttendanceReports';
+import TimetableManager from './TimetableManager';
 
 export default function Dashboard() {
     const [activeTab, setActiveTab] = useState('overview');
@@ -29,6 +30,15 @@ export default function Dashboard() {
     const [user, setUser] = useState<any>(null);
 
     const [timetable, setTimetable] = useState<any[]>([]);
+
+    const fetchTimetable = async (userId: string) => {
+        try {
+            const res = await getTimetableApi(userId);
+            setTimetable(res.timetable || []);
+        } catch (err) {
+            console.error('Failed to fetch timetable', err);
+        }
+    };
 
     useEffect(() => {
         const userData = localStorage.getItem('user');
@@ -45,13 +55,18 @@ export default function Dashboard() {
                 .catch(err => console.error('Failed to fetch profile', err));
 
             // Fetch timetable
-            getTimetableApi(parsedUser.id)
-                .then(res => setTimetable(res.timetable || []))
-                .catch(err => console.error('Failed to fetch timetable', err));
+            fetchTimetable(parsedUser.id);
         } else {
             window.location.href = '/login';
         }
     }, []);
+
+    // Refresh timetable when switching to overview
+    useEffect(() => {
+        if (activeTab === 'overview' && user?.id) {
+            fetchTimetable(user.id);
+        }
+    }, [activeTab, user?.id]);
 
     const handleLogout = () => {
         localStorage.removeItem('token');
@@ -84,6 +99,13 @@ export default function Dashboard() {
                         active={activeTab === 'overview'}
                         isOpen={isSidebarOpen}
                         onClick={() => setActiveTab('overview')}
+                    />
+                    <SidebarItem
+                        icon={<BookOpen />}
+                        label="Timetable"
+                        active={activeTab === 'timetable'}
+                        isOpen={isSidebarOpen}
+                        onClick={() => setActiveTab('timetable')}
                     />
                     <SidebarItem
                         icon={<History />}
@@ -158,6 +180,7 @@ export default function Dashboard() {
                 <div className="flex-1 overflow-y-auto p-4 sm:p-8">
                     <div className="max-w-7xl mx-auto h-full flex flex-col">
                         {activeTab === 'overview' && <OverviewSection user={user} timetable={timetable} />}
+                        {activeTab === 'timetable' && <TimetableManager />}
                         {activeTab === 'reports' && <AttendanceReports />}
                         {activeTab === 'profile' && <Profile user={user} />}
                     </div>

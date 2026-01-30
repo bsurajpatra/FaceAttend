@@ -5,11 +5,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { styles } from '@/components/styles/welcome-styles';
 import Login from '@/components/login';
-import TimetableSetup from '@/components/timetable-setup';
 import TimetableView from '@/components/timetable-view';
 import Dashboard from '@/components/dashboard';
 import { loginApi } from '@/api/auth';
-import { getTimetableApi, updateTimetableApi, TimetableDay } from '@/api/timetable';
+import { getTimetableApi, TimetableDay } from '@/api/timetable';
 import { useKiosk } from '@/contexts/KioskContext';
 
 export default function WelcomeScreen() {
@@ -18,7 +17,6 @@ export default function WelcomeScreen() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [user, setUser] = useState<{ id: string; name: string; username: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [showTimetableSetup, setShowTimetableSetup] = useState(false);
   const [showTimetableView, setShowTimetableView] = useState(false);
   const { setStoredPassword } = useKiosk();
   // Initialize with proper empty timetable structure
@@ -112,43 +110,6 @@ export default function WelcomeScreen() {
       <TimetableView
         timetable={timetable}
         onBack={() => setShowTimetableView(false)}
-        onAdd={() => {
-          setShowTimetableView(false);
-          setShowTimetableSetup(true);
-        }}
-        onEdit={() => {
-          setShowTimetableView(false);
-          setShowTimetableSetup(true);
-        }}
-      />
-    );
-  }
-
-  if (showTimetableSetup && user) {
-    return (
-      <TimetableSetup
-        existingTimetable={timetable.length > 0 ? timetable : getEmptyTimetable()}
-        onSubmit={async (timetableData) => {
-          try {
-            setIsSubmitting(true);
-            if (user) {
-              await updateTimetableApi(user.id, timetableData);
-              setTimetable(timetableData);
-            }
-            setShowTimetableSetup(false);
-            setShowTimetableView(true);
-          } catch (error) {
-            console.error('Failed to save timetable:', error);
-          } finally {
-            setIsSubmitting(false);
-          }
-        }}
-        onSkip={() => {
-          setShowTimetableSetup(false);
-          setShowTimetableView(timetable.length > 0);
-          setIsLoggedIn(true);
-        }}
-        isSubmitting={isSubmitting}
       />
     );
   }

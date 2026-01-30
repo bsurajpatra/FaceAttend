@@ -45,34 +45,26 @@ export default function TimetableView({ timetable, onEdit, onAdd, onBack }: Time
           <Ionicons name="chevron-back" size={20} color="white" />
         </Pressable>
         <Text style={styles.title}>Your Schedule</Text>
-        {hasTimetable() ? (
-          <Pressable
-            onPress={onEdit}
-            style={({ pressed }) => [styles.headerEditButton, pressed && styles.headerEditButtonPressed]}
-          >
-            <Ionicons name="create-outline" size={20} color="#2563EB" />
-          </Pressable>
-        ) : (
-          <View style={{ width: 44 }} />
-        )}
+        <View style={{ width: 44 }} />
       </View>
 
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
+        {/* Info Banner */}
+        <View style={{ marginHorizontal: 20, marginTop: 16, marginBottom: 8, padding: 12, backgroundColor: '#EFF6FF', borderRadius: 12, borderLeftWidth: 4, borderLeftColor: '#3B82F6' }}>
+          <Text style={{ fontSize: 13, color: '#1E40AF', lineHeight: 18 }}>
+            To update or modify your timetable, please visit the <Text style={{ fontWeight: '700' }}>ERP Portal</Text>.
+          </Text>
+        </View>
+
         {!hasTimetable() ? (
           <View style={styles.emptyState}>
-            <View style={{ backgroundColor: '#EFF6FF', padding: 32, borderRadius: 40, marginBottom: 24 }}>
-              <Ionicons name="calendar-outline" size={80} color="#2563EB" />
+            <View style={{ backgroundColor: '#F1F5F9', padding: 32, borderRadius: 40, marginBottom: 24 }}>
+              <Ionicons name="calendar-outline" size={80} color="#94A3B8" />
             </View>
-            <Text style={styles.emptyTitle}>No Schedule Set</Text>
+            <Text style={styles.emptyTitle}>No Schedule Found</Text>
             <Text style={styles.emptySubtitle}>
-              Add your teaching hours to see your schedule here.
+              Please set up your teaching hours in the ERP Portal.
             </Text>
-            <Pressable
-              onPress={onAdd}
-              style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}
-            >
-              <Text style={styles.addButtonText}>+ Setup Timetable</Text>
-            </Pressable>
           </View>
         ) : (
           <View style={styles.timetableContainer}>
