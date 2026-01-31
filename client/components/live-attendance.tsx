@@ -56,7 +56,7 @@ export default function LiveAttendance({
   existingAttendance
 }: LiveAttendanceProps) {
   const [permission, requestPermission] = useCameraPermissions();
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [attendanceStats, setAttendanceStats] = useState<AttendanceStats>(() => {
     if (existingAttendance) {
       return {
@@ -77,7 +77,9 @@ export default function LiveAttendance({
   const cameraRef = useRef<CameraView>(null);
   const detectionIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isProcessingRef = useRef(false);
+  const isCapturingRef = useRef(false);
+  const activeRequestsRef = useRef(0);
+  const analyzingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const markedStudentsRef = useRef<Set<string>>(new Set());
   const { isKioskMode, enableKioskMode, showPasswordModal, setShowPasswordModal } = useKiosk();
 
@@ -98,6 +100,64 @@ export default function LiveAttendance({
     }
   }, []);
 
+  const processFrameAsync = useCallback(async (base64: string) => {
+    activeRequestsRef.current++;
+
+    // Only show analyzing indicator if request takes > 800ms
+    if (!analyzingTimerRef.current) {
+      analyzingTimerRef.current = setTimeout(() => {
+        setIsAnalyzing(true);
+      }, 800);
+    }
+
+    try {
+      const result = await markAttendanceApi({ sessionId, faceImageBase64: base64 });
+      const isAlreadyMarked = result.message === 'Student already marked present';
+
+      if (!isAlreadyMarked) {
+        setAttendanceStats({
+          present: result.attendance.present,
+          absent: result.attendance.absent,
+          total: result.attendance.total
+        });
+        markedStudentsRef.current.add(result.student.id);
+        setStatusType('success');
+        setStatusMessage(`${result.student.name} (${result.student.rollNumber || 'N/A'}) marked!`);
+        onAttendanceMarked(result);
+      } else {
+        setStatusType('duplicate');
+        setStatusMessage(`Already marked: ${result.student.name} (${result.student.rollNumber || 'N/A'})`);
+      }
+    } catch (apiError: any) {
+      if (apiError.response?.status === 404 || apiError.response?.status === 400) {
+        setStatusType('notfound');
+        setStatusMessage('Not found');
+      } else {
+        setStatusType('error');
+        setStatusMessage('Connection error');
+      }
+    } finally {
+      activeRequestsRef.current--;
+
+      // If no more active requests, clear the analyzing state and timer
+      if (activeRequestsRef.current === 0) {
+        if (analyzingTimerRef.current) {
+          clearTimeout(analyzingTimerRef.current);
+          analyzingTimerRef.current = null;
+        }
+        setIsAnalyzing(false);
+      }
+
+      // Handle status message clearing safely
+      if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
+      statusTimerRef.current = setTimeout(() => {
+        setStatusMessage(null);
+        setStatusType(null);
+        statusTimerRef.current = null;
+      }, 2500);
+    }
+  }, [sessionId, onAttendanceMarked]);
+
   useEffect(() => {
     if (!isDetecting || !isInitialized || !cameraRef.current) {
       if (detectionIntervalRef.current) {
@@ -107,66 +167,39 @@ export default function LiveAttendance({
       return;
     }
 
+    // Decoupled loop: captures frames every 2.2s without waiting for API response
     detectionIntervalRef.current = setInterval(async () => {
-      if (isProcessingRef.current || !cameraRef.current || !isDetecting) return;
+      if (isCapturingRef.current || !cameraRef.current || !isDetecting) return;
 
       try {
-        isProcessingRef.current = true;
-        setIsProcessing(true);
+        isCapturingRef.current = true;
+
+        // Fast capture: skip processing, lower quality, no EXIF
         const photo = await cameraRef.current.takePictureAsync({
-          quality: 0.5,
+          quality: 0.3,
           base64: true,
+          skipProcessing: true,
+          exif: false,
         });
 
-        if (!photo?.base64) {
-          setIsProcessing(false);
-          return;
-        }
+        isCapturingRef.current = false;
 
-        const result = await markAttendanceApi({ sessionId, faceImageBase64: photo.base64 });
-        const isAlreadyMarked = result.message === 'Student already marked present';
-
-        if (!isAlreadyMarked) {
-          setAttendanceStats({
-            present: result.attendance.present,
-            absent: result.attendance.absent,
-            total: result.attendance.total
-          });
-          markedStudentsRef.current.add(result.student.id);
-          setStatusType('success');
-          setStatusMessage(`${result.student.name} (${result.student.rollNumber || 'N/A'}) marked!`);
-          onAttendanceMarked(result);
-        } else {
-          setStatusType('duplicate');
-          setStatusMessage(`Already marked: ${result.student.name} (${result.student.rollNumber || 'N/A'})`);
+        if (photo?.base64) {
+          // Process asynchronously
+          processFrameAsync(photo.base64);
         }
-      } catch (apiError: any) {
-        if (apiError.response?.status === 404 || apiError.response?.status === 400) {
-          setStatusType('notfound');
-          setStatusMessage('Not found');
-        } else {
-          setStatusType('error');
-          setStatusMessage('Connection error');
-        }
-      } finally {
-        isProcessingRef.current = false;
-        setIsProcessing(false);
-
-        // Handle status message clearing safely
-        if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
-        statusTimerRef.current = setTimeout(() => {
-          setStatusMessage(null);
-          setStatusType(null);
-          statusTimerRef.current = null;
-        }, 2500);
+      } catch (err) {
+        isCapturingRef.current = false;
+        console.error("Frame capture error:", err);
       }
-    }, 3000);
+    }, 2200);
 
     return () => {
       if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current);
       if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
+      if (analyzingTimerRef.current) clearTimeout(analyzingTimerRef.current);
     };
-  }, [isDetecting, isInitialized, sessionId]);
+  }, [isDetecting, isInitialized, processFrameAsync]);
 
   useEffect(() => {
     if (permission?.granted && cameraReady && !isInitialized) {
@@ -243,7 +276,7 @@ export default function LiveAttendance({
             </Text>
           </View>
 
-          {isProcessing && (
+          {isAnalyzing && (
             <View style={styles.processPill}>
               <ActivityIndicator size="small" color="#2563EB" />
               <Text style={styles.processPillText}>ANALYZING...</Text>

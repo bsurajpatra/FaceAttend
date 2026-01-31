@@ -9,6 +9,7 @@ import Dashboard from '@/components/dashboard';
 import { loginApi } from '@/api/auth';
 import { getTimetableApi, TimetableDay } from '@/api/timetable';
 import { useKiosk } from '@/contexts/KioskContext';
+import { useSocket } from '@/contexts/SocketContext';
 
 export default function WelcomeScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -63,6 +64,23 @@ export default function WelcomeScreen() {
 
     checkLoginState();
   }, []);
+
+  const { socket } = useSocket();
+
+  useEffect(() => {
+    if (!socket || !isLoggedIn || !user) return;
+
+    const handleTimetableUpdate = (data: { timetable: TimetableDay[] }) => {
+      console.log('Socket: Received timetable_updated event');
+      setTimetable(data.timetable || getEmptyTimetable());
+    };
+
+    socket.on('timetable_updated', handleTimetableUpdate);
+
+    return () => {
+      socket.off('timetable_updated', handleTimetableUpdate);
+    };
+  }, [socket, isLoggedIn, user]);
 
   useEffect(() => {
     if (isLoading) return; // Don't show animation while loading

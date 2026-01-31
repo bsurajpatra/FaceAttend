@@ -12,6 +12,7 @@ import { TimetableDay as ApiTimetableDay, Session as ApiSession } from '@/api/ti
 import { TIME_SLOTS, getCurrentSession } from '@/utils/timeSlots';
 import { getStudentsApi } from '@/api/students';
 import { checkAttendanceStatusApi, updateAttendanceLocationApi } from '@/api/attendance';
+import { useSocket } from '@/contexts/SocketContext';
 
 type User = {
   id: string;
@@ -219,6 +220,28 @@ export default function Dashboard({
       }
     }, [currentSession])
   );
+
+  const { socket } = useSocket();
+
+  useEffect(() => {
+    if (!socket || !currentSession) return;
+
+    const handleStudentsUpdate = (data?: { subject: string; section: string }) => {
+      console.log('Socket: Received students_updated event');
+      // If data is provided, only refresh if it matches current session
+      if (data && (data.subject !== currentSession.subject || data.section !== currentSession.section)) {
+        return;
+      }
+      checkRegisteredStudents(currentSession);
+      checkAttendanceStatus(currentSession);
+    };
+
+    socket.on('students_updated', handleStudentsUpdate);
+
+    return () => {
+      socket.off('students_updated', handleStudentsUpdate);
+    };
+  }, [socket, currentSession]);
 
   const getProfileInitial = () => {
     if (!user || !user.name) return 'U';

@@ -178,6 +178,13 @@ export async function registerStudent(req: Request, res: Response): Promise<void
 
       await existing.save();
       console.log('✅ Student updated successfully');
+
+      // Notify client app for immediate count refresh
+      try {
+        const io = getIO();
+        io.to(`faculty_${facultyId}`).emit('students_updated', { subject, section });
+      } catch (e) { }
+
       res.status(200).json({ message: 'Student updated', studentId: existing.id });
       return;
     }
@@ -190,6 +197,12 @@ export async function registerStudent(req: Request, res: Response): Promise<void
       faceDescriptor: faceEmbedding, // Keep legacy field
       embeddings: [faceEmbedding], // Add to FaceNet embeddings
     });
+
+    // Notify client app for immediate count refresh
+    try {
+      const io = getIO();
+      io.to(`faculty_${facultyId}`).emit('students_updated', { subject, section });
+    } catch (e) { }
 
     console.log('✅ Student created successfully with ID:', created.id);
     res.status(201).json({ message: 'Student registered', studentId: created.id });
@@ -365,6 +378,15 @@ export async function updateStudent(req: Request, res: Response): Promise<void> 
     }
 
     await student.save();
+
+    // Notify client app
+    try {
+      const io = getIO();
+      // Since student might be in multiple classes, we could send a generic refresh or specific ones
+      // For simplicity, we notify the faculty room
+      io.to(`faculty_${facultyId}`).emit('students_updated');
+    } catch (e) { }
+
     res.json({ message: 'Student updated successfully' });
   } catch (error) {
     console.error('Update student error:', error);
@@ -411,10 +433,24 @@ export async function deleteStudent(req: Request, res: Response): Promise<void> 
     // If no enrollments left, delete the student entirely
     if (student.enrollments.length === 0) {
       await Student.findByIdAndDelete(studentId);
+
+      // Notify client app
+      try {
+        const io = getIO();
+        io.to(`faculty_${facultyId}`).emit('students_updated');
+      } catch (e) { }
+
       res.json({ message: 'Student deleted successfully' });
     } else {
       // Otherwise, just remove the enrollment
       await student.save();
+
+      // Notify client app
+      try {
+        const io = getIO();
+        io.to(`faculty_${facultyId}`).emit('students_updated');
+      } catch (e) { }
+
       res.json({ message: 'Student enrollment removed successfully' });
     }
   } catch (error) {
