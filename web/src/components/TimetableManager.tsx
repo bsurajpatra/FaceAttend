@@ -187,7 +187,7 @@ export default function TimetableManager() {
     }
 
     return (
-        <div className="space-y-6 pb-20">
+        <div className="space-y-6">
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-black text-slate-900 tracking-tight uppercase italic flex items-center gap-3">
                     <BookOpen size={28} className="text-blue-600" />

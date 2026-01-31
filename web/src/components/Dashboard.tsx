@@ -293,8 +293,8 @@ export default function Dashboard() {
             {/* Main Content Area */}
             <main className="flex-1 flex flex-col h-full overflow-hidden min-w-0">
                 {/* Header */}
-                <header className="bg-white border-b border-slate-200 sticky top-0 z-40 p-4">
-                    <div className="max-w-7xl mx-auto flex justify-between items-center">
+                <header className="bg-white border-b border-slate-200 sticky top-0 z-40 px-6 py-4">
+                    <div className="flex justify-between items-center">
                         <button
                             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
                             className="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-all"

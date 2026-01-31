@@ -21,16 +21,18 @@ FaceAttend is built on four core pillars:
 
 ### 🌐 Premium Web ERP Portal
 *   **Intelligent Student Registration:** Multi-step form with real-time **Mobile Sync**. Trigger your mobile camera from your PC to capture student faces.
-*   **Advanced Student Management:** Search, filter, and manage thousands of student records. Edit profiles or recapture face data with one click.
-*   **Visual Timetable Manager:** A sleek, interactive interface to configure your weekly teaching schedule with clash detection.
-*   **Comprehensive Analytics:** Detailed attendance reports with percentages, last-present tracking, and location data.
+*   **Advanced Student Management:** Search, filter, and manage thousands of student records. Edit profiles or recapture face data with one click using custom integrated modals.
+*   **Visual Timetable Manager:** A sleek, interactive interface to configure your weekly teaching schedule with clash detection and real-time dashboard updates.
+*   **Faculty Activity Summary:** Live analytics dashboard tracking weekly attendance rates, total sessions, and class-wise performance with real-time socket updates.
+*   **Hardware Security Console:** (My Devices) Manage and monitor all devices logged into your account. Features **Live Remote Logout** and **Single-Device Trust Policy** to prevent unauthorized access.
 *   **Professional Exports:** One-tap export of any report or student list to professional **PDF** or **CSV** formats.
-*   **Premium UI/UX:** Stunning "Glassmorphism" design with smooth micro-animations and a unified dark/light theme.
+*   **Premium UI/UX:** Stunning "Glassmorphism" design with smooth micro-animations, custom confirmation modals, and unified brand aesthetics.
 
 ### 📱 Operational Mobile App
 *   **Live Attendance Loop:** High-speed face recognition camera that scans and marks attendance every 0.5s–3s with instant feedback.
 *   **Secure Kiosk Mode:** (Android only) Locks the device to the attendance screen, preventing unauthorized access while the phone is with a student representative.
 *   **Global Sync Modal:** Automatically pops up when a request is sent from the Web ERP to capture a student's face.
+*   **Live Remote Control:** Mobile app responds instantly to "Force Logout" or "Trust Update" signals sent from the Web ERP console.
 *   **Location Intelligence:** Automatically captures GPS coordinates and reverse-geocoded addresses for every attendance session.
 *   **Real-time Feedback:** Visual/Haptic cues for "Marked", "Already Marked", or "Not Found" status.
 
@@ -44,11 +46,10 @@ FaceAttend is built on four core pillars:
 ## 🔄 The "Magic" Sync: Web + Mobile
 One of FaceAttend's most powerful features is the **seamless synchronization** between the Web Portal and the Mobile App via WebSockets (Socket.io):
 
-1.  **Faculty** opens the **Web ERP** and clicks "Register Student".
-2.  After entering details, they click "Initiate Capture".
-3.  The **Mobile App** (in the faculty's pocket or hand) instantly wakes up and opens the camera.
-4.  The photo is captured on the phone, processed, and the **Web ERP** automatically updates with the preview.
-5.  This avoids the need to transfer files or use low-quality webcams.
+1.  **Student Registration:** Click "Initiate Capture" on PC -> Phone camera wakes up -> Preview appears instantly on PC.
+2.  **Timetable Updates:** Save schedule on ERP -> All mobile devices sync their local timetable data instantly.
+3.  **Security Events:** Revoke a device on Web -> The mobile app is immediately logged out and session tokens are cleared.
+4.  **Attendance metrics:** Mark attendance on Mobile -> Web Dashboard metrics (Faculty Activity Summary) refresh live.
 
 ---
 
@@ -59,6 +60,8 @@ One of FaceAttend's most powerful features is the **seamless synchronization** b
 web/
 ├── src/
 │   ├── components/
+│   │   ├── FacultyActivitySummary.tsx # Live analytics & Metrics
+│   │   ├── MyDevices.tsx            # Security Console + Live Logout
 │   │   ├── AttendanceReports.tsx    # PDF/CSV Export + Analytics
 │   │   ├── StudentManagement.tsx    # Advanced Filters + Mobile Sync
 │   │   ├── StudentRegistration.tsx  # Dynamic Forms + Socket Sync
@@ -71,13 +74,14 @@ web/
 ```bash
 client/
 ├── app/                             # Expo Router Navigation
+│   ├── index.tsx                    # Auth state & Force Logout listener
 │   ├── take-attendance.tsx          # Main capture operation
 │   └── manage-students.tsx          # On-the-go student list
 ├── components/
 │   ├── live-attendance.tsx          # Real-time scan logic
 │   ├── GlobalCaptureModal.tsx       # Remote sync camera
 │   └── PasswordModal.tsx            # Kiosk security
-├── contexts/                        # Kiosk & Socket state
+├── contexts/                        # Kiosk & Socket state (Live Sync)
 ```
 
 ### Backend & AI (`server/` + `facenet_service/`)
@@ -125,6 +129,8 @@ cd client && npm install && npx expo start
 
 ## 🔒 Security & Performance
 *   **JWT Authentication:** All APIs are protected by signed JSON Web Tokens.
+*   **Single-Device Policy:** Attendance operations are restricted to a single trusted device per account.
+*   **Live Session Kill:** Web-to-Device WebSocket signals allow instant termination of compromised sessions.
 *   **Bcrypt Hashing:** Passwords are never stored in plain text.
 *   **Rate Limiting:** Session creation is throttled to prevent spam.
 *   **Kiosk Security:** Prevents navigation while students are marking attendance via physical hardware button blocking (Android).
