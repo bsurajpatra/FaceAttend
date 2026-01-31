@@ -144,9 +144,10 @@ export function StudentManagement({ user, timetable }: StudentManagementProps) {
             ));
 
             setEditingStudent(null); // Close modal
-        } catch (err) {
+        } catch (err: any) {
             console.error(err);
-            alert('Failed to update student details');
+            const msg = err.response?.data?.message || 'Failed to update student details';
+            alert(msg);
         } finally {
             setIsUpdating(false);
         }
@@ -165,10 +166,12 @@ export function StudentManagement({ user, timetable }: StudentManagementProps) {
                 sessionType: editingStudent.sessionType || 'Lecture', // Default if missing
                 forceCapture: true
             });
-        } catch (err) {
+        } catch (err: any) {
             console.error(err);
             setPhotoUpdateStatus('idle');
-            alert('Failed to send capture request');
+            const msg = err.response?.data?.message || 'Failed to send capture request';
+            const hint = err.response?.data?.hint;
+            alert(hint ? `${msg}\n\n${hint}` : msg);
         }
     };
 
@@ -194,10 +197,12 @@ export function StudentManagement({ user, timetable }: StudentManagementProps) {
                 });
                 setPhotoUpdateStatus('success');
                 setTimeout(() => setPhotoUpdateStatus('idle'), 3000);
-            } catch (err) {
+            } catch (err: any) {
                 console.error(err);
                 setPhotoUpdateStatus('idle');
-                alert('Failed to upload photo');
+                const msg = err.response?.data?.message || 'Failed to upload photo';
+                const hint = err.response?.data?.hint;
+                alert(hint ? `${msg}\n\n${hint}` : msg);
                 setPhotoPreview(null); // Revert on fail
             }
         };

@@ -1,0 +1,7 @@
+// Verification Check
+// 1. Initiate Request -> Check AI Health -> Check Trusted Device -> Emit
+// Current Implementation in student.controller.ts:
+// Line 486: const isAiServiceLive = await checkFaceNetHealth();
+// Line 487: if (!isAiServiceLive) return 503;
+// Line 496: const faculty = await Faculty... (Trusted Device)
+// This ensures AI health is checked strictly BEFORE trusted device logic and socket emission.

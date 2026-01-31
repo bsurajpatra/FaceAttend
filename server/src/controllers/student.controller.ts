@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import { Student } from '../models/Student';
 import { Faculty } from '../models/Faculty';
-import { getFaceEmbedding } from '../services/facenet.service';
+import { getFaceEmbedding, checkFaceNetHealth } from '../services/facenet.service';
 
 import { cosineSimilarity } from '../utils/math';
 import { getIO } from '../socket';
@@ -60,9 +60,13 @@ export async function registerStudent(req: Request, res: Response): Promise<void
       console.log('✅ FaceNet embedding generated, length:', faceEmbedding.length);
     } catch (error: any) {
       console.error('❌ FaceNet processing error:', error);
-      res.status(400).json({
+      const isServiceDown = error.message.includes('FaceNet service is not running');
+
+      res.status(isServiceDown ? 503 : 400).json({
         message: error.message || 'Failed to process face image',
-        hint: 'Please ensure the image contains a clear face and try again'
+        hint: isServiceDown
+          ? 'The AI Face Recognition system is offline. Please contact administrator.'
+          : 'Please ensure the image contains a clear face and try again'
       });
       return;
     }
@@ -369,9 +373,13 @@ export async function updateStudent(req: Request, res: Response): Promise<void> 
         student.embeddings = [faceEmbedding];
       } catch (error: any) {
         console.error('❌ FaceNet processing error during update:', error);
-        res.status(400).json({
+        const isServiceDown = error.message.includes('FaceNet service is not running');
+
+        res.status(isServiceDown ? 503 : 400).json({
           message: error.message || 'Failed to process face image',
-          hint: 'Please ensure the image contains a clear face and try again'
+          hint: isServiceDown
+            ? 'The AI Face Recognition system is offline. Please contact administrator.'
+            : 'Please ensure the image contains a clear face and try again'
         });
         return;
       }
@@ -471,6 +479,16 @@ export async function initiateStudentRegistration(req: Request, res: Response): 
 
     if (!name || !rollNumber || !subject || !section || !sessionType) {
       res.status(400).json({ message: 'All fields are required' });
+      return;
+    }
+
+    // 0. Check AI Service Health
+    const isAiServiceLive = await checkFaceNetHealth();
+    if (!isAiServiceLive) {
+      res.status(503).json({
+        message: 'The AI Face Recognition system is offline.',
+        hint: 'Capture cannot be initiated. Please contact administrator to start the Python service.'
+      });
       return;
     }
 
@@ -616,7 +634,13 @@ export async function uploadStudentFace(req: Request, res: Response): Promise<vo
     try {
       faceEmbedding = await getFaceEmbedding(faceImageBase64);
     } catch (error: any) {
-      res.status(400).json({ message: error.message || 'Failed to process face image' });
+      const isServiceDown = error.message.includes('FaceNet service is not running');
+      res.status(isServiceDown ? 503 : 400).json({
+        message: error.message || 'Failed to process face image',
+        hint: isServiceDown
+          ? 'The AI Face Recognition system is offline. Please contact administrator.'
+          : 'Please ensure the image contains a clear face and try again'
+      });
       return;
     }
 
