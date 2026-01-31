@@ -12,6 +12,7 @@ import {
     BookOpen,
     MapPin as MapPinIcon,
     History,
+    Activity,
     UserPlus,
     Users,
     Smartphone,
@@ -33,6 +34,7 @@ import { StudentRegistration } from './StudentRegistration';
 import { StudentManagement } from './StudentManagement';
 import MyDevices from './MyDevices';
 import { FacultyActivitySummary } from './FacultyActivitySummary';
+import { AuditLog } from './AuditLog';
 
 
 export default function Dashboard() {
@@ -85,6 +87,7 @@ export default function Dashboard() {
         { id: 'students', label: 'Student Management', icon: <Users size={18} />, keywords: ['list', 'search', 'edit', 'delete', 'all students'] },
         { id: 'timetable', label: 'Timetable', icon: <BookOpen size={18} />, keywords: ['schedule', 'classes', 'sessions', 'time'] },
         { id: 'reports', label: 'Attendance Reports', icon: <History size={18} />, keywords: ['analytics', 'records', 'past', 'history', 'pdf', 'csv'] },
+        { id: 'audit', label: 'Security Logs', icon: <Activity size={18} />, keywords: ['audit', 'logs', 'security', 'activity', 'surveillance'] },
         { id: 'profile', label: 'My Profile', icon: <User size={18} />, keywords: ['account', 'settings', 'password', 'email'] },
         { id: 'devices', label: 'My Devices', icon: <ShieldCheck size={18} />, keywords: ['security', 'hardware', 'logout', 'remote', 'trust'] },
     ];
@@ -170,6 +173,24 @@ export default function Dashboard() {
                 isNew: true
             };
             setNotifications(prev => [newNotif, ...prev.slice(0, 9)]);
+        });
+
+        socket.on('new_audit_log', (data: { log: any }) => {
+            console.log('New audit log received:', data.log);
+            window.dispatchEvent(new CustomEvent('new-audit-log', { detail: data.log }));
+
+            if (data.log.action.includes('Login') || data.log.action.includes('Revoke') || data.log.action.includes('Logout')) {
+                const newNotif = {
+                    id: Date.now(),
+                    type: 'security',
+                    title: 'Security Alert',
+                    message: `${data.log.action}: ${data.log.details}`,
+                    time: 'Just now',
+                    icon: <ShieldCheck className="text-red-500" size={18} />,
+                    isNew: true
+                };
+                setNotifications(prev => [newNotif, ...prev.slice(0, 9)]);
+            }
         });
 
 
@@ -287,6 +308,14 @@ export default function Dashboard() {
                         isOpen={isSidebarOpen}
                         onClick={() => setActiveTab('reports')}
                     />
+                    <SidebarItem
+                        icon={<Activity />}
+                        label="Security Logs"
+                        active={activeTab === 'audit'}
+                        isOpen={isSidebarOpen}
+                        onClick={() => setActiveTab('audit')}
+                    />
+                    <div className="my-2 border-t border-slate-800/50 mx-4" />
                     <SidebarItem
                         icon={<User />}
                         label="My Profile"
@@ -476,6 +505,7 @@ export default function Dashboard() {
                         {activeTab === 'reports' && <AttendanceReports />}
                         {activeTab === 'profile' && <Profile user={user} />}
                         {activeTab === 'devices' && <MyDevices user={user} />}
+                        {activeTab === 'audit' && <AuditLog />}
                     </div>
                 </div>
             </main>

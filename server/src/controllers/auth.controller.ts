@@ -3,6 +3,7 @@ import jwt, { SignOptions } from 'jsonwebtoken';
 import { Faculty } from '../models/Faculty';
 import { env } from '../config/env';
 import { getIO } from '../socket';
+import { createAuditLog } from '../utils/auditLogger';
 
 function signToken(userId: string): string {
   return jwt.sign({ sub: userId }, env.jwtSecret, { expiresIn: '7d' });
@@ -119,6 +120,14 @@ export async function login(req: Request, res: Response): Promise<void> {
       token,
       isTrusted: currentDeviceTrusted
     });
+
+    // Audit Log
+    createAuditLog({
+      action: 'Login',
+      details: `Faculty logged in from ${deviceName || 'Unknown Device'}`,
+      req,
+      facultyId: faculty.id
+    });
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ message: 'Login failed' });
@@ -177,7 +186,14 @@ export async function revokeDevice(req: Request, res: Response): Promise<void> {
       console.warn('Socket emission failed for revoke device:', socketErr);
     }
 
-    res.json({ message: 'Device revoked successfully', devices: faculty.devices });
+    // Audit Log
+    createAuditLog({
+      action: 'Device Revoked',
+      details: `Revoked access for device ID: ${deviceId}`,
+      req
+    });
+
+    res.json({ message: 'Device deleted successfully', devices: faculty.devices });
   } catch (error) {
     console.error('Revoke device error:', error);
     res.status(500).json({ message: 'Failed to revoke device' });
@@ -219,10 +235,17 @@ export async function trustDevice(req: Request, res: Response): Promise<void> {
         devices: faculty.devices
       });
     } catch (socketErr) {
-      console.warn('Socket emission failed for trust device:', socketErr);
+      console.warn('Socket emission failed for device trust update:', socketErr);
     }
 
-    res.json({ message: 'Device trusted successfully', devices: faculty.devices });
+    // Audit Log
+    createAuditLog({
+      action: 'Device Trusted',
+      details: `Marketed device ${deviceId} as trusted`,
+      req
+    });
+
+    res.json({ message: 'Device trust status updated', devices: faculty.devices });
   } catch (error) {
     console.error('Trust device error:', error);
     res.status(500).json({ message: 'Failed to trust device' });
@@ -247,6 +270,13 @@ export async function logoutDevice(req: Request, res: Response): Promise<void> {
     } catch (socketErr) {
       console.warn('Socket emission failed for live logout:', socketErr);
     }
+
+    // Audit Log
+    createAuditLog({
+      action: 'Force Logout',
+      details: `Sent remote logout signal to device ${deviceId}`,
+      req
+    });
 
     res.json({ message: 'Live logout initiated' });
   } catch (error) {

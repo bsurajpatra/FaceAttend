@@ -11,6 +11,7 @@ import {
     trustDevice,
     logoutDevice
 } from '../controllers/auth.controller';
+import { getAuditLogs } from '../controllers/audit.controller';
 import { verifyFacultyToken } from '../middleware/auth';
 
 export const authRouter = Router();
@@ -27,5 +28,6 @@ authRouter.get('/devices', verifyFacultyToken, getDevices);
 authRouter.delete('/devices/:deviceId', verifyFacultyToken, revokeDevice);
 authRouter.post('/devices/trust', verifyFacultyToken, trustDevice);
 authRouter.post('/devices/logout', verifyFacultyToken, logoutDevice);
+authRouter.get('/audit-logs', verifyFacultyToken, getAuditLogs);
 
 

@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { Faculty } from '../models/Faculty';
 import { getIO } from '../socket';
+import { createAuditLog } from '../utils/auditLogger';
 
 // Check for overlapping hours within the same day
 function hasOverlappingHours(timetable: any[]): { hasOverlap: boolean; conflictDetails?: string } {
@@ -128,10 +129,17 @@ export async function updateTimetable(req: Request, res: Response): Promise<void
       io.to(`faculty_${facultyId}`).emit('timetable_updated', {
         timetable: faculty.timetable
       });
-      console.log(`Socket: timetable_updated emitted to faculty_${facultyId}`);
     } catch (socketErr) {
       console.warn('Socket emission failed for timetable update:', socketErr);
     }
+
+    // Audit Log
+    createAuditLog({
+      action: 'Timetable Updated',
+      details: 'Faculty updated their weekly timetable schedule',
+      req,
+      facultyId
+    });
 
     res.json({
       message: 'Timetable updated successfully',

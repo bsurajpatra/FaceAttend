@@ -85,6 +85,7 @@ http.interceptors.request.use(async (config) => {
     const deviceName = getDeviceName();
     (config.headers as Record<string, string>)['X-Device-Id'] = deviceId;
     (config.headers as Record<string, string>)['X-Device-Name'] = deviceName;
+    (config.headers as Record<string, string>)['X-Platform'] = 'Mobile';
 
   } catch (error) {
     console.warn('Error in request interceptor:', error);
