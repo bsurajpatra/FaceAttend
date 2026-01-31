@@ -41,6 +41,8 @@ export default function Dashboard() {
     const [user, setUser] = useState<any>(null);
     const [notifications, setNotifications] = useState<any[]>([]);
     const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [showSearchResults, setShowSearchResults] = useState(false);
 
     const [timetable, setTimetable] = useState<any[]>([]);
 
@@ -75,6 +77,32 @@ export default function Dashboard() {
     }, []);
 
     const notifiedSessions = useRef<Set<string>>(new Set());
+    const searchInputRef = useRef<HTMLInputElement>(null);
+
+    const navItems = [
+        { id: 'overview', label: 'Overview', icon: <LayoutDashboard size={18} />, keywords: ['home', 'dashboard', 'main'] },
+        { id: 'registration', label: 'Student Registration', icon: <UserPlus size={18} />, keywords: ['add', 'register', 'new', 'photo', 'capture'] },
+        { id: 'students', label: 'Student Management', icon: <Users size={18} />, keywords: ['list', 'search', 'edit', 'delete', 'all students'] },
+        { id: 'timetable', label: 'Timetable', icon: <BookOpen size={18} />, keywords: ['schedule', 'classes', 'sessions', 'time'] },
+        { id: 'reports', label: 'Attendance Reports', icon: <History size={18} />, keywords: ['analytics', 'records', 'past', 'history', 'pdf', 'csv'] },
+        { id: 'profile', label: 'My Profile', icon: <User size={18} />, keywords: ['account', 'settings', 'password', 'email'] },
+        { id: 'devices', label: 'My Devices', icon: <ShieldCheck size={18} />, keywords: ['security', 'hardware', 'logout', 'remote', 'trust'] },
+    ];
+
+    const searchResults = searchQuery.trim() === '' ? [] : navItems.filter(item =>
+        item.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.keywords.some(k => k.toLowerCase().includes(searchQuery.toLowerCase()))
+    );
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (searchInputRef.current && !searchInputRef.current.contains(event.target as Node)) {
+                setShowSearchResults(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     // Socket and Notification Logic
     useEffect(() => {
@@ -303,13 +331,40 @@ export default function Dashboard() {
                         </button>
 
                         <div className="flex items-center gap-6">
-                            <div className="relative hidden md:block">
+                            <div className="relative hidden md:block" ref={searchInputRef}>
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                                 <input
                                     type="text"
-                                    placeholder="Search console..."
+                                    placeholder="Jump to (e.g. Timetable...)"
+                                    value={searchQuery}
+                                    onChange={(e) => {
+                                        setSearchQuery(e.target.value);
+                                        setShowSearchResults(true);
+                                    }}
+                                    onFocus={() => setShowSearchResults(true)}
                                     className="pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 w-64 text-sm transition-all text-slate-900"
                                 />
+                                {showSearchResults && searchResults.length > 0 && (
+                                    <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-200 z-[100] overflow-hidden py-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                                        <p className="px-4 py-1 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Quick Results</p>
+                                        {searchResults.map((result) => (
+                                            <button
+                                                key={result.id}
+                                                onClick={() => {
+                                                    setActiveTab(result.id);
+                                                    setSearchQuery('');
+                                                    setShowSearchResults(false);
+                                                }}
+                                                className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-slate-50 transition-colors text-left group"
+                                            >
+                                                <div className="text-slate-400 group-hover:text-blue-600 transition-colors">
+                                                    {result.icon}
+                                                </div>
+                                                <span className="text-sm font-bold text-slate-700 group-hover:text-slate-900">{result.label}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                             <div className="flex items-center gap-4">
                                 <div className="relative">
