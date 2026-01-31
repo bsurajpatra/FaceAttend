@@ -94,3 +94,20 @@ export async function toggle2faApi(enabled: boolean): Promise<void> {
 export async function resend2faApi(email: string): Promise<void> {
     await http.post('/api/auth/resend-2fa', { email });
 }
+
+export async function verifyEmailChangeApi(otp: string): Promise<LoginResponse> {
+    const res = await http.post<LoginResponse>('/api/auth/verify-email-change', { otp });
+    return res.data;
+}
+
+export type UpdateProfileInput = { name: string; username: string; email: string };
+export type UpdateProfileResponse = {
+    user: UserProfile;
+    emailVerificationRequired?: boolean;
+    message?: string;
+};
+
+export async function updateProfileApi(data: UpdateProfileInput): Promise<UpdateProfileResponse> {
+    const res = await http.put<UpdateProfileResponse>('/api/auth/profile', data);
+    return res.data;
+}

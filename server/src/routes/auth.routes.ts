@@ -17,7 +17,8 @@ import {
     resendOTP,
     verify2FA,
     toggle2FA,
-    resend2FA
+    resend2FA,
+    verifyEmailChangeOTP
 } from '../controllers/auth.controller';
 import { getAuditLogs } from '../controllers/audit.controller';
 import { verifyFacultyToken } from '../middleware/auth';
@@ -45,5 +46,6 @@ authRouter.post('/resend-otp', resendOTP);
 authRouter.post('/verify-2fa', verify2FA);
 authRouter.post('/toggle-2fa', verifyFacultyToken, toggle2FA);
 authRouter.post('/resend-2fa', resend2FA);
+authRouter.post('/verify-email-change', verifyFacultyToken, verifyEmailChangeOTP);
 
 

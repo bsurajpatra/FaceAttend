@@ -114,6 +114,15 @@ export async function login(req: Request, res: Response): Promise<void> {
     }
 
     if (!faculty.isVerified) {
+      if (deviceId) {
+        res.status(403).json({
+          message: 'Verification pending. Please visit ERP portal to verify your account.',
+          email: faculty.email,
+          needsVerification: true
+        });
+        return;
+      }
+
       res.status(403).json({
         message: 'Account not verified. Please verify your email.',
         email: faculty.email,
@@ -413,12 +422,46 @@ export async function updateProfile(req: Request, res: Response): Promise<void> 
       return;
     }
 
+    const newEmail = email.trim().toLowerCase();
+    const currentEmail = faculty.email;
+    let emailVerificationRequired = false;
+
+    // Update name and username immediately
     faculty.name = name.trim();
-    faculty.email = email.trim().toLowerCase();
     faculty.username = username.trim().toLowerCase();
+
+    // Check if email has changed
+    if (newEmail !== currentEmail) {
+      const emailClash = await Faculty.findOne({ email: newEmail, _id: { $ne: userId } });
+      if (emailClash) {
+        res.status(409).json({ message: 'Email already in use' });
+        return;
+      }
+
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+      faculty.tempEmail = newEmail;
+      faculty.otp = otp;
+      faculty.otpExpires = otpExpires;
+
+      await sendOTPEmail(newEmail, otp);
+      emailVerificationRequired = true;
+    }
+
     await faculty.save();
 
-    res.json({ user: { id: faculty.id, name: faculty.name, username: faculty.username, email: faculty.email } });
+    res.json({
+      user: {
+        id: faculty.id,
+        name: faculty.name,
+        username: faculty.username,
+        email: faculty.email // Return OLD email until verified
+      },
+      emailVerificationRequired,
+      tempEmail: emailVerificationRequired ? newEmail : undefined,
+      message: emailVerificationRequired ? 'Profile updated. Please verify your new email.' : 'Profile updated successfully'
+    });
   } catch (error) {
     console.error('Update profile error:', error);
     res.status(500).json({ message: 'Failed to update profile' });
@@ -821,5 +864,82 @@ export async function resend2FA(req: Request, res: Response): Promise<void> {
   } catch (error) {
     console.error('Resend 2FA error:', error);
     res.status(500).json({ message: 'Failed to resend security code' });
+  }
+}
+
+export async function verifyEmailChangeOTP(req: Request, res: Response): Promise<void> {
+  try {
+    const userId = req.userId;
+    const { otp } = req.body;
+
+    if (!userId) {
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+
+    if (!otp) {
+      res.status(400).json({ message: 'OTP is required' });
+      return;
+    }
+
+    const faculty = await Faculty.findById(userId);
+    if (!faculty) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
+
+    if (!faculty.tempEmail || !faculty.otp || !faculty.otpExpires) {
+      res.status(400).json({ message: 'No pending email verification found' });
+      return;
+    }
+
+    if (faculty.otp !== otp) {
+      res.status(400).json({ message: 'Invalid OTP' });
+      return;
+    }
+
+    if (faculty.otpExpires < new Date()) {
+      res.status(400).json({ message: 'OTP has expired' });
+      return;
+    }
+
+    // Verify successful
+    const newEmail = faculty.tempEmail;
+
+    // Double check uniqueness one last time
+    const emailClash = await Faculty.findOne({ email: newEmail, _id: { $ne: userId } });
+    if (emailClash) {
+      res.status(409).json({ message: 'Email already in use by another account' });
+      return;
+    }
+
+    faculty.email = newEmail;
+    faculty.otp = undefined;
+    faculty.otpExpires = undefined;
+    faculty.tempEmail = undefined;
+
+    await faculty.save();
+
+    // Audit Log
+    createAuditLog({
+      action: 'Email Changed',
+      details: `Email address updated to ${newEmail}`,
+      req,
+      facultyId: faculty.id
+    });
+
+    res.json({
+      message: 'Email updated successfully',
+      user: {
+        id: faculty.id,
+        name: faculty.name,
+        username: faculty.username,
+        email: faculty.email
+      }
+    });
+
+  } catch (error) {
+    console.error('Verify email change OTP error:', error);
+    res.status(500).json({ message: 'Failed to verify email change' });
   }
 }

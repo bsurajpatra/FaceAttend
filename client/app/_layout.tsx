@@ -18,11 +18,8 @@ export default function RootLayout() {
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
           <Stack>
             <Stack.Screen name="index" options={{ headerShown: false }} />
-            <Stack.Screen name="student-registration" options={{ headerShown: false }} />
             <Stack.Screen name="take-attendance" options={{ headerShown: false }} />
             <Stack.Screen name="settings" options={{ headerShown: false }} />
-            <Stack.Screen name="manage-students" options={{ headerShown: false }} />
-            <Stack.Screen name="student-details" options={{ headerShown: false }} />
             <Stack.Screen name="timetable" options={{ headerShown: false }} />
           </Stack>
           <GlobalCaptureModal />

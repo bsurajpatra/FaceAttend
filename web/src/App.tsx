@@ -12,7 +12,7 @@ function App() {
     return <SignupPage />;
   }
 
-  if (path === '/dashboard') {
+  if (path.startsWith('/dashboard')) {
     return <Dashboard />;
   }
 

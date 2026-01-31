@@ -35,6 +35,7 @@ export interface FacultyDocument extends Document {
   twoFactorEnabled: boolean;
   otp?: string;
   otpExpires?: Date;
+  tempEmail?: string;
   comparePassword(candidate: string): Promise<boolean>;
 }
 
@@ -76,7 +77,8 @@ const FacultySchema = new Schema<FacultyDocument>(
     isFirstLogin: { type: Boolean, default: true },
     otp: { type: String },
     twoFactorEnabled: { type: Boolean, default: false },
-    otpExpires: { type: Date }
+    otpExpires: { type: Date },
+    tempEmail: { type: String, lowercase: true, trim: true } // For email change verification
   },
   { timestamps: true }
 );

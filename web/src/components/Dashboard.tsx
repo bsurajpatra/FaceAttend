@@ -39,7 +39,17 @@ import { AuditLog } from './AuditLog';
 
 
 export default function Dashboard() {
-    const [activeTab, setActiveTab] = useState('overview');
+    const [activeTab, setActiveTab] = useState(() => {
+        const path = window.location.pathname;
+        if (path.includes('/dashboard/registration')) return 'registration';
+        if (path.includes('/dashboard/students')) return 'students';
+        if (path.includes('/dashboard/timetable')) return 'timetable';
+        if (path.includes('/dashboard/reports')) return 'reports';
+        if (path.includes('/dashboard/audit')) return 'audit';
+        if (path.includes('/dashboard/profile')) return 'profile';
+        if (path.includes('/dashboard/devices')) return 'devices';
+        return 'overview';
+    });
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [user, setUser] = useState<any>(null);
     const [notifications, setNotifications] = useState<any[]>([]);
@@ -306,42 +316,60 @@ export default function Dashboard() {
                         label="Overview"
                         active={activeTab === 'overview'}
                         isOpen={isSidebarOpen}
-                        onClick={() => setActiveTab('overview')}
+                        onClick={() => {
+                            setActiveTab('overview');
+                            window.history.pushState({}, '', '/dashboard');
+                        }}
                     />
                     <SidebarItem
                         icon={<UserPlus />}
                         label="Registration"
                         active={activeTab === 'registration'}
                         isOpen={isSidebarOpen}
-                        onClick={() => setActiveTab('registration')}
+                        onClick={() => {
+                            setActiveTab('registration');
+                            window.history.pushState({}, '', '/dashboard/registration');
+                        }}
                     />
                     <SidebarItem
                         icon={<Users />}
                         label="Students"
                         active={activeTab === 'students'}
                         isOpen={isSidebarOpen}
-                        onClick={() => setActiveTab('students')}
+                        onClick={() => {
+                            setActiveTab('students');
+                            window.history.pushState({}, '', '/dashboard/students');
+                        }}
                     />
                     <SidebarItem
                         icon={<BookOpen />}
                         label="Timetable"
                         active={activeTab === 'timetable'}
                         isOpen={isSidebarOpen}
-                        onClick={() => setActiveTab('timetable')}
+                        onClick={() => {
+                            setActiveTab('timetable');
+                            window.history.pushState({}, '', '/dashboard/timetable');
+                        }}
                     />
                     <SidebarItem
                         icon={<History />}
                         label="Attendance Reports"
                         active={activeTab === 'reports'}
                         isOpen={isSidebarOpen}
-                        onClick={() => setActiveTab('reports')}
+                        onClick={() => {
+                            setActiveTab('reports');
+                            window.history.pushState({}, '', '/dashboard/reports');
+                        }}
                     />
                     <SidebarItem
                         icon={<Activity />}
                         label="Security Logs"
                         active={activeTab === 'audit'}
                         isOpen={isSidebarOpen}
-                        onClick={() => setActiveTab('audit')}
+                        onClick={() => {
+                            setActiveTab('audit');
+                            window.history.pushState({}, '', '/dashboard/audit');
+                        }}
                     />
                     <div className="my-2 border-t border-slate-800/50 mx-4" />
                     <SidebarItem
@@ -349,14 +377,20 @@ export default function Dashboard() {
                         label="My Profile"
                         active={activeTab === 'profile'}
                         isOpen={isSidebarOpen}
-                        onClick={() => setActiveTab('profile')}
+                        onClick={() => {
+                            setActiveTab('profile');
+                            window.history.pushState({}, '', '/dashboard/profile');
+                        }}
                     />
                     <SidebarItem
                         icon={<ShieldCheck />}
                         label="My Devices"
                         active={activeTab === 'devices'}
                         isOpen={isSidebarOpen}
-                        onClick={() => setActiveTab('devices')}
+                        onClick={() => {
+                            setActiveTab('devices');
+                            window.history.pushState({}, '', '/dashboard/devices');
+                        }}
                     />
                 </nav>
 

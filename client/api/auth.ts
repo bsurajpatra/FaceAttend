@@ -27,7 +27,11 @@ export async function registerApi(data: RegisterInput): Promise<LoginResponse> {
 }
 
 export type UpdateProfileInput = { name: string; email: string; username: string };
-export type UpdateProfileResponse = { user: { id: string; name: string; username: string; email?: string } };
+export type UpdateProfileResponse = {
+  user: { id: string; name: string; username: string; email?: string };
+  emailVerificationRequired?: boolean;
+  message?: string;
+};
 
 export async function updateProfileApi(data: UpdateProfileInput): Promise<UpdateProfileResponse> {
   const res = await http.put<UpdateProfileResponse>('/api/auth/profile', data);
@@ -59,3 +63,14 @@ export async function logoutApi(): Promise<void> {
 }
 
 
+
+export type ChangePasswordInput = { oldPassword?: string; newPassword?: string; confirmPassword?: string };
+
+export async function changePasswordApi(data: ChangePasswordInput): Promise<void> {
+  await http.put('/api/auth/password', data);
+}
+
+export async function verifyEmailChangeApi(otp: string): Promise<UpdateProfileResponse> {
+  const res = await http.post<UpdateProfileResponse>('/api/auth/verify-email-change', { otp });
+  return res.data;
+}

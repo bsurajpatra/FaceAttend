@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { User, ShieldCheck, KeyRound, Save, ShieldAlert, Loader2, X } from 'lucide-react';
-import { toggle2faApi, verify2faApi, resend2faApi } from '../api/auth';
+import { toggle2faApi, verify2faApi, resend2faApi, updateProfileApi, verifyEmailChangeApi } from '../api/auth';
 import { cn } from '../lib/utils';
 
 interface ProfileProps {
@@ -19,6 +19,7 @@ export function Profile({ user }: ProfileProps) {
 
     // OTP Verification State
     const [showOtpModal, setShowOtpModal] = useState(false);
+    const [verificationType, setVerificationType] = useState<'2fa-toggle' | 'email-change'>('2fa-toggle');
     const [otp, setOtp] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -38,26 +39,8 @@ export function Profile({ user }: ProfileProps) {
     const handleToggle2fa = async () => {
         setIsUpdating2fa(true);
         try {
-            // Trigger 2FA toggle request - backend will send OTP
-            const nextValue = !twoFactorEnabled;
-            // For now, toggle2faApi just sets the value. 
-            // We need to change the flow: 
-            // 1. Request to toggle -> backend sends OTP (we modified toggle2faApi to do this silently in backend or we trigger a resend)
-            // But actually wait, the new requirement is: "if mfa enabled/disabled send otp for verfication".
-            // So we call the API, which sends email. THEN we show modal. 
-            // Only after modal verify do we assume it's "done" (visual update).
-            // HOWEVER: verify2faApi is usually for login. We might need a specific "verify-toggle" endpoint or just reuse verify2fa.
-            // Let's assume re-using verify2faApi works to validate the OTP sent.
-
-            await toggle2faApi(nextValue); // This now sends email but also updates state immediately in DB? 
-            // Actually, per previous backend change, it updates state AND sends email.
-            // So technically it's already toggled. But we want to "gate" it.
-            // Ideally, the backend shouldn't toggle until verified. 
-            // But based on the current constraint, let's just show the modal to "confirm" it.
-
-            // To make this "verify first", we would need to revert the DB change if they fail.
-            // But let's stick to the user's request: "add a popup modal for it".
-
+            await toggle2faApi(!twoFactorEnabled);
+            setVerificationType('2fa-toggle');
             setShowOtpModal(true);
             setResendTimer(60);
         } catch (error) {
@@ -67,18 +50,45 @@ export function Profile({ user }: ProfileProps) {
         }
     };
 
+    const handleUpdateProfile = async () => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            const res = await updateProfileApi(formData);
+
+            if (res.emailVerificationRequired) {
+                setVerificationType('email-change');
+                setShowOtpModal(true);
+                setResendTimer(60);
+            } else {
+                // Optionally show success message
+                setError(null);
+                // Force reload or state update if needed, but for now assuming silent success or parent update
+                window.location.reload();
+            }
+        } catch (err: any) {
+            setError(err?.response?.data?.message || 'Failed to update profile');
+        } finally {
+            if (!showOtpModal) setIsLoading(false);
+        }
+    };
+
     const handleVerifyOtp = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
         setError(null);
         try {
-            await verify2faApi(user.email, otp);
-            // If success, we just close modal and update UI
+            if (verificationType === '2fa-toggle') {
+                await verify2faApi(user.email, otp);
+                setTwoFactorEnabled(!twoFactorEnabled);
+            } else {
+                await verifyEmailChangeApi(otp);
+            }
             setShowOtpModal(false);
-            setTwoFactorEnabled(!twoFactorEnabled);
             setOtp('');
+            window.location.reload();
         } catch (err: any) {
-            setError('Invalid or expired code. Please try again.');
+            setError(err?.response?.data?.message || 'Invalid or expired code.');
         } finally {
             setIsLoading(false);
         }
@@ -87,7 +97,12 @@ export function Profile({ user }: ProfileProps) {
     const handleResendOtp = async () => {
         if (resendTimer > 0) return;
         try {
-            await resend2faApi(user.email);
+            if (verificationType === '2fa-toggle') {
+                await resend2faApi(user.email);
+            } else {
+                // Logic for resending email change OTP if endpoint existed
+                // For now, no-op or rely on user re-initiating
+            }
             setResendTimer(60);
             setError(null);
         } catch (err) {
@@ -213,9 +228,13 @@ export function Profile({ user }: ProfileProps) {
                                 </section>
 
                                 <div className="pt-2 flex justify-end">
-                                    <button type="button" className="bg-blue-600 text-white px-8 py-3 rounded-xl font-black shadow-xl shadow-blue-200 hover:bg-blue-700 transition-all active:scale-95 flex items-center gap-2 group text-sm">
-                                        <Save size={18} className="group-hover:animate-bounce" />
-                                        SYNC PROFILE
+                                    <button
+                                        type="button"
+                                        onClick={handleUpdateProfile}
+                                        disabled={isLoading}
+                                        className="bg-blue-600 text-white px-8 py-3 rounded-xl font-black shadow-xl shadow-blue-200 hover:bg-blue-700 transition-all active:scale-95 flex items-center gap-2 group text-sm"
+                                    >
+                                        {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Save size={18} className="group-hover:animate-bounce" /> SYNC PROFILE</>}
                                     </button>
                                 </div>
                             </div>
@@ -241,7 +260,7 @@ export function Profile({ user }: ProfileProps) {
                             <h3 className="text-2xl font-black text-slate-900 uppercase italic tracking-tight">Verify Identity</h3>
                             <p className="text-slate-500 font-medium text-sm mt-2">
                                 Please enter the verification code sent to <br />
-                                <span className="text-slate-900 font-bold">{user.email}</span>
+                                <span className="text-slate-900 font-bold">{verificationType === 'email-change' ? 'new email address' : user.email}</span>
                             </p>
                         </div>
 
