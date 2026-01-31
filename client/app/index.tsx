@@ -10,6 +10,7 @@ import { loginApi } from '@/api/auth';
 import { getTimetableApi, TimetableDay } from '@/api/timetable';
 import { useKiosk } from '@/contexts/KioskContext';
 import { useSocket } from '@/contexts/SocketContext';
+import { getDeviceId } from '@/utils/device';
 
 export default function WelcomeScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -80,8 +81,26 @@ export default function WelcomeScreen() {
 
     socket.on('timetable_updated', handleTimetableUpdate);
 
+    socket.on('force_logout', async (data: { deviceId: string }) => {
+      const deviceId = await getDeviceId();
+      console.log(`WelcomeScreen: force_logout check - incoming: ${data.deviceId}, local: ${deviceId}`);
+
+      if (data.deviceId.toLowerCase().trim() === deviceId.toLowerCase().trim()) {
+        console.log('WelcomeScreen: ID match! Logging out...');
+        // Clear saved login state
+        await AsyncStorage.removeItem('user');
+        await AsyncStorage.removeItem('token');
+        await AsyncStorage.removeItem('isTrusted');
+        setIsLoggedIn(false);
+        setUser(null);
+        setIsTrusted(null);
+        setErrorMessage(null);
+      }
+    });
+
     return () => {
       socket.off('timetable_updated', handleTimetableUpdate);
+      socket.off('force_logout');
     };
   }, [socket, isLoggedIn, user]);
 

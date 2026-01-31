@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getDeviceId } from '@/utils/device';
 
 interface SocketContextType {
     socket: Socket | null;
@@ -42,8 +43,11 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             console.log('Connecting to socket:', socketUrl);
 
             newSocket = io(socketUrl, {
-                transports: ['websocket'],
-                auth: { token }
+                transports: ['websocket', 'polling'],
+                auth: { token },
+                reconnection: true,
+                reconnectionAttempts: 5,
+                timeout: 10000,
             });
 
             newSocket.on('connect', () => {
@@ -59,13 +63,26 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
             newSocket.on('devices_updated', async (data: { devices: any[] }) => {
                 console.log('Socket: Global devices_updated event received');
-                const { getDeviceId } = await import('@/utils/device');
                 const deviceId = await getDeviceId();
-                const currentDevice = data.devices.find((d: any) => d.deviceId === deviceId);
+                const currentDevice = data.devices.find((d: any) =>
+                    d.deviceId.toLowerCase().trim() === deviceId.toLowerCase().trim()
+                );
 
                 const newStatus = currentDevice ? currentDevice.isTrusted : false;
                 setIsTrusted(newStatus);
                 await AsyncStorage.setItem('isTrusted', String(newStatus));
+            });
+
+            newSocket.on('force_logout', async (data: { deviceId: string }) => {
+                const deviceId = await getDeviceId();
+                console.log(`Socket: force_logout check - incoming: ${data.deviceId}, local: ${deviceId}`);
+
+                if (data.deviceId.toLowerCase().trim() === deviceId.toLowerCase().trim()) {
+                    console.log('Socket: ID match! Triggering force_logout');
+                    await AsyncStorage.removeItem('token');
+                    await AsyncStorage.removeItem('user');
+                    await AsyncStorage.removeItem('isTrusted');
+                }
             });
 
             setSocket(newSocket);

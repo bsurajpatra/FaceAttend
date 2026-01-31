@@ -17,7 +17,8 @@ import {
     Smartphone,
     Calendar,
     ExternalLink,
-    X
+    X,
+    CheckCircle2
 } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { cn } from '../lib/utils';
@@ -31,6 +32,8 @@ import TimetableManager from './TimetableManager';
 import { StudentRegistration } from './StudentRegistration';
 import { StudentManagement } from './StudentManagement';
 import MyDevices from './MyDevices';
+import { FacultyActivitySummary } from './FacultyActivitySummary';
+
 
 export default function Dashboard() {
     const [activeTab, setActiveTab] = useState('overview');
@@ -80,8 +83,10 @@ export default function Dashboard() {
         const apiUrl = import.meta.env.VITE_API_URL;
         const socketUrl = apiUrl.split(',')[0].trim();
         const socket = io(socketUrl, {
-            transports: ['websocket'],
-            auth: { token: localStorage.getItem('token') }
+            transports: ['websocket', 'polling'],
+            auth: { token: localStorage.getItem('token') },
+            reconnection: true,
+            reconnectionAttempts: 5
         });
 
         socket.on('connect', () => {
@@ -100,6 +105,45 @@ export default function Dashboard() {
             };
             setNotifications(prev => [newNotif, ...prev.slice(0, 9)]);
         });
+
+        socket.on('attendance_updated', (data) => {
+            console.log('Attendance updated:', data);
+            // We can add a notification or just let components refresh
+            if (data.type === 'session_started') {
+                const newNotif = {
+                    id: Date.now(),
+                    type: 'attendance',
+                    title: 'Session Started',
+                    message: `${data.subject} (${data.section}) attendance session is live.`,
+                    time: 'Just now',
+                    icon: <CheckCircle2 className="text-emerald-500" size={18} />,
+                    isNew: true
+                };
+                setNotifications(prev => [newNotif, ...prev.slice(0, 9)]);
+            }
+
+            // Trigger a refresh of the metrics
+            // We'll use a custom event or state change
+            window.dispatchEvent(new CustomEvent('refresh-attendance-metrics'));
+        });
+
+        socket.on('timetable_updated', (data: { timetable: any[] }) => {
+            console.log('Timetable updated via socket:', data);
+            setTimetable(data.timetable);
+
+            // Notification for sync
+            const newNotif = {
+                id: Date.now(),
+                type: 'timetable',
+                title: 'Schedule Updated',
+                message: 'Your timetable has been synchronized with the latest ERP changes.',
+                time: 'Just now',
+                icon: <Calendar className="text-blue-500" size={18} />,
+                isNew: true
+            };
+            setNotifications(prev => [newNotif, ...prev.slice(0, 9)]);
+        });
+
 
         // Interval for session checks
         const checkSessions = () => {
@@ -367,9 +411,9 @@ export default function Dashboard() {
                     </div>
                 </header>
 
-                {/* Dashboard Content - The only scrolling area */}
-                <div className="flex-1 overflow-y-auto p-4 sm:p-8">
-                    <div className="max-w-7xl mx-auto h-full flex flex-col">
+                {/* Dashboard Content - Flexible scrolling area */}
+                <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-10">
+                    <div className="max-w-6xl mx-auto">
                         {activeTab === 'overview' && <OverviewSection user={user} timetable={timetable} />}
                         {activeTab === 'registration' && <StudentRegistration user={user} timetable={timetable} />}
                         {activeTab === 'students' && <StudentManagement user={user} timetable={timetable} />}
@@ -411,56 +455,58 @@ function OverviewSection({ user, timetable }: any) {
     const currentSession = getCurrentSession(timetable);
 
     return (
-        <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500 text-center max-w-4xl mx-auto">
-            <div className="space-y-4">
-                <h1 className="text-5xl font-black text-slate-900 tracking-tight">
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 text-center max-w-4xl mx-auto">
+            <div className="space-y-2">
+                <h1 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tight">
                     Welcome back, <span className="text-blue-600 italic">{user.name}</span> !
                 </h1>
-                <p className="text-slate-500 text-xl font-medium max-w-2xl mx-auto leading-relaxed">
+                <p className="text-slate-500 text-lg font-medium max-w-2xl mx-auto leading-relaxed">
                     Manage your attendance records and profile from the ERP console.
                 </p>
             </div>
 
             {currentSession ? (
-                <div className="bg-white overflow-hidden rounded-[3rem] border border-slate-200 shadow-2xl flex flex-col md:flex-row items-stretch group hover:scale-[1.01] transition-transform duration-500">
-                    <div className="bg-slate-900 p-10 flex flex-col items-center justify-center text-white min-w-[240px] relative overflow-hidden">
+                <div className="bg-white overflow-hidden rounded-[2.5rem] border border-slate-200 shadow-xl flex flex-col md:flex-row items-stretch group hover:scale-[1.01] transition-transform duration-500">
+                    <div className="bg-slate-900 p-6 md:p-8 flex flex-col items-center justify-center text-white min-w-[200px] relative overflow-hidden">
                         <div className="absolute top-0 left-0 w-full h-full opacity-10" style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '15px 15px' }} />
-                        <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mb-4 shadow-xl shadow-blue-600/20 relative z-10 group-hover:rotate-12 transition-transform">
-                            <Clock size={32} />
+                        <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center mb-3 shadow-xl relative z-10 group-hover:rotate-12 transition-transform">
+                            <Clock size={24} />
                         </div>
-                        <span className="text-blue-400 font-black uppercase tracking-[0.2em] text-xs mb-1 relative z-10">Current Session</span>
-                        <h4 className="text-3xl font-black italic tracking-tighter relative z-10">{currentSession.timeSlot}</h4>
+                        <span className="text-blue-400 font-black uppercase tracking-[0.2em] text-[10px] mb-1 relative z-10">Current Session</span>
+                        <h4 className="text-2xl font-black italic tracking-tighter relative z-10">{currentSession.timeSlot}</h4>
                     </div>
-                    <div className="flex-1 p-10 text-left flex flex-col justify-center relative">
-                        <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:opacity-[0.07] transition-opacity">
-                            <BookOpen size={120} />
+                    <div className="flex-1 p-6 md:p-8 text-left flex flex-col justify-center relative">
+                        <div className="absolute top-0 right-0 p-6 opacity-[0.03] group-hover:opacity-[0.07] transition-opacity">
+                            <BookOpen size={100} />
                         </div>
-                        <div className="flex items-center gap-3 mb-6">
-                            <span className="px-5 py-1.5 bg-blue-50 text-blue-600 text-[10px] font-black rounded-full uppercase tracking-widest border border-blue-100 italic">
+                        <div className="flex items-center gap-2 mb-4">
+                            <span className="px-4 py-1 bg-blue-50 text-blue-600 text-[9px] font-black rounded-full uppercase tracking-widest border border-blue-100 italic">
                                 {currentSession.sessionType}
                             </span>
-                            <span className="px-5 py-1.5 bg-emerald-50 text-emerald-600 text-[10px] font-black rounded-full uppercase tracking-widest border border-emerald-100 italic">
+                            <span className="px-4 py-1 bg-emerald-50 text-emerald-600 text-[9px] font-black rounded-full uppercase tracking-widest border border-emerald-100 italic">
                                 SEC: {currentSession.section}
                             </span>
                         </div>
-                        <h3 className="text-4xl font-black text-slate-900 mb-6 tracking-tighter group-hover:text-blue-600 transition-colors uppercase italic">{currentSession.subject}</h3>
-                        <div className="flex items-center gap-6 text-slate-500 font-bold">
+                        <h3 className="text-3xl font-black text-slate-900 mb-4 tracking-tighter group-hover:text-blue-600 transition-colors uppercase italic">{currentSession.subject}</h3>
+                        <div className="flex items-center gap-4 text-slate-500 font-bold">
                             <div className="flex items-center gap-2">
-                                <MapPinIcon size={20} className="text-blue-500" />
-                                <span className="text-lg uppercase tracking-tight">Room {currentSession.roomNumber}</span>
+                                <MapPinIcon size={18} className="text-blue-500" />
+                                <span className="text-base uppercase tracking-tight">Room {currentSession.roomNumber}</span>
                             </div>
                         </div>
                     </div>
                 </div>
             ) : (
-                <div className="bg-slate-50 rounded-[3rem] border-2 border-dashed border-slate-200 p-16 group hover:border-slate-300 transition-colors">
-                    <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-sm border border-slate-100 group-hover:scale-110 transition-transform">
-                        <Clock size={32} className="text-slate-300" />
+                <div className="bg-slate-50 rounded-[2.5rem] border-2 border-dashed border-slate-200 p-10 group hover:border-slate-300 transition-colors">
+                    <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm border border-slate-100 group-hover:scale-110 transition-transform">
+                        <Clock size={28} className="text-slate-300" />
                     </div>
-                    <h3 className="text-2xl font-black text-slate-400 tracking-tight italic uppercase">No Ongoing Session</h3>
-                    <p className="text-slate-400 font-medium mt-2">Check your timetable for upcoming classes.</p>
+                    <h3 className="text-xl font-black text-slate-400 tracking-tight italic uppercase">No Ongoing Session</h3>
+                    <p className="text-slate-400 text-sm font-medium mt-1">Check your timetable for upcoming classes.</p>
                 </div>
             )}
+
+            <FacultyActivitySummary user={user} timetable={timetable} />
         </div>
     );
 }

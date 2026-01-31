@@ -8,7 +8,8 @@ import {
     getFacultySubjects,
     getDevices,
     revokeDevice,
-    trustDevice
+    trustDevice,
+    logoutDevice
 } from '../controllers/auth.controller';
 import { verifyFacultyToken } from '../middleware/auth';
 
@@ -25,5 +26,6 @@ authRouter.get('/subjects', verifyFacultyToken, getFacultySubjects);
 authRouter.get('/devices', verifyFacultyToken, getDevices);
 authRouter.delete('/devices/:deviceId', verifyFacultyToken, revokeDevice);
 authRouter.post('/devices/trust', verifyFacultyToken, trustDevice);
+authRouter.post('/devices/logout', verifyFacultyToken, logoutDevice);
 
 

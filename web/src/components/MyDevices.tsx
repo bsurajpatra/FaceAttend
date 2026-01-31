@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { io } from 'socket.io-client';
-import { getDevicesApi, revokeDeviceApi, trustDeviceApi } from '../api/auth';
+import { Smartphone, Shield, Trash2, AlertCircle, RefreshCw, Clock, ShieldCheck, Loader2, X, LogOut } from 'lucide-react';
+import { getDevicesApi, revokeDeviceApi, trustDeviceApi, logoutDeviceApi } from '../api/auth';
 import type { DeviceInfo } from '../api/auth';
-import { Smartphone, Shield, Trash2, AlertCircle, RefreshCw, Clock, ShieldCheck } from 'lucide-react';
+
 import { cn } from '../lib/utils';
 
 interface MyDevicesProps {
@@ -14,6 +15,9 @@ export default function MyDevices({ user }: MyDevicesProps) {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
+    const [deviceToDelete, setDeviceToDelete] = useState<DeviceInfo | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+
 
     const fetchDevices = async (showLoading = true) => {
         try {
@@ -57,28 +61,50 @@ export default function MyDevices({ user }: MyDevicesProps) {
 
     const handleManualRefresh = () => fetchDevices(true);
 
-    const handleRevoke = async (deviceId: string) => {
-        if (!confirm('Are you sure you want to revoke this device? You will be logged out from that device.')) return;
+    const handleRevoke = (device: DeviceInfo) => {
+        setDeviceToDelete(device);
+    };
+
+    const confirmRevoke = async () => {
+        if (!deviceToDelete) return;
 
         try {
+            setIsDeleting(true);
+            setError(null);
+            const data = await revokeDeviceApi(deviceToDelete.deviceId);
+            setDevices(data.devices);
+            setDeviceToDelete(null);
+        } catch (err) {
+            setError('Failed to revoke device. Please try again.');
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
+
+    const handleTrust = async (deviceId: string) => {
+        try {
             setActionLoading(deviceId);
-            const data = await revokeDeviceApi(deviceId);
+            setError(null);
+            const data = await trustDeviceApi(deviceId);
             setDevices(data.devices);
         } catch (err) {
-            alert('Failed to revoke device.');
+            setError('Failed to update trust status. Please try again.');
         } finally {
             setActionLoading(null);
         }
     };
 
-    const handleTrust = async (deviceId: string) => {
+    const handleLogout = async (deviceId: string) => {
         try {
             setActionLoading(deviceId);
-            const data = await trustDeviceApi(deviceId);
-            setDevices(data.devices);
+            setError(null);
+            await logoutDeviceApi(deviceId);
+            // Show a brief success state
+            setActionLoading('success');
+            setTimeout(() => setActionLoading(null), 2000);
         } catch (err) {
-            alert('Failed to update trust status.');
-        } finally {
+            setError('Failed to send live logout command.');
             setActionLoading(null);
         }
     };
@@ -216,7 +242,25 @@ export default function MyDevices({ user }: MyDevicesProps) {
                                         </button>
                                     )}
                                     <button
-                                        onClick={() => handleRevoke(device.deviceId)}
+                                        onClick={() => handleLogout(device.deviceId)}
+                                        disabled={!!actionLoading}
+                                        className={cn(
+                                            "p-3 rounded-xl transition-all active:scale-95 shadow-sm border bg-white border-slate-200 text-slate-400 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-100",
+                                            actionLoading === 'success' && "bg-emerald-50 text-emerald-600 border-emerald-100"
+                                        )}
+                                        title="Force Logout"
+                                    >
+                                        {actionLoading === device.deviceId ? (
+                                            <RefreshCw className="w-5 h-5 animate-spin" />
+                                        ) : actionLoading === 'success' ? (
+                                            <X size={20} />
+                                        ) : (
+                                            <LogOut size={20} />
+                                        )}
+                                    </button>
+
+                                    <button
+                                        onClick={() => handleRevoke(device)}
                                         disabled={!!actionLoading}
                                         className={cn(
                                             "p-3 rounded-xl transition-all active:scale-95 shadow-sm border",
@@ -224,12 +268,12 @@ export default function MyDevices({ user }: MyDevicesProps) {
                                                 ? "bg-white border-red-100 text-red-400 hover:bg-red-50 hover:text-red-600"
                                                 : "bg-white border-slate-200 text-slate-400 hover:bg-red-50 hover:text-red-600"
                                         )}
-                                        title="Revoke device"
+                                        title="Delete Device"
                                     >
                                         {actionLoading === device.deviceId ? (
                                             <RefreshCw className="w-5 h-5 animate-spin" />
                                         ) : (
-                                            <Trash2 className="w-5 h-5" />
+                                            <Trash2 size={20} />
                                         )}
                                     </button>
                                 </div>
@@ -238,6 +282,55 @@ export default function MyDevices({ user }: MyDevicesProps) {
                     ))
                 )}
             </div>
+
+            {/* REVOKE CONFIRMATION MODAL */}
+            {deviceToDelete && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
+                    <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-300 p-8 text-center border border-slate-100 relative">
+                        <button
+                            onClick={() => setDeviceToDelete(null)}
+                            className="absolute top-6 right-6 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-all"
+                        >
+                            <X size={20} />
+                        </button>
+
+                        <div className="w-20 h-20 bg-rose-50 rounded-3xl flex items-center justify-center mx-auto mb-6 text-rose-500 border border-rose-100 shadow-inner group">
+                            {isDeleting ? <Loader2 className="animate-spin" size={36} /> : <AlertCircle size={36} className="group-hover:scale-110 transition-transform" />}
+                        </div>
+
+                        <div className="space-y-2 mb-8">
+                            <h3 className="text-2xl font-black text-slate-900 uppercase italic tracking-tight">
+                                {isDeleting ? 'Revoking Access...' : 'Revoke Device?'}
+                            </h3>
+                            <p className="text-slate-500 font-medium text-sm leading-relaxed px-4">
+                                {isDeleting
+                                    ? 'We are securely revoking trust from this hardware. Please wait.'
+                                    : <span>Are you sure you want to revoke <span className="text-slate-900 font-black italic underline">{deviceToDelete.deviceName}</span>? You will be logged out immediately from this device.</span>
+                                }
+                            </p>
+                        </div>
+
+                        <div className="flex gap-4">
+                            <button
+                                onClick={() => setDeviceToDelete(null)}
+                                disabled={isDeleting}
+                                className="flex-1 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] text-slate-500 bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-all active:scale-95 disabled:opacity-50 italic"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmRevoke}
+                                disabled={isDeleting}
+                                className="flex-1 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] text-white bg-rose-500 hover:bg-rose-600 shadow-xl shadow-rose-200 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2 italic"
+                            >
+                                {isDeleting ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
+                                {isDeleting ? 'Revoking...' : 'Confirm Revoke'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
+

@@ -171,6 +171,8 @@ export async function revokeDevice(req: Request, res: Response): Promise<void> {
       io.to(`faculty_${userId}`).emit('devices_updated', {
         devices: faculty.devices
       });
+      // Also force logout the revoked device
+      io.to(`faculty_${userId}`).emit('force_logout', { deviceId });
     } catch (socketErr) {
       console.warn('Socket emission failed for revoke device:', socketErr);
     }
@@ -224,6 +226,32 @@ export async function trustDevice(req: Request, res: Response): Promise<void> {
   } catch (error) {
     console.error('Trust device error:', error);
     res.status(500).json({ message: 'Failed to trust device' });
+  }
+}
+
+export async function logoutDevice(req: Request, res: Response): Promise<void> {
+  try {
+    const userId = req.userId;
+    const { deviceId } = req.body;
+
+    if (!userId || !deviceId) {
+      res.status(400).json({ message: 'Unauthorized or deviceId missing' });
+      return;
+    }
+
+    // Emit live logout command via socket
+    try {
+      const io = getIO();
+      io.to(`faculty_${userId}`).emit('force_logout', { deviceId });
+      console.log(`Live logout command sent to device ${deviceId} for faculty ${userId}`);
+    } catch (socketErr) {
+      console.warn('Socket emission failed for live logout:', socketErr);
+    }
+
+    res.json({ message: 'Live logout initiated' });
+  } catch (error) {
+    console.error('Logout device error:', error);
+    res.status(500).json({ message: 'Failed to initiate live logout' });
   }
 }
 export async function getProfile(req: Request, res: Response): Promise<void> {

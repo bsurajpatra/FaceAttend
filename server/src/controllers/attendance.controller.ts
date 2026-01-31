@@ -4,6 +4,7 @@ import { AttendanceSession } from '../models/Attendance';
 import { Student } from '../models/Student';
 import { Faculty } from '../models/Faculty';
 import { getFaceEmbedding } from '../services/facenet.service';
+import { getIO } from '../socket';
 import { cosineSimilarity } from '../utils/math';
 
 // Face matching threshold (cosine similarity) - higher threshold for FaceNet embeddings
@@ -156,6 +157,17 @@ export async function startAttendanceSession(req: Request, res: Response): Promi
       }))
     });
 
+    // Emit socket event for real-time dashboard updates
+    try {
+      getIO().to(`faculty_${facultyId}`).emit('attendance_updated', {
+        type: 'session_started',
+        subject,
+        section
+      });
+    } catch (err) {
+      console.error('Socket emit error:', err);
+    }
+
     res.status(201).json({
       message: 'Attendance session started',
       sessionId: attendanceSession._id,
@@ -302,6 +314,16 @@ export async function markAttendance(req: Request, res: Response): Promise<void>
 
         await session.save();
 
+        // Emit socket event for real-time dashboard updates
+        try {
+          getIO().to(`faculty_${facultyId}`).emit('attendance_updated', {
+            type: 'attendance_marked',
+            studentName: match.student.name
+          });
+        } catch (err) {
+          console.error('Socket emit error:', err);
+        }
+
         res.json({
           message: 'Attendance marked successfully (student added to session)',
           student: {
@@ -340,6 +362,16 @@ export async function markAttendance(req: Request, res: Response): Promise<void>
       session.absentStudents -= 1;
 
       await session.save();
+
+      // Emit socket event for real-time dashboard updates
+      try {
+        getIO().to(`faculty_${facultyId}`).emit('attendance_updated', {
+          type: 'attendance_marked',
+          studentName: match.student.name
+        });
+      } catch (err) {
+        console.error('Socket emit error:', err);
+      }
 
       res.json({
         message: 'Attendance marked successfully',

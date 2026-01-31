@@ -43,3 +43,7 @@ export async function trustDeviceApi(deviceId: string): Promise<{ devices: Devic
     const res = await http.post<{ devices: DeviceInfo[] }>('/api/auth/devices/trust', { deviceId });
     return res.data;
 }
+
+export async function logoutDeviceApi(deviceId: string): Promise<void> {
+    await http.post('/api/auth/devices/logout', { deviceId });
+}
