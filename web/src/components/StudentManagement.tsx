@@ -236,8 +236,8 @@ export function StudentManagement({ user, timetable }: StudentManagementProps) {
     // RENDER: Select Class State
     if (!hasSelectedClass) {
         return (
-            <div className="flex flex-col items-center justify-center h-full min-h-[600px] animate-in fade-in zoom-in duration-500">
-                <div className="bg-white px-12 py-16 rounded-[2.5rem] shadow-2xl border border-slate-200 text-center max-w-2xl w-full space-y-10 relative overflow-hidden">
+            <div className="flex flex-col items-center justify-center h-full min-h-[400px] animate-in fade-in zoom-in duration-500 scrollbar-hide">
+                <div className="bg-white px-12 py-10 rounded-[2.5rem] shadow-2xl border border-slate-200 text-center max-w-2xl w-full space-y-10 relative overflow-hidden">
                     <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-500 to-indigo-600" />
 
                     <div className="w-20 h-20 bg-blue-50 rounded-3xl flex items-center justify-center mx-auto text-blue-600 shadow-inner">
@@ -296,7 +296,7 @@ export function StudentManagement({ user, timetable }: StudentManagementProps) {
 
     // RENDER: List View with Edit Modal
     return (
-        <div className="flex flex-col h-full w-full animate-in fade-in slide-in-from-bottom-4 duration-500 relative overflow-hidden">
+        <div className="flex flex-col h-full w-full animate-in fade-in slide-in-from-bottom-4 duration-500 relative overflow-hidden scrollbar-hide">
             {/* Header Section - Fixed/Non-scrolling part */}
             <div className="flex-none py-6 bg-inherit z-10 w-full">
                 <div className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col xl:flex-row xl:items-center justify-between gap-8">

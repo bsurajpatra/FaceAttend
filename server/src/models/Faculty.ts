@@ -28,6 +28,13 @@ export interface FacultyDocument extends Document {
   password: string;
   timetable: TimetableDay[];
   devices: DeviceInfo[];
+  resetPasswordToken?: string;
+  resetPasswordExpires?: Date;
+  isVerified: boolean;
+  isFirstLogin: boolean;
+  twoFactorEnabled: boolean;
+  otp?: string;
+  otpExpires?: Date;
   comparePassword(candidate: string): Promise<boolean>;
 }
 
@@ -62,7 +69,14 @@ const FacultySchema = new Schema<FacultyDocument>(
     username: { type: String, required: true, unique: true, lowercase: true, trim: true },
     password: { type: String, required: true, minlength: 6 },
     timetable: [TimetableDaySchema],
-    devices: [DeviceInfoSchema]
+    devices: [DeviceInfoSchema],
+    resetPasswordToken: { type: String },
+    resetPasswordExpires: { type: Date },
+    isVerified: { type: Boolean, default: false },
+    isFirstLogin: { type: Boolean, default: true },
+    otp: { type: String },
+    twoFactorEnabled: { type: Boolean, default: false },
+    otpExpires: { type: Date }
   },
   { timestamps: true }
 );

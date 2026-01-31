@@ -27,6 +27,7 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.18.1",
     "morgan": "^1.10.1",
+    "nodemailer": "^7.0.13",
     "socket.io": "^4.8.3"
   },
   "devDependencies": {
@@ -36,6 +37,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/morgan": "^1.9.10",
     "@types/node": "^24.3.1",
+    "@types/nodemailer": "^7.0.9",
     "@types/socket.io": "^3.0.1",
     "@typescript-eslint/eslint-plugin": "^8.43.0",
     "@typescript-eslint/parser": "^8.43.0",

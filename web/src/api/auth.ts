@@ -1,7 +1,13 @@
 import { http } from './http';
 
 export type LoginInput = { username: string; password: string };
-export type LoginResponse = { token: string; user: { id: string; name: string; username: string } };
+export type LoginResponse = {
+    token: string;
+    isFirstLogin: boolean;
+    user: { id: string; name: string; username: string };
+    twoFactorRequired?: boolean;
+    email?: string;
+};
 
 export type RegisterInput = { name: string; email: string; username: string; password: string };
 
@@ -15,7 +21,14 @@ export async function registerApi(data: RegisterInput): Promise<LoginResponse> {
     return res.data;
 }
 
-export type UserProfile = { id: string; name: string; username: string; email?: string };
+export type UserProfile = {
+    id: string;
+    name: string;
+    username: string;
+    email?: string;
+    isFirstLogin?: boolean;
+    twoFactorEnabled?: boolean;
+};
 
 export interface DeviceInfo {
     deviceId: string;
@@ -50,4 +63,34 @@ export async function logoutDeviceApi(deviceId: string): Promise<void> {
 
 export async function logoutApi(): Promise<void> {
     await http.post('/api/auth/logout');
+}
+
+export async function forgotPasswordApi(email: string): Promise<void> {
+    await http.post('/api/auth/forgot-password', { email });
+}
+
+export async function resetPasswordApi(data: any): Promise<void> {
+    await http.post('/api/auth/reset-password', data);
+}
+
+export async function verifyOtpApi(email: string, otp: string): Promise<LoginResponse> {
+    const res = await http.post<LoginResponse>('/api/auth/verify-otp', { email, otp });
+    return res.data;
+}
+
+export async function resendOtpApi(email: string): Promise<void> {
+    await http.post('/api/auth/resend-otp', { email });
+}
+
+export async function verify2faApi(email: string, otp: string): Promise<LoginResponse> {
+    const res = await http.post<LoginResponse>('/api/auth/verify-2fa', { email, otp });
+    return res.data;
+}
+
+export async function toggle2faApi(enabled: boolean): Promise<void> {
+    await http.post('/api/auth/toggle-2fa', { enabled });
+}
+
+export async function resend2faApi(email: string): Promise<void> {
+    await http.post('/api/auth/resend-2fa', { email });
 }

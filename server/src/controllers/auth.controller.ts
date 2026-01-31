@@ -4,6 +4,8 @@ import { Faculty } from '../models/Faculty';
 import { env } from '../config/env';
 import { getIO } from '../socket';
 import { createAuditLog } from '../utils/auditLogger';
+import { sendPasswordResetEmail, sendPasswordResetSuccessEmail, sendOTPEmail, sendWelcomeEmail, send2FAEmail } from '../utils/email';
+import crypto from 'crypto';
 
 function signToken(userId: string): string {
   return jwt.sign({ sub: userId }, env.jwtSecret, { expiresIn: '7d' });
@@ -37,11 +39,25 @@ export async function register(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    const faculty = await Faculty.create({ name, email, username, password });
-    const token = signToken(faculty.id);
+    // Generate OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    const faculty = await Faculty.create({
+      name,
+      email,
+      username,
+      password,
+      otp,
+      otpExpires,
+      isVerified: false
+    });
+
+    await sendOTPEmail(email, otp);
+
     res.status(201).json({
-      user: { id: faculty.id, name: faculty.name, username: faculty.username },
-      token,
+      message: 'Registration successful. Please verify your email with the OTP sent.',
+      email: faculty.email
     });
   } catch (error) {
     console.error('Registration error:', error);
@@ -97,6 +113,33 @@ export async function login(req: Request, res: Response): Promise<void> {
       return;
     }
 
+    if (!faculty.isVerified) {
+      res.status(403).json({
+        message: 'Account not verified. Please verify your email.',
+        email: faculty.email,
+        needsVerification: true
+      });
+      return;
+    }
+
+    if (faculty.twoFactorEnabled) {
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const otpExpires = new Date(Date.now() + 5 * 60 * 1000); // 5 mins for 2FA
+
+      faculty.otp = otp;
+      faculty.otpExpires = otpExpires;
+      await faculty.save();
+
+      await send2FAEmail(faculty.email, otp);
+
+      res.json({
+        twoFactorRequired: true,
+        email: faculty.email,
+        message: 'Two-factor authentication required'
+      });
+      return;
+    }
+
     // Handle device trust
     let currentDeviceTrusted = false;
     if (deviceId && deviceName) {
@@ -132,15 +175,24 @@ export async function login(req: Request, res: Response): Promise<void> {
     }
 
     const token = signToken(faculty.id);
+    const isFirstLogin = faculty.isFirstLogin;
+
+    if (isFirstLogin) {
+      faculty.isFirstLogin = false;
+      await faculty.save();
+    }
+
     res.json({
+      token,
+      isFirstLogin,
       user: {
         id: faculty.id,
         name: faculty.name,
         username: faculty.username,
-        email: faculty.email
+        email: faculty.email,
+        devices: faculty.devices
       },
-      token,
-      isTrusted: currentDeviceTrusted
+      currentDeviceTrusted
     });
 
     // Audit Log
@@ -314,13 +366,13 @@ export async function getProfile(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    const faculty = await Faculty.findById(userId).select('name email username');
+    const faculty = await Faculty.findById(userId).select('name email username isFirstLogin twoFactorEnabled');
     if (!faculty) {
       res.status(404).json({ message: 'User not found' });
       return;
     }
 
-    res.json({ user: { id: faculty.id, name: faculty.name, username: faculty.username, email: faculty.email } });
+    res.json({ user: { id: faculty.id, name: faculty.name, username: faculty.username, email: faculty.email, isFirstLogin: faculty.isFirstLogin, twoFactorEnabled: faculty.twoFactorEnabled } });
   } catch (error) {
     console.error('Get profile error:', error);
     res.status(500).json({ message: 'Failed to fetch profile' });
@@ -478,5 +530,295 @@ export async function getFacultySubjects(req: Request, res: Response): Promise<v
   } catch (error) {
     console.error('Get faculty subjects error:', error);
     res.status(500).json({ message: 'Failed to fetch faculty subjects' });
+  }
+}
+
+export async function forgotPassword(req: Request, res: Response): Promise<void> {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      res.status(400).json({ message: 'Email is required' });
+      return;
+    }
+
+    const faculty = await Faculty.findOne({ email });
+    if (!faculty) {
+      // For security reasons, don't reveal if user exists
+      res.json({ message: 'If an account with that email exists, a password reset link has been sent.' });
+      return;
+    }
+
+    const token = crypto.randomBytes(32).toString('hex');
+    faculty.resetPasswordToken = token;
+    faculty.resetPasswordExpires = new Date(Date.now() + 3600000); // 1 hour
+
+    await faculty.save();
+
+    await sendPasswordResetEmail(email, token);
+
+    // Audit Log
+    createAuditLog({
+      action: 'Recovery Requested',
+      details: `Password reset link sent to ${email}`,
+      req,
+      facultyId: faculty.id
+    });
+
+    res.json({ message: 'If an account with that email exists, a password reset link has been sent.' });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ message: 'Failed to process request' });
+  }
+}
+
+export async function resetPassword(req: Request, res: Response): Promise<void> {
+  try {
+    const { token, password } = req.body;
+    if (!token || !password) {
+      res.status(400).json({ message: 'Token and password are required' });
+      return;
+    }
+
+    const faculty = await Faculty.findOne({
+      resetPasswordToken: token,
+      resetPasswordExpires: { $gt: Date.now() }
+    });
+
+    if (!faculty) {
+      res.status(400).json({ message: 'Password reset token is invalid or has expired' });
+      return;
+    }
+
+    faculty.password = password;
+    faculty.resetPasswordToken = undefined;
+    faculty.resetPasswordExpires = undefined;
+
+    await faculty.save();
+
+    // Send confirmation email
+    await sendPasswordResetSuccessEmail(faculty.email);
+
+    // Audit Log
+    createAuditLog({
+      action: 'Password Reset',
+      details: 'Password was successfully reset using a recovery link',
+      req,
+      facultyId: faculty.id
+    });
+
+    res.json({ message: 'Password has been reset successfully' });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ message: 'Failed to reset password' });
+  }
+}
+
+export async function verifyOTP(req: Request, res: Response): Promise<void> {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) {
+      res.status(400).json({ message: 'Email and OTP are required' });
+      return;
+    }
+
+    const faculty = await Faculty.findOne({
+      email,
+      otp,
+      otpExpires: { $gt: Date.now() }
+    });
+
+    if (!faculty) {
+      res.status(400).json({ message: 'Invalid or expired OTP' });
+      return;
+    }
+
+    faculty.isVerified = true;
+    faculty.otp = undefined;
+    faculty.otpExpires = undefined;
+    await faculty.save();
+
+    const token = signToken(faculty.id);
+    const isFirstLogin = faculty.isFirstLogin;
+
+    if (isFirstLogin) {
+      faculty.isFirstLogin = false;
+      await faculty.save();
+      // Send Welcome Email
+      sendWelcomeEmail(faculty.email, faculty.name).catch(err =>
+        console.error('Failed to send welcome email:', err)
+      );
+    }
+
+    // Audit Log
+    createAuditLog({
+      action: 'Account Verified',
+      details: `Email ${email} verified successfully via OTP`,
+      req,
+      facultyId: faculty.id
+    });
+
+    res.json({
+      message: 'Account verified successfully',
+      token,
+      isFirstLogin,
+      user: { id: faculty.id, name: faculty.name, username: faculty.username, email: faculty.email }
+    });
+  } catch (error) {
+    console.error('OTP verification error:', error);
+    res.status(500).json({ message: 'Verification failed' });
+  }
+}
+
+export async function resendOTP(req: Request, res: Response): Promise<void> {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      res.status(400).json({ message: 'Email is required' });
+      return;
+    }
+
+    const faculty = await Faculty.findOne({ email });
+    if (!faculty) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
+
+    if (faculty.isVerified) {
+      res.status(400).json({ message: 'Account is already verified' });
+      return;
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
+
+    faculty.otp = otp;
+    faculty.otpExpires = otpExpires;
+    await faculty.save();
+
+    await sendOTPEmail(email, otp);
+
+    res.json({ message: 'New OTP sent to your email' });
+  } catch (error) {
+    console.error('Resend OTP error:', error);
+    res.status(500).json({ message: 'Failed to resend OTP' });
+  }
+}
+
+export async function verify2FA(req: Request, res: Response): Promise<void> {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) {
+      res.status(400).json({ message: 'Email and code are required' });
+      return;
+    }
+
+    const faculty = await Faculty.findOne({
+      email,
+      otp,
+      otpExpires: { $gt: Date.now() }
+    });
+
+    if (!faculty) {
+      res.status(400).json({ message: 'Invalid or expired security code' });
+      return;
+    }
+
+    // Clear OTP
+    faculty.otp = undefined;
+    faculty.otpExpires = undefined;
+    await faculty.save();
+
+    const token = signToken(faculty.id);
+
+    // Audit Log
+    createAuditLog({
+      action: '2FA Verified',
+      details: `Successful 2FA verification for ${email}`,
+      req,
+      facultyId: faculty.id
+    });
+
+    res.json({
+      token,
+      user: { id: faculty.id, name: faculty.name, username: faculty.username, email: faculty.email }
+    });
+  } catch (error) {
+    console.error('2FA verification error:', error);
+    res.status(500).json({ message: '2FA verification failed' });
+  }
+}
+
+export async function toggle2FA(req: Request, res: Response): Promise<void> {
+  try {
+    const userId = req.userId;
+    const { enabled } = req.body;
+
+    if (!userId) {
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+
+    const faculty = await Faculty.findById(userId);
+    if (!faculty) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
+
+    faculty.twoFactorEnabled = !!enabled;
+    await faculty.save();
+
+    // Audit Log
+    createAuditLog({
+      action: '2FA Setting Changed',
+      details: `Two-factor authentication ${enabled ? 'enabled' : 'disabled'}`,
+      req,
+      facultyId: faculty.id
+    });
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
+    faculty.otp = otp;
+    faculty.otpExpires = otpExpires;
+    await faculty.save();
+
+    await sendOTPEmail(faculty.email, otp);
+
+    res.json({
+      message: `Two-factor authentication ${enabled ? 'enabled' : 'disabled'} successfully`,
+      twoFactorEnabled: faculty.twoFactorEnabled
+    });
+  } catch (error) {
+    console.error('Toggle 2FA error:', error);
+    res.status(500).json({ message: 'Failed to update 2FA setting' });
+  }
+}
+
+export async function resend2FA(req: Request, res: Response): Promise<void> {
+  try {
+    const { email } = req.body;
+    const faculty = await Faculty.findOne({ email });
+    if (!faculty) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
+
+    if (!faculty.twoFactorEnabled) {
+      res.status(400).json({ message: '2FA is not enabled for this account' });
+      return;
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpires = new Date(Date.now() + 5 * 60 * 1000);
+
+    faculty.otp = otp;
+    faculty.otpExpires = otpExpires;
+    await faculty.save();
+
+    await send2FAEmail(email, otp);
+
+    res.json({ message: 'New security code sent to your email' });
+  } catch (error) {
+    console.error('Resend 2FA error:', error);
+    res.status(500).json({ message: 'Failed to resend security code' });
   }
 }

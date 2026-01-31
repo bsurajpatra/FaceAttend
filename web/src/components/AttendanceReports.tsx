@@ -391,7 +391,7 @@ export function AttendanceReports() {
     }
 
     return (
-        <div className="animate-in fade-in slide-in-from-right-4 duration-500">
+        <div className="animate-in fade-in slide-in-from-right-4 duration-500 scrollbar-hide">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8 mt-2">
                 <h2 className="text-2xl font-black text-slate-900 tracking-tight uppercase italic flex items-center gap-3">
                     <Clock size={28} className="text-blue-600" />

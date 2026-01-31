@@ -51,9 +51,10 @@ export function AuditLog() {
     }, []);
 
     const filteredLogs = logs.filter((log: Log) => {
-        const matchesSearch = log.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            log.details.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            log.deviceName?.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesSearch =
+            (log.action?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+            (log.details?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+            (log.deviceName?.toLowerCase() || '').includes(searchQuery.toLowerCase());
         const matchesPlatform = platformFilter === 'all' || log.platform === platformFilter;
         return matchesSearch && matchesPlatform;
     });
@@ -68,7 +69,7 @@ export function AuditLog() {
     }
 
     return (
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 scrollbar-hide">
             {/* Header section */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mt-2">
                 <div>

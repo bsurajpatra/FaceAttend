@@ -178,7 +178,7 @@ export function StudentRegistration({ user, timetable }: StudentRegistrationProp
     };
 
     return (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 scrollbar-hide">
             <h2 className="text-2xl font-black text-slate-900 tracking-tight uppercase italic flex items-center gap-3">
                 <UserPlus size={28} className="text-blue-600" />
                 Register Student

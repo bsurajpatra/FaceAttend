@@ -19,7 +19,8 @@ import {
     Calendar,
     ExternalLink,
     X,
-    CheckCircle2
+    CheckCircle2,
+    ShieldAlert
 } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { cn } from '../lib/utils';
@@ -45,6 +46,7 @@ export default function Dashboard() {
     const [isNotificationOpen, setIsNotificationOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [showSearchResults, setShowSearchResults] = useState(false);
+    const [showMfaModal, setShowMfaModal] = useState(false);
 
     const [timetable, setTimetable] = useState<any[]>([]);
 
@@ -68,6 +70,25 @@ export default function Dashboard() {
                 .then(res => {
                     setUser(res.user);
                     localStorage.setItem('user', JSON.stringify(res.user));
+                    if (res.user.isFirstLogin !== undefined) {
+                        localStorage.setItem('isFirstLogin', String(res.user.isFirstLogin));
+                    }
+
+                    // Check for MFA and warn
+                    if (!res.user.twoFactorEnabled) {
+                        const mfaNotif = {
+                            id: 'mfa-warning-' + Date.now(),
+                            type: 'security_advisory',
+                            title: 'Enable MFA',
+                            message: 'Add an extra layer of security to your account by enabling Multi-Factor Authentication.',
+                            time: 'Recommended',
+                            icon: <ShieldCheck className="text-orange-500" size={18} />,
+                            isNew: true,
+                            action: () => setActiveTab('profile')
+                        };
+                        setNotifications(prev => [mfaNotif, ...prev]);
+                        setShowMfaModal(true);
+                    }
                 })
                 .catch(err => console.error('Failed to fetch profile', err));
 
@@ -88,8 +109,8 @@ export default function Dashboard() {
         { id: 'timetable', label: 'Timetable', icon: <BookOpen size={18} />, keywords: ['schedule', 'classes', 'sessions', 'time'] },
         { id: 'reports', label: 'Attendance Reports', icon: <History size={18} />, keywords: ['analytics', 'records', 'past', 'history', 'pdf', 'csv'] },
         { id: 'audit', label: 'Security Logs', icon: <Activity size={18} />, keywords: ['audit', 'logs', 'security', 'activity', 'surveillance'] },
-        { id: 'profile', label: 'My Profile', icon: <User size={18} />, keywords: ['account', 'settings', 'password', 'email'] },
-        { id: 'devices', label: 'My Devices', icon: <ShieldCheck size={18} />, keywords: ['security', 'hardware', 'logout', 'remote', 'trust'] },
+        { id: 'profile', label: 'My Profile', icon: <User size={18} />, keywords: ['account', 'settings', 'password', 'email', 'mfa', 'otp', '2fa'] },
+        { id: 'devices', label: 'My Devices', icon: <ShieldCheck size={18} />, keywords: ['security', 'hardware', 'logout', 'remote', 'trust', 'mfa', 'otp', '2fa'] },
     ];
 
     const searchResults = searchQuery.trim() === '' ? [] : navItems.filter(item =>
@@ -256,6 +277,7 @@ export default function Dashboard() {
         } finally {
             localStorage.removeItem('token');
             localStorage.removeItem('user');
+            localStorage.removeItem('isFirstLogin');
             window.location.href = '/login';
         }
     };
@@ -278,7 +300,7 @@ export default function Dashboard() {
                 </div>
 
                 {/* Sidebar Content */}
-                <nav className="flex-1 p-4 space-y-2">
+                <nav className="flex-1 p-4 space-y-2 overflow-y-auto scrollbar-hide">
                     <SidebarItem
                         icon={<LayoutDashboard />}
                         label="Overview"
@@ -502,7 +524,7 @@ export default function Dashboard() {
                 </header>
 
                 {/* Dashboard Content - Flexible scrolling area */}
-                <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-10">
+                <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 lg:p-10 scrollbar-hide">
                     <div className="max-w-6xl mx-auto">
                         {activeTab === 'overview' && <OverviewSection user={user} timetable={timetable} />}
                         {activeTab === 'registration' && <StudentRegistration user={user} timetable={timetable} />}
@@ -515,6 +537,52 @@ export default function Dashboard() {
                     </div>
                 </div>
             </main>
+
+            {/* MFA Recommendation Modal */}
+            {showMfaModal && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
+                    <div className="bg-white rounded-[2rem] w-full max-w-md p-8 shadow-2xl relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-orange-50 rounded-full blur-3xl -mt-16 -mr-16 opacity-50" />
+
+                        <button
+                            onClick={() => setShowMfaModal(false)}
+                            className="absolute right-6 top-6 text-slate-400 hover:text-slate-600 transition-colors z-10"
+                        >
+                            <X size={24} />
+                        </button>
+
+                        <div className="text-center mb-6 relative z-10">
+                            <div className="w-20 h-20 bg-orange-50 rounded-full flex items-center justify-center mx-auto mb-6 text-orange-500 shadow-sm border border-orange-100">
+                                <ShieldAlert size={40} />
+                            </div>
+                            <h3 className="text-2xl font-black text-slate-900 uppercase italic tracking-tight">Security Alert</h3>
+                            <p className="text-slate-500 font-medium text-sm mt-3 leading-relaxed">
+                                Your account is currently at risk. <br />
+                                <strong className="text-slate-700">Multi-Factor Authentication (MFA)</strong> is disabled.
+                            </p>
+                        </div>
+
+                        <div className="space-y-3 relative z-10">
+                            <button
+                                onClick={() => {
+                                    setShowMfaModal(false);
+                                    setActiveTab('profile');
+                                }}
+                                className="w-full py-4 bg-slate-900 text-white rounded-xl font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg shadow-slate-200 active:scale-95 flex items-center justify-center gap-2"
+                            >
+                                <ShieldCheck size={18} />
+                                ENABLE SECURITY
+                            </button>
+                            <button
+                                onClick={() => setShowMfaModal(false)}
+                                className="w-full py-4 bg-white border border-slate-200 text-slate-500 rounded-xl font-bold uppercase tracking-widest hover:bg-slate-50 transition-all hover:text-slate-700 hover:border-slate-300"
+                            >
+                                Remind Me Later
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
@@ -545,11 +613,14 @@ function SidebarItem({ icon, label, active, isOpen, onClick }: any) {
 function OverviewSection({ user, timetable }: any) {
     const currentSession = getCurrentSession(timetable);
 
+    const isFirstLogin = localStorage.getItem('isFirstLogin') === 'true' || user.isFirstLogin;
+
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 text-center max-w-4xl mx-auto">
             <div className="space-y-2">
                 <h1 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tight">
-                    Welcome back, <span className="text-blue-600 italic">{user.name}</span> !
+                    {isFirstLogin ? 'Welcome, ' : 'Welcome back, '}
+                    <span className="text-blue-600 italic">{user.name}</span> !
                 </h1>
                 <p className="text-slate-500 text-lg font-medium max-w-2xl mx-auto leading-relaxed">
                     Manage your attendance records and profile from the ERP console.

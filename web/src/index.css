@@ -8,7 +8,26 @@
     background-color: #f8fafc;
 }
 
-body {
+body,
+html {
     margin: 0;
     min-height: 100vh;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+}
+
+body::-webkit-scrollbar,
+html::-webkit-scrollbar {
+    display: none !important;
+}
+
+.scrollbar-hide,
+.scrollbar-hide * {
+    -ms-overflow-style: none !important;
+    scrollbar-width: none !important;
+}
+
+.scrollbar-hide::-webkit-scrollbar,
+.scrollbar-hide *::-webkit-scrollbar {
+    display: none !important;
 }
