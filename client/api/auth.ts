@@ -50,4 +50,12 @@ export async function getFacultySubjectsApi(): Promise<FacultySubjectsResponse> 
   return res.data;
 }
 
+export async function logoutApi(): Promise<void> {
+  try {
+    await http.post('/api/auth/logout');
+  } catch (error) {
+    console.warn('Logout API failed:', error);
+  }
+}
+
 

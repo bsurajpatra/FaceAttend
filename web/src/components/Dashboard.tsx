@@ -25,7 +25,7 @@ import { io } from 'socket.io-client';
 import { cn } from '../lib/utils';
 import logoImg from '../assets/logo.png';
 import { getTimetableApi } from '../api/timetable';
-import { getProfileApi } from '../api/auth';
+import { getProfileApi, logoutApi } from '../api/auth';
 import { getCurrentSession, getNextSession } from '../lib/timeSlots';
 import { Profile } from './Profile';
 import { AttendanceReports } from './AttendanceReports';
@@ -248,10 +248,16 @@ export default function Dashboard() {
         };
     }, [user?.id, timetable]);
 
-    const handleLogout = () => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        window.location.href = '/login';
+    const handleLogout = async () => {
+        try {
+            await logoutApi();
+        } catch (error) {
+            console.error('Logout API failed:', error);
+        } finally {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            window.location.href = '/login';
+        }
     };
 
     if (!user) return null;

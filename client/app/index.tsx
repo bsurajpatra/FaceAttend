@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { styles } from '@/components/styles/welcome-styles';
 import Login from '@/components/login';
 import Dashboard from '@/components/dashboard';
-import { loginApi } from '@/api/auth';
+import { loginApi, logoutApi } from '@/api/auth';
 import { getTimetableApi, TimetableDay } from '@/api/timetable';
 import { useKiosk } from '@/contexts/KioskContext';
 import { useSocket } from '@/contexts/SocketContext';
@@ -150,6 +150,8 @@ export default function WelcomeScreen() {
         timetable={timetable}
         isTrusted={isTrusted ?? false}
         onLogout={async () => {
+          // Call server-side logout for audit logging
+          await logoutApi();
           // Clear saved login state
           await AsyncStorage.removeItem('user');
           await AsyncStorage.removeItem('token');

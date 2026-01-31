@@ -49,6 +49,28 @@ export async function register(req: Request, res: Response): Promise<void> {
   }
 }
 
+export async function logout(req: Request, res: Response): Promise<void> {
+  try {
+    const userId = req.userId;
+    if (!userId) {
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+
+    // Audit Log
+    createAuditLog({
+      action: 'Logout',
+      details: 'Faculty manually logged out of their account',
+      req
+    });
+
+    res.json({ message: 'Logged out successfully' });
+  } catch (error) {
+    console.error('Logout error:', error);
+    res.status(500).json({ message: 'Logout failed' });
+  }
+}
+
 export async function login(req: Request, res: Response): Promise<void> {
   try {
     const { username, password, deviceId, deviceName } = req.body as {
