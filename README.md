@@ -21,35 +21,36 @@ FaceAttend is built on four core pillars:
 
 ### 🌐 Premium Web ERP Portal
 *   **Intelligent Student Registration:** Multi-step form with real-time **Mobile Sync**. Trigger your mobile camera from your PC to capture student faces.
-*   **Advanced Student Management:** Search, filter, and manage thousands of student records. Edit profiles or recapture face data with one click using custom integrated modals.
+*   **Advanced Student Management:** Search, filter, and manage thousands of student records with custom integrated modals.
 *   **Visual Timetable Manager:** A sleek, interactive interface to configure your weekly teaching schedule with clash detection and real-time dashboard updates.
-*   **Faculty Activity Summary:** Live analytics dashboard tracking weekly attendance rates, total sessions, and class-wise performance with real-time socket updates.
-*   **Hardware Security Console:** (My Devices) Manage and monitor all devices logged into your account. Features **Live Remote Logout** and **Single-Device Trust Policy** to prevent unauthorized access.
+*   **Faculty Activity Summary:** Live analytics dashboard tracking weekly attendance rates, total sessions, and class-wise performance.
+*   **Global Audit Log:** (Security Logs) Real-time surveillance of all system activities. Capture every login, device update, and schedule change with detailed IP/platform tracing.
+*   **Hardware Security Console:** (My Devices) Manage and monitor all devices logged into your account. Features **Live Remote Logout** and **Single-Device Trust Policy**.
 *   **Professional Exports:** One-tap export of any report or student list to professional **PDF** or **CSV** formats.
-*   **Premium UI/UX:** Stunning "Glassmorphism" design with smooth micro-animations, custom confirmation modals, and unified brand aesthetics.
+*   **Premium UI/UX:** Stunning "Glassmorphism" design with smooth micro-animations, unified brand aesthetics, and a functional **Search Console** for quick navigation.
 
 ### 📱 Operational Mobile App
 *   **Live Attendance Loop:** High-speed face recognition camera that scans and marks attendance every 0.5s–3s with instant feedback.
-*   **Secure Kiosk Mode:** (Android only) Locks the device to the attendance screen, preventing unauthorized access while the phone is with a student representative.
 *   **Global Sync Modal:** Automatically pops up when a request is sent from the Web ERP to capture a student's face.
 *   **Live Remote Control:** Mobile app responds instantly to "Force Logout" or "Trust Update" signals sent from the Web ERP console.
-*   **Location Intelligence:** Automatically captures GPS coordinates and reverse-geocoded addresses for every attendance session.
-*   **Real-time Feedback:** Visual/Haptic cues for "Marked", "Already Marked", or "Not Found" status.
+*   **Platform Intelligence**: Automatically identifies as a mobile origin for security logs and audit tracking.
+*   **Secure Kiosk Mode:** (Android only) Locks the device to the attendance screen, preventing unauthorized access.
 
 ### 🤖 FaceNet Recognition
 *   **MTCNN Detection:** Multi-task CNN for robust face detection even in challenging classroom lighting.
 *   **Deep Embeddings:** Generates 512-bit biometric signatures that are unique and secure.
-*   **Cosine Similarity Matching:** High-precision matching (default 0.6 threshold) ensures accurate identification without false positives.
+*   **Cosine Similarity Matching:** High-precision matching (default 0.6 threshold) ensures accurate identification.
 
 ---
 
 ## 🔄 The "Magic" Sync: Web + Mobile
-One of FaceAttend's most powerful features is the **seamless synchronization** between the Web Portal and the Mobile App via WebSockets (Socket.io):
+One of FaceAttend's most powerful features is the **seamless synchronization** via WebSockets (Socket.io):
 
 1.  **Student Registration:** Click "Initiate Capture" on PC -> Phone camera wakes up -> Preview appears instantly on PC.
 2.  **Timetable Updates:** Save schedule on ERP -> All mobile devices sync their local timetable data instantly.
 3.  **Security Events:** Revoke a device on Web -> The mobile app is immediately logged out and session tokens are cleared.
-4.  **Attendance metrics:** Mark attendance on Mobile -> Web Dashboard metrics (Faculty Activity Summary) refresh live.
+4.  **Live Audit:** Perform any action on Mobile -> The Web ERP **Security Logs** refresh in real-time with origin details.
+5.  **Attendance metrics:** Mark attendance on Mobile -> Web Dashboard metrics (Faculty Activity Summary) refresh live.
 
 ---
 
@@ -62,6 +63,7 @@ web/
 │   ├── components/
 │   │   ├── FacultyActivitySummary.tsx # Live analytics & Metrics
 │   │   ├── MyDevices.tsx            # Security Console + Live Logout
+│   │   ├── AuditLog.tsx             # Real-time Activity Surveillance
 │   │   ├── AttendanceReports.tsx    # PDF/CSV Export + Analytics
 │   │   ├── StudentManagement.tsx    # Advanced Filters + Mobile Sync
 │   │   ├── StudentRegistration.tsx  # Dynamic Forms + Socket Sync
@@ -76,16 +78,14 @@ client/
 ├── app/                             # Expo Router Navigation
 │   ├── index.tsx                    # Auth state & Force Logout listener
 │   ├── take-attendance.tsx          # Main capture operation
-│   └── manage-students.tsx          # On-the-go student list
 ├── components/
 │   ├── live-attendance.tsx          # Real-time scan logic
 │   ├── GlobalCaptureModal.tsx       # Remote sync camera
-│   └── PasswordModal.tsx            # Kiosk security
 ├── contexts/                        # Kiosk & Socket state (Live Sync)
 ```
 
 ### Backend & AI (`server/` + `facenet_service/`)
-*   **Server:** Express API handling MongoDB, JWT, and Socket Rooms (`faculty_[id]`).
+*   **Server:** Express API handling MongoDB, JWT, Audit Logging, and Socket Rooms (`faculty_[id]`).
 *   **AI Service:** Flask API providing `/api/recognize` and `/api/compare`.
 
 ---
@@ -128,12 +128,11 @@ cd client && npm install && npx expo start
 ---
 
 ## 🔒 Security & Performance
+*   **Global Activity Surveillance:** Every login, device change, and schedule update is recorded with IP and platform tracing.
 *   **JWT Authentication:** All APIs are protected by signed JSON Web Tokens.
-*   **Single-Device Policy:** Attendance operations are restricted to a single trusted device per account.
-*   **Live Session Kill:** Web-to-Device WebSocket signals allow instant termination of compromised sessions.
+*   **Single-Device Policy:** Attendance operations restricted to a single trusted device.
+*   **Live Session Kill:** Web-to-Device WebSocket signals allow instant termination of sessions.
 *   **Bcrypt Hashing:** Passwords are never stored in plain text.
-*   **Rate Limiting:** Session creation is throttled to prevent spam.
-*   **Kiosk Security:** Prevents navigation while students are marking attendance via physical hardware button blocking (Android).
 
 ---
 
