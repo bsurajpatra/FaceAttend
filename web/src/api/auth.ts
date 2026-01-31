@@ -17,7 +17,29 @@ export async function registerApi(data: RegisterInput): Promise<LoginResponse> {
 
 export type UserProfile = { id: string; name: string; username: string; email?: string };
 
+export interface DeviceInfo {
+    deviceId: string;
+    deviceName: string;
+    lastLogin: string;
+    isTrusted: boolean;
+}
+
 export async function getProfileApi(): Promise<{ user: UserProfile }> {
     const res = await http.get<{ user: UserProfile }>('/api/auth/profile');
+    return res.data;
+}
+
+export async function getDevicesApi(): Promise<{ devices: DeviceInfo[] }> {
+    const res = await http.get<{ devices: DeviceInfo[] }>('/api/auth/devices');
+    return res.data;
+}
+
+export async function revokeDeviceApi(deviceId: string): Promise<{ devices: DeviceInfo[] }> {
+    const res = await http.delete<{ devices: DeviceInfo[] }>(`/api/auth/devices/${deviceId}`);
+    return res.data;
+}
+
+export async function trustDeviceApi(deviceId: string): Promise<{ devices: DeviceInfo[] }> {
+    const res = await http.post<{ devices: DeviceInfo[] }>('/api/auth/devices/trust', { deviceId });
     return res.data;
 }

@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import jwt, { SignOptions } from 'jsonwebtoken';
 import { Faculty } from '../models/Faculty';
 import { env } from '../config/env';
+import { getIO } from '../socket';
 
 function signToken(userId: string): string {
   return jwt.sign({ sub: userId }, env.jwtSecret, { expiresIn: '7d' });
@@ -9,13 +10,13 @@ function signToken(userId: string): string {
 
 export async function register(req: Request, res: Response): Promise<void> {
   try {
-    const { name, email, username, password } = req.body as { 
-      name: string; 
-      email: string; 
-      username: string; 
-      password: string; 
+    const { name, email, username, password } = req.body as {
+      name: string;
+      email: string;
+      username: string;
+      password: string;
     };
-    
+
     if (!name || !email || !username || !password) {
       res.status(400).json({ message: 'name, email, username, password are required' });
       return;
@@ -49,7 +50,13 @@ export async function register(req: Request, res: Response): Promise<void> {
 
 export async function login(req: Request, res: Response): Promise<void> {
   try {
-    const { username, password } = req.body as { username: string; password: string };
+    const { username, password, deviceId, deviceName } = req.body as {
+      username: string;
+      password: string;
+      deviceId?: string;
+      deviceName?: string;
+    };
+
     if (!username || !password) {
       res.status(400).json({ message: 'username and password are required' });
       return;
@@ -67,14 +74,158 @@ export async function login(req: Request, res: Response): Promise<void> {
       return;
     }
 
+    // Handle device trust
+    let currentDeviceTrusted = false;
+    if (deviceId && deviceName) {
+      const deviceIndex = faculty.devices.findIndex(d => d.deviceId === deviceId);
+
+      if (deviceIndex === -1) {
+        // New device
+        const isFirstDevice = faculty.devices.length === 0;
+        faculty.devices.push({
+          deviceId,
+          deviceName,
+          lastLogin: new Date(),
+          isTrusted: isFirstDevice
+        });
+        currentDeviceTrusted = isFirstDevice;
+      } else {
+        // Existing device
+        faculty.devices[deviceIndex].lastLogin = new Date();
+        faculty.devices[deviceIndex].deviceName = deviceName;
+        currentDeviceTrusted = faculty.devices[deviceIndex].isTrusted;
+      }
+      await faculty.save();
+
+      // Notify the client via socket
+      try {
+        const io = getIO();
+        io.to(`faculty_${faculty.id}`).emit('devices_updated', {
+          devices: faculty.devices
+        });
+      } catch (socketErr) {
+        console.warn('Socket emission failed for login device update:', socketErr);
+      }
+    }
+
     const token = signToken(faculty.id);
-    res.json({ user: { id: faculty.id, name: faculty.name, username: faculty.username }, token });
+    res.json({
+      user: {
+        id: faculty.id,
+        name: faculty.name,
+        username: faculty.username,
+        email: faculty.email
+      },
+      token,
+      isTrusted: currentDeviceTrusted
+    });
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ message: 'Login failed' });
   }
 }
 
+export async function getDevices(req: Request, res: Response): Promise<void> {
+  try {
+    const userId = req.userId;
+    if (!userId) {
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+
+    const faculty = await Faculty.findById(userId).select('devices');
+    if (!faculty) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
+
+    res.json({ devices: faculty.devices });
+  } catch (error) {
+    console.error('Get devices error:', error);
+    res.status(500).json({ message: 'Failed to fetch devices' });
+  }
+}
+
+export async function revokeDevice(req: Request, res: Response): Promise<void> {
+  try {
+    const userId = req.userId;
+    const { deviceId } = req.params;
+
+    if (!userId) {
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+
+    const faculty = await Faculty.findById(userId);
+    if (!faculty) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
+
+    faculty.devices = faculty.devices.filter(d => d.deviceId !== deviceId);
+    await faculty.save();
+
+    // Notify the client via socket
+    try {
+      const io = getIO();
+      io.to(`faculty_${userId}`).emit('devices_updated', {
+        devices: faculty.devices
+      });
+    } catch (socketErr) {
+      console.warn('Socket emission failed for revoke device:', socketErr);
+    }
+
+    res.json({ message: 'Device revoked successfully', devices: faculty.devices });
+  } catch (error) {
+    console.error('Revoke device error:', error);
+    res.status(500).json({ message: 'Failed to revoke device' });
+  }
+}
+
+export async function trustDevice(req: Request, res: Response): Promise<void> {
+  try {
+    const userId = req.userId;
+    const { deviceId } = req.body;
+
+    if (!userId) {
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+
+    if (!deviceId) {
+      res.status(400).json({ message: 'deviceId is required' });
+      return;
+    }
+
+    const faculty = await Faculty.findById(userId);
+    if (!faculty) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
+
+    // Set all devices to untrusted, then trust the target one
+    faculty.devices.forEach(d => {
+      d.isTrusted = d.deviceId === deviceId;
+    });
+
+    await faculty.save();
+
+    // Notify the client via socket
+    try {
+      const io = getIO();
+      io.to(`faculty_${userId}`).emit('devices_updated', {
+        devices: faculty.devices
+      });
+    } catch (socketErr) {
+      console.warn('Socket emission failed for trust device:', socketErr);
+    }
+
+    res.json({ message: 'Device trusted successfully', devices: faculty.devices });
+  } catch (error) {
+    console.error('Trust device error:', error);
+    res.status(500).json({ message: 'Failed to trust device' });
+  }
+}
 export async function getProfile(req: Request, res: Response): Promise<void> {
   try {
     const userId = req.userId;
@@ -211,12 +362,12 @@ export async function getFacultySubjects(req: Request, res: Response): Promise<v
         if (day.sessions) {
           day.sessions.forEach(session => {
             subjects.add(session.subject);
-            
+
             if (!subjectSections[session.subject]) {
               subjectSections[session.subject] = new Set<string>();
             }
             subjectSections[session.subject].add(session.section);
-            
+
             if (!subjectSessionTypes[session.subject]) {
               subjectSessionTypes[session.subject] = new Set<string>();
             }
@@ -230,16 +381,16 @@ export async function getFacultySubjects(req: Request, res: Response): Promise<v
     const subjectsArray = Array.from(subjects).sort();
     const subjectSectionsArray: { [key: string]: string[] } = {};
     const subjectSessionTypesArray: { [key: string]: string[] } = {};
-    
+
     Object.keys(subjectSections).forEach(subject => {
       subjectSectionsArray[subject] = Array.from(subjectSections[subject]).sort();
     });
-    
+
     Object.keys(subjectSessionTypes).forEach(subject => {
       subjectSessionTypesArray[subject] = Array.from(subjectSessionTypes[subject]).sort();
     });
 
-    res.json({ 
+    res.json({
       subjects: subjectsArray,
       subjectSections: subjectSectionsArray,
       subjectSessionTypes: subjectSessionTypesArray
@@ -249,5 +400,3 @@ export async function getFacultySubjects(req: Request, res: Response): Promise<v
     res.status(500).json({ message: 'Failed to fetch faculty subjects' });
   }
 }
-
-

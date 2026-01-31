@@ -1,10 +1,22 @@
 import { http } from './http';
 
+import { getDeviceId, getDeviceName } from '@/utils/device';
+
 export type LoginInput = { username: string; password: string };
-export type LoginResponse = { token: string; user: { id: string; name: string; username: string } };
+export type LoginResponse = {
+  token: string;
+  user: { id: string; name: string; username: string };
+  isTrusted?: boolean;
+};
 
 export async function loginApi(data: LoginInput): Promise<LoginResponse> {
-  const res = await http.post<LoginResponse>('/api/auth/login', data);
+  const deviceId = await getDeviceId();
+  const deviceName = getDeviceName();
+  const res = await http.post<LoginResponse>('/api/auth/login', {
+    ...data,
+    deviceId,
+    deviceName
+  });
   return res.data;
 }
 

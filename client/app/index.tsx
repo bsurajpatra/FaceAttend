@@ -14,8 +14,8 @@ import { useSocket } from '@/contexts/SocketContext';
 export default function WelcomeScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [user, setUser] = useState<{ id: string; name: string; username: string } | null>(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const { setStoredPassword } = useKiosk();
   // Initialize with proper empty timetable structure
@@ -47,6 +47,9 @@ export default function WelcomeScreen() {
           setUser(parsedUser);
           setIsLoggedIn(true);
 
+          const savedIsTrusted = await AsyncStorage.getItem('isTrusted');
+          setIsTrusted(savedIsTrusted === 'true');
+
           // Fetch timetable data
           try {
             const response = await getTimetableApi(parsedUser.id);
@@ -65,7 +68,7 @@ export default function WelcomeScreen() {
     checkLoginState();
   }, []);
 
-  const { socket } = useSocket();
+  const { socket, isTrusted, setIsTrusted } = useSocket();
 
   useEffect(() => {
     if (!socket || !isLoggedIn || !user) return;
@@ -126,12 +129,15 @@ export default function WelcomeScreen() {
       <Dashboard
         user={user}
         timetable={timetable}
+        isTrusted={isTrusted ?? false}
         onLogout={async () => {
           // Clear saved login state
           await AsyncStorage.removeItem('user');
           await AsyncStorage.removeItem('token');
+          await AsyncStorage.removeItem('isTrusted');
           setIsLoggedIn(false);
           setUser(null);
+          setIsTrusted(null);
           setErrorMessage(null);
         }}
         onTakeAttendance={(hours) => {
@@ -177,13 +183,15 @@ export default function WelcomeScreen() {
                   setErrorMessage(null);
                   setIsSubmitting(true);
                   try {
-                    const { token, user } = await loginApi({ username, password });
+                    const { token, user, isTrusted: trusted } = await loginApi({ username, password });
                     // Save login state to AsyncStorage
                     await AsyncStorage.setItem('user', JSON.stringify(user));
                     await AsyncStorage.setItem('token', token);
+                    await AsyncStorage.setItem('isTrusted', String(trusted));
                     // Store password for kiosk mode
                     await setStoredPassword(password);
                     setUser(user);
+                    setIsTrusted(trusted ?? false);
                     setIsLoggedIn(true);
                   } catch (err: any) {
                     const msg = err?.response?.data?.message || 'Login failed';

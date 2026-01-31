@@ -38,6 +38,7 @@ type DashboardProps = {
   timetable: ApiTimetableDay[];
   onLogout?: () => void;
   onTakeAttendance?: (hours: number[]) => void;
+  isTrusted?: boolean;
 };
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -46,7 +47,8 @@ export default function Dashboard({
   user,
   timetable,
   onLogout,
-  onTakeAttendance
+  onTakeAttendance,
+  isTrusted
 }: DashboardProps) {
   const [isHoursModalVisible, setHoursModalVisible] = useState(false);
   const [currentSession, setCurrentSession] = useState<any>(null);
@@ -286,6 +288,7 @@ export default function Dashboard({
           <Text style={styles.welcomeSubtext}>Have a productive day of teaching!</Text>
         </View>
 
+
         {/* Current Session Card */}
         {(() => {
           if (currentSession) {
@@ -330,6 +333,29 @@ export default function Dashboard({
                       );
                     }
 
+                    if (isTrusted === false) {
+                      return (
+                        <View style={{
+                          backgroundColor: '#FEF2F2',
+                          padding: 16,
+                          borderRadius: 20,
+                          borderWidth: 1,
+                          borderStyle: 'dashed',
+                          borderColor: '#FCA5A5',
+                        }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                            <Ionicons name="shield-outline" size={20} color="#B91C1C" style={{ marginRight: 8 }} />
+                            <Text style={{ color: '#B91C1C', fontSize: 15, fontWeight: '800', fontStyle: 'italic', textTransform: 'uppercase' }}>
+                              Device Untrusted
+                            </Text>
+                          </View>
+                          <Text style={{ color: '#7F1D1D', fontSize: 13, fontWeight: '500', lineHeight: 18 }}>
+                            Security policy blocks attendance on this hardware. To enable, trust this device via the <Text style={{ fontWeight: '800', color: '#B91C1C' }}>ERP Web Portal</Text>.
+                          </Text>
+                        </View>
+                      );
+                    }
+
                     if (attendanceStatus?.hasAttendance) {
                       const attendancePercentage = Math.round((attendanceStatus.presentStudents / attendanceStatus.totalStudents) * 100);
                       const attendanceTime = new Date(attendanceStatus.updatedAt).toLocaleTimeString();
@@ -365,7 +391,7 @@ export default function Dashboard({
                         onPress={() => setHoursModalVisible(true)}
                         style={({ pressed }) => [
                           styles.takeAttendanceButton,
-                          pressed && styles.takeAttendanceButtonPressed
+                          pressed && styles.takeAttendanceButtonPressed,
                         ]}
                         accessibilityRole="button"
                         accessibilityLabel="Take attendance for current session"

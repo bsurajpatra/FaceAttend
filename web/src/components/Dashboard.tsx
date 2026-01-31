@@ -3,14 +3,11 @@ import React, { useState, useEffect } from 'react';
 import {
     LayoutDashboard,
     User,
-    KeyRound,
     LogOut,
     Menu,
     Bell,
     Search,
     ShieldCheck,
-    Save,
-    Loader2,
     Clock,
     BookOpen,
     MapPin as MapPinIcon,
@@ -28,6 +25,7 @@ import { AttendanceReports } from './AttendanceReports';
 import TimetableManager from './TimetableManager';
 import { StudentRegistration } from './StudentRegistration';
 import { StudentManagement } from './StudentManagement';
+import MyDevices from './MyDevices';
 
 export default function Dashboard() {
     const [activeTab, setActiveTab] = useState('overview');
@@ -140,6 +138,13 @@ export default function Dashboard() {
                         isOpen={isSidebarOpen}
                         onClick={() => setActiveTab('profile')}
                     />
+                    <SidebarItem
+                        icon={<ShieldCheck />}
+                        label="My Devices"
+                        active={activeTab === 'devices'}
+                        isOpen={isSidebarOpen}
+                        onClick={() => setActiveTab('devices')}
+                    />
                 </nav>
 
                 {/* Sidebar Footer */}
@@ -204,6 +209,7 @@ export default function Dashboard() {
                         {activeTab === 'timetable' && <TimetableManager />}
                         {activeTab === 'reports' && <AttendanceReports />}
                         {activeTab === 'profile' && <Profile user={user} />}
+                        {activeTab === 'devices' && <MyDevices user={user} />}
                     </div>
                 </div>
             </main>

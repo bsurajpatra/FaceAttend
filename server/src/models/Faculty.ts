@@ -14,21 +14,36 @@ export interface TimetableDay {
   sessions: Session[];
 }
 
+export interface DeviceInfo {
+  deviceId: string;
+  deviceName: string;
+  lastLogin: Date;
+  isTrusted: boolean;
+}
+
 export interface FacultyDocument extends Document {
   name: string;
   email: string;
   username: string;
   password: string;
   timetable: TimetableDay[];
+  devices: DeviceInfo[];
   comparePassword(candidate: string): Promise<boolean>;
 }
 
+const DeviceInfoSchema = new Schema<DeviceInfo>({
+  deviceId: { type: String, required: true },
+  deviceName: { type: String, required: true },
+  lastLogin: { type: Date, default: Date.now },
+  isTrusted: { type: Boolean, default: false }
+});
+
 const SessionSchema = new Schema<Session>({
   subject: { type: String, required: true, trim: true },
-  sessionType: { 
-    type: String, 
-    required: true, 
-    enum: ['Lecture', 'Tutorial', 'Practical', 'Skill'] 
+  sessionType: {
+    type: String,
+    required: true,
+    enum: ['Lecture', 'Tutorial', 'Practical', 'Skill']
   },
   section: { type: String, required: true, trim: true },
   roomNumber: { type: String, required: true, trim: true },
@@ -46,7 +61,8 @@ const FacultySchema = new Schema<FacultyDocument>(
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     username: { type: String, required: true, unique: true, lowercase: true, trim: true },
     password: { type: String, required: true, minlength: 6 },
-    timetable: [TimetableDaySchema]
+    timetable: [TimetableDaySchema],
+    devices: [DeviceInfoSchema]
   },
   { timestamps: true }
 );

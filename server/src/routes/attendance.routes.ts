@@ -1,22 +1,23 @@
 import { Router } from 'express';
-import { 
-  startAttendanceSession, 
-  markAttendance, 
-  getAttendanceSession, 
+import {
+  startAttendanceSession,
+  markAttendance,
+  getAttendanceSession,
   getAttendanceReports,
   checkAttendanceStatus,
   getStudentAttendanceData,
   updateAttendanceLocation
 } from '../controllers/attendance.controller';
 import { verifyFacultyToken } from '../middleware/auth';
+import { verifyTrustedDevice } from '../middleware/trustedDevice';
 
 export const attendanceRouter = Router();
 
 // Start new attendance session
-attendanceRouter.post('/start', verifyFacultyToken, startAttendanceSession);
+attendanceRouter.post('/start', verifyFacultyToken, verifyTrustedDevice, startAttendanceSession);
 
 // Mark attendance using face detection
-attendanceRouter.post('/mark', verifyFacultyToken, markAttendance);
+attendanceRouter.post('/mark', verifyFacultyToken, verifyTrustedDevice, markAttendance);
 
 // Get attendance session details
 attendanceRouter.get('/session/:sessionId', verifyFacultyToken, getAttendanceSession);

@@ -6,15 +6,25 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 interface SocketContextType {
     socket: Socket | null;
     isConnected: boolean;
+    isTrusted: boolean | null;
+    setIsTrusted: (val: boolean | null) => void;
 }
 
-const SocketContext = createContext<SocketContextType>({ socket: null, isConnected: false });
+const SocketContext = createContext<SocketContextType>({ socket: null, isConnected: false, isTrusted: null, setIsTrusted: () => { } });
 
 export const useSocket = () => useContext(SocketContext);
 
 export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [socket, setSocket] = useState<Socket | null>(null);
     const [isConnected, setIsConnected] = useState(false);
+    const [isTrusted, setIsTrusted] = useState<boolean | null>(null);
+
+    // Initial load from storage
+    useEffect(() => {
+        AsyncStorage.getItem('isTrusted').then(val => {
+            if (val !== null) setIsTrusted(val === 'true');
+        });
+    }, []);
 
     useEffect(() => {
         let newSocket: Socket | null = null;
@@ -47,6 +57,17 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 setIsConnected(false);
             });
 
+            newSocket.on('devices_updated', async (data: { devices: any[] }) => {
+                console.log('Socket: Global devices_updated event received');
+                const { getDeviceId } = await import('@/utils/device');
+                const deviceId = await getDeviceId();
+                const currentDevice = data.devices.find((d: any) => d.deviceId === deviceId);
+
+                const newStatus = currentDevice ? currentDevice.isTrusted : false;
+                setIsTrusted(newStatus);
+                await AsyncStorage.setItem('isTrusted', String(newStatus));
+            });
+
             setSocket(newSocket);
         };
 
@@ -58,7 +79,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }, []);
 
     return (
-        <SocketContext.Provider value={{ socket, isConnected }}>
+        <SocketContext.Provider value={{ socket, isConnected, isTrusted, setIsTrusted }}>
             {children}
         </SocketContext.Provider>
     );
