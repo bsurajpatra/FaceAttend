@@ -113,6 +113,45 @@ export const getCurrentSession = (timetable: any[], currentTime?: Date) => {
     return null;
 };
 
+// Get next upcoming session
+export const getNextSession = (timetable: any[], currentTime?: Date) => {
+    const now = currentTime || new Date();
+    const currentDay = DAYS[now.getDay()];
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+
+    const todaySchedule = timetable && Array.isArray(timetable) && timetable.length > 0
+        ? timetable.find(day => day && day.day === currentDay)
+        : null;
+    if (!todaySchedule || !todaySchedule.sessions || todaySchedule.sessions.length === 0) return null;
+
+    const currentTimeInMinutes = currentHour * 60 + currentMinute;
+
+    let nextSession = null;
+    let minDiff = Infinity;
+
+    for (const session of todaySchedule.sessions) {
+        const firstHour = Math.min(...session.hours);
+        const slot = getTimeSlotByHour(firstHour);
+        if (!slot) continue;
+
+        const sessionStartTime = slot.startMinutes as number;
+        const diff = sessionStartTime - currentTimeInMinutes;
+
+        // If it starts in the future
+        if (diff > 0 && diff < minDiff) {
+            minDiff = diff;
+            nextSession = {
+                ...session,
+                minutesUntil: diff,
+                startTime: slot.time.split(' - ')[0]
+            };
+        }
+    }
+
+    return nextSession;
+};
+
 export const validateConsecutiveHours = (hours: number[]) => {
     if (hours.length === 0) return true;
     const sorted = [...hours].sort((a, b) => a - b);

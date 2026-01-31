@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     LayoutDashboard,
     User,
@@ -13,13 +13,18 @@ import {
     MapPin as MapPinIcon,
     History,
     UserPlus,
-    Users
+    Users,
+    Smartphone,
+    Calendar,
+    ExternalLink,
+    X
 } from 'lucide-react';
+import { io } from 'socket.io-client';
 import { cn } from '../lib/utils';
 import logoImg from '../assets/logo.png';
 import { getTimetableApi } from '../api/timetable';
 import { getProfileApi } from '../api/auth';
-import { getCurrentSession } from '../lib/timeSlots';
+import { getCurrentSession, getNextSession } from '../lib/timeSlots';
 import { Profile } from './Profile';
 import { AttendanceReports } from './AttendanceReports';
 import TimetableManager from './TimetableManager';
@@ -31,6 +36,8 @@ export default function Dashboard() {
     const [activeTab, setActiveTab] = useState('overview');
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [user, setUser] = useState<any>(null);
+    const [notifications, setNotifications] = useState<any[]>([]);
+    const [isNotificationOpen, setIsNotificationOpen] = useState(false);
 
     const [timetable, setTimetable] = useState<any[]>([]);
 
@@ -64,12 +71,89 @@ export default function Dashboard() {
         }
     }, []);
 
-    // Refresh timetable when switching to overview
+    const notifiedSessions = useRef<Set<string>>(new Set());
+
+    // Socket and Notification Logic
     useEffect(() => {
-        if (activeTab === 'overview' && user?.id) {
-            fetchTimetable(user.id);
-        }
-    }, [activeTab, user?.id]);
+        if (!user?.id) return;
+
+        const apiUrl = import.meta.env.VITE_API_URL;
+        const socketUrl = apiUrl.split(',')[0].trim();
+        const socket = io(socketUrl, {
+            transports: ['websocket'],
+            auth: { token: localStorage.getItem('token') }
+        });
+
+        socket.on('connect', () => {
+            socket.emit('join_room', `faculty_${user.id}`);
+        });
+
+        socket.on('devices_updated', () => {
+            const newNotif = {
+                id: Date.now(),
+                type: 'device',
+                title: 'Security Sync',
+                message: 'Hardware trust status updated across your devices.',
+                time: 'Just now',
+                icon: <Smartphone className="text-blue-500" size={18} />,
+                isNew: true
+            };
+            setNotifications(prev => [newNotif, ...prev.slice(0, 9)]);
+        });
+
+        // Interval for session checks
+        const checkSessions = () => {
+            const current = getCurrentSession(timetable);
+            const next = getNextSession(timetable);
+
+            const newNotifs: any[] = [];
+
+            if (current) {
+                const sessionKey = `current-${current.subject}-${current.timeSlot}-${new Date().toDateString()}`;
+                if (!notifiedSessions.current.has(sessionKey)) {
+                    notifiedSessions.current.add(sessionKey);
+                    newNotifs.push({
+                        id: 'current-' + Date.now(),
+                        type: 'current',
+                        title: 'Ongoing Session',
+                        message: `Currently: ${current.subject} (${current.timeSlot})`,
+                        time: 'Live',
+                        icon: <Clock className="text-green-500" size={18} />,
+                        isNew: true
+                    });
+                }
+            }
+
+            if (next && next.minutesUntil <= 20) {
+                const sessionKey = `reminder-${next.subject}-${next.startTime}-${new Date().toDateString()}`;
+                if (!notifiedSessions.current.has(sessionKey)) {
+                    notifiedSessions.current.add(sessionKey);
+                    newNotifs.push({
+                        id: 'reminder-' + Date.now(),
+                        type: 'reminder',
+                        title: 'Upcoming Session',
+                        message: `Starts in ${next.minutesUntil}m: ${next.subject}`,
+                        time: '20m early',
+                        icon: <Calendar className="text-orange-500" size={18} />,
+                        isNew: true,
+                        action: () => setActiveTab('timetable')
+                    });
+                }
+            }
+
+            if (newNotifs.length > 0) {
+                setNotifications(prev => [...newNotifs, ...prev].slice(0, 10));
+            }
+        };
+
+        const interval = setInterval(checkSessions, 60000); // Check every minute
+        checkSessions(); // Initial check
+
+        return () => {
+            socket.disconnect();
+            clearInterval(interval);
+        };
+    }, [user?.id, timetable]);
 
     const handleLogout = () => {
         localStorage.removeItem('token');
@@ -184,10 +268,93 @@ export default function Dashboard() {
                                 />
                             </div>
                             <div className="flex items-center gap-4">
-                                <button className="p-2 hover:bg-slate-100 rounded-lg text-slate-600 relative transition-all">
-                                    <Bell size={22} />
-                                    <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-                                </button>
+                                <div className="relative">
+                                    <button
+                                        onClick={() => setIsNotificationOpen(!isNotificationOpen)}
+                                        className={cn(
+                                            "p-2 hover:bg-slate-100 rounded-lg text-slate-600 relative transition-all",
+                                            isNotificationOpen && "bg-slate-100 text-blue-600"
+                                        )}
+                                    >
+                                        <Bell size={22} />
+                                        {notifications.some(n => n.isNew) && (
+                                            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>
+                                        )}
+                                    </button>
+
+                                    {/* Notification Dropdown */}
+                                    {isNotificationOpen && (
+                                        <div className="absolute right-0 mt-3 w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 z-[100] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                                            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                                                <h3 className="font-bold text-slate-900 flex items-center gap-2">
+                                                    Notifications
+                                                    <span className="bg-blue-100 text-blue-600 text-[10px] px-1.5 py-0.5 rounded-full font-black">
+                                                        {notifications.length}
+                                                    </span>
+                                                </h3>
+                                                <button
+                                                    onClick={() => setIsNotificationOpen(false)}
+                                                    className="p-1 hover:bg-slate-200 rounded-lg text-slate-400 transition-colors"
+                                                >
+                                                    <X size={16} />
+                                                </button>
+                                            </div>
+                                            <div className="max-h-[400px] overflow-y-auto">
+                                                {notifications.length > 0 ? (
+                                                    notifications.map((notif) => (
+                                                        <div
+                                                            key={notif.id}
+                                                            onClick={() => {
+                                                                if (notif.action) notif.action();
+                                                                setIsNotificationOpen(false);
+                                                                // Clear new status
+                                                                setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, isNew: false } : n));
+                                                            }}
+                                                            className={cn(
+                                                                "p-4 border-b border-slate-50 hover:bg-slate-50 transition-colors cursor-pointer group relative",
+                                                                notif.isNew && "bg-blue-50/30"
+                                                            )}
+                                                        >
+                                                            <div className="flex gap-4">
+                                                                <div className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center flex-shrink-0 shadow-sm group-hover:scale-110 transition-transform">
+                                                                    {notif.icon}
+                                                                </div>
+                                                                <div className="flex-1 min-w-0">
+                                                                    <div className="flex justify-between items-start mb-0.5">
+                                                                        <p className="text-sm font-bold text-slate-900 truncate">{notif.title}</p>
+                                                                        <span className="text-[10px] text-slate-400 font-medium">{notif.time}</span>
+                                                                    </div>
+                                                                    <p className="text-xs text-slate-500 leading-normal line-clamp-2">{notif.message}</p>
+                                                                    {notif.action && (
+                                                                        <div className="mt-2 flex items-center gap-1 text-[10px] font-bold text-blue-600 uppercase tracking-tight">
+                                                                            View Details <ExternalLink size={10} />
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            {notif.isNew && (
+                                                                <div className="absolute left-1 top-1/2 -translate-y-1/2 w-1 h-8 bg-blue-500 rounded-full" />
+                                                            )}
+                                                        </div>
+                                                    ))
+                                                ) : (
+                                                    <div className="p-8 text-center">
+                                                        <Bell className="mx-auto text-slate-200 mb-2" size={32} />
+                                                        <p className="text-sm text-slate-400 font-medium">No new notifications</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            {notifications.length > 0 && (
+                                                <button
+                                                    onClick={() => setNotifications([])}
+                                                    className="w-full p-3 text-xs font-bold text-slate-500 hover:text-red-500 hover:bg-red-50/50 transition-all border-t border-slate-100 bg-slate-50/30"
+                                                >
+                                                    Clear All Notifications
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
                                 <div className="h-10 w-[1px] bg-slate-200" />
                                 <div className="flex items-center gap-3 bg-slate-50 p-1 pr-4 rounded-full border border-slate-100">
                                     <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-blue-200">
