@@ -122,7 +122,8 @@ export async function login(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    if (faculty.twoFactorEnabled) {
+    // Skip 2FA for mobile app (identified by deviceId)
+    if (faculty.twoFactorEnabled && !deviceId) {
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
       const otpExpires = new Date(Date.now() + 5 * 60 * 1000); // 5 mins for 2FA
 
