@@ -16,10 +16,12 @@ export const initSocket = (httpServer: HttpServer): SocketIOServer => {
     });
 
     io.on('connection', (socket) => {
-        console.log(`Socket connected: ${socket.id}`);
+        const deviceId = socket.handshake.query.deviceId as string;
+        socket.data.deviceId = deviceId;
+        console.log(`Socket connected: ${socket.id} (Device: ${deviceId || 'Unknown'})`);
 
         socket.on('join_room', (room) => {
-            console.log(`Socket ${socket.id} joined room: ${room}`);
+            console.log(`Socket ${socket.id} (Device: ${socket.data.deviceId}) joined room: ${room}`);
             socket.join(room);
         });
 

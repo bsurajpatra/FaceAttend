@@ -85,7 +85,7 @@ export function StudentRegistration({ user, timetable }: StudentRegistrationProp
             setStatus('initiating');
             setMessage('Initiating registration...');
 
-            await http.post('/api/students/initiate', {
+            const res = await http.post('/api/students/initiate', {
                 name,
                 rollNumber,
                 subject,
@@ -93,12 +93,20 @@ export function StudentRegistration({ user, timetable }: StudentRegistrationProp
                 sessionType
             });
 
+            if (res.data.warning) {
+                setStatus('error');
+                setMessage(res.data.message);
+                return;
+            }
+
             setStatus('waiting_for_mobile');
             setMessage('Request sent! Open the mobile app to capture photo.');
         } catch (err: any) {
             console.error(err);
             setStatus('error');
-            setMessage(err.response?.data?.message || 'Failed to initiate');
+            const msg = err.response?.data?.message || 'Failed to initiate';
+            const hint = err.response?.data?.hint;
+            setMessage(hint ? `${msg}\n${hint}` : msg);
         }
     };
 
@@ -329,8 +337,8 @@ export function StudentRegistration({ user, timetable }: StudentRegistrationProp
                     </div>
 
                     {status === 'error' && (
-                        <div className="flex items-center gap-2 text-red-500 bg-red-50 p-4 rounded-xl text-sm font-bold">
-                            <AlertCircle size={16} />
+                        <div className="flex items-center gap-2 text-red-500 bg-red-50 p-4 rounded-xl text-sm font-bold whitespace-pre-wrap">
+                            <AlertCircle size={16} className="flex-shrink-0" />
                             {message}
                         </div>
                     )}

@@ -474,7 +474,38 @@ export async function initiateStudentRegistration(req: Request, res: Response): 
       return;
     }
 
-    // Check for duplicate roll number
+    // 1. Identify Trusted Device
+    const faculty = await Faculty.findById(facultyId).select('devices');
+    if (!faculty) {
+      res.status(404).json({ message: 'Faculty not found' });
+      return;
+    }
+
+    const trustedDevice = faculty.devices.find(d => d.isTrusted);
+    if (!trustedDevice) {
+      res.status(400).json({
+        message: 'No trusted mobile device found.',
+        hint: 'Please go to "My Devices" in the sidebar and trust your mobile device.'
+      });
+      return;
+    }
+
+    // 2. Helper to find socket
+    const findTrustedSocket = async () => {
+      const io = getIO();
+      const sockets = await io.in(`faculty_${facultyId}`).fetchSockets();
+
+      // Look for socket with matching deviceId
+      // Note: socket.data is available in fetchSockets() results
+      const targetSocket = sockets.find(s => {
+        const sDevice = s.data.deviceId;
+        return sDevice && sDevice.toString() === trustedDevice.deviceId;
+      });
+
+      return { io, targetSocket };
+    };
+
+    // Check for existing student
     const existingStudent = await Student.findOne({
       rollNumber,
       'enrollments.subject': subject,
@@ -485,23 +516,27 @@ export async function initiateStudentRegistration(req: Request, res: Response): 
     if (existingStudent) {
       // Allow re-initiation if face is missing OR forced
       if (req.body.forceCapture || !existingStudent.faceDescriptor || existingStudent.faceDescriptor.length === 0) {
-        // Emit capture request again
-        try {
-          const io = getIO();
-          // Emit to faculty room
-          io.to(`faculty_${facultyId}`).emit('capture_request', {
-            studentId: existingStudent._id,
-            name: existingStudent.name,
-            rollNumber: existingStudent.rollNumber,
-            subject,
-            section
+
+        const { io, targetSocket } = await findTrustedSocket();
+
+        if (!targetSocket) {
+          res.status(400).json({
+            message: `Trusted device "${trustedDevice.deviceName}" is offline.`,
+            hint: 'Please open the app on your trusted device or switch trust to a different device in "My Devices".'
           });
-        } catch (e) {
-          console.error('Socket emit error', e);
+          return;
         }
 
+        io.to(targetSocket.id).emit('capture_request', {
+          studentId: existingStudent._id,
+          name: existingStudent.name,
+          rollNumber: existingStudent.rollNumber,
+          subject,
+          section
+        });
+
         res.status(200).json({
-          message: 'Student already exists, re-requesting capture',
+          message: `Request sent to ${trustedDevice.deviceName}`,
           studentId: existingStudent._id
         });
         return;
@@ -520,22 +555,30 @@ export async function initiateStudentRegistration(req: Request, res: Response): 
       embeddings: []
     });
 
-    // Emit socket event to mobile app
-    try {
-      const io = getIO();
-      io.to(`faculty_${facultyId}`).emit('capture_request', {
+    // 3. Emit to Trusted Socket for new student
+    const { io, targetSocket } = await findTrustedSocket();
+
+    if (!targetSocket) {
+      // We created the student, but failed to connect to device.
+      // We should probably inform the user.
+      res.status(201).json({
+        message: `Student registered, but trusted device "${trustedDevice.deviceName}" is offline.`,
         studentId: newStudent._id,
-        name: newStudent.name,
-        rollNumber: newStudent.rollNumber,
-        subject,
-        section
+        warning: true
       });
-    } catch (e) {
-      console.error('Socket emit error', e);
+      return;
     }
 
+    io.to(targetSocket.id).emit('capture_request', {
+      studentId: newStudent._id,
+      name: newStudent.name,
+      rollNumber: newStudent.rollNumber,
+      subject,
+      section
+    });
+
     res.status(201).json({
-      message: 'Student initiated. Please capture photo on mobile app.',
+      message: `Request sent to ${trustedDevice.deviceName}`,
       studentId: newStudent._id
     });
 

@@ -39,12 +39,14 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             const user = JSON.parse(userStr);
             const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.5:3000'; // Fallback
             const socketUrl = apiUrl.split(',')[0].trim();
+            const deviceId = await getDeviceId();
 
-            console.log('Connecting to socket:', socketUrl);
+            console.log('Connecting to socket:', socketUrl, 'with deviceId:', deviceId);
 
             newSocket = io(socketUrl, {
                 transports: ['websocket', 'polling'],
                 auth: { token },
+                query: { deviceId },
                 reconnection: true,
                 reconnectionAttempts: 5,
                 timeout: 10000,
