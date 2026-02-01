@@ -17,7 +17,12 @@ export async function loginApi(data: LoginInput): Promise<LoginResponse> {
     deviceId,
     deviceName
   });
-  return res.data;
+  // Map server response 'currentDeviceTrusted' to 'isTrusted'
+  const responseData: any = res.data;
+  if (responseData.currentDeviceTrusted !== undefined) {
+    responseData.isTrusted = responseData.currentDeviceTrusted;
+  }
+  return responseData;
 }
 
 export type RegisterInput = { name: string; email: string; username: string; password: string };
