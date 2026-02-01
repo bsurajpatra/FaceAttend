@@ -1,0 +1,994 @@
+
+import React, { useState, useEffect, useRef } from 'react';
+import {
+    LayoutDashboard,
+    User,
+    LogOut,
+    Menu,
+    Bell,
+    Search,
+    ShieldCheck,
+    Clock,
+    BookOpen,
+    MapPin as MapPinIcon,
+    History,
+    Activity,
+    UserPlus,
+    Users,
+    Smartphone,
+    Calendar,
+    ExternalLink,
+    X,
+    CheckCircle2,
+    ShieldAlert
+} from 'lucide-react';
+import { io } from 'socket.io-client';
+import { cn } from '../lib/utils';
+import logoImg from '../assets/logo.png';
+import { getTimetableApi } from '../api/timetable';
+import { getProfileApi, logoutApi } from '../api/auth';
+import { getAttendanceReportsApi, markSessionMissedApi } from '../api/attendance';
+import { getCurrentSession, getNextSession, getRemainingMinutes, getTimeSlotByHour } from '../lib/timeSlots';
+import { Profile } from './Profile';
+import { AttendanceReports } from './AttendanceReports';
+import TimetableManager from './TimetableManager';
+import { StudentRegistration } from './StudentRegistration';
+import { StudentManagement } from './StudentManagement';
+import MyDevices from './MyDevices';
+import { FacultyActivitySummary } from './FacultyActivitySummary';
+import { AuditLog } from './AuditLog';
+
+
+export default function Dashboard() {
+    const [activeTab, setActiveTab] = useState(() => {
+        const path = window.location.pathname;
+        if (path.includes('/dashboard/registration')) return 'registration';
+        if (path.includes('/dashboard/students')) return 'students';
+        if (path.includes('/dashboard/timetable')) return 'timetable';
+        if (path.includes('/dashboard/reports')) return 'reports';
+        if (path.includes('/dashboard/audit')) return 'audit';
+        if (path.includes('/dashboard/profile')) return 'profile';
+        if (path.includes('/dashboard/devices')) return 'devices';
+        return 'overview';
+    });
+    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const [user, setUser] = useState<any>(null);
+    const [notifications, setNotifications] = useState<any[]>([]);
+    const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [showSearchResults, setShowSearchResults] = useState(false);
+    const [showMfaModal, setShowMfaModal] = useState(false);
+
+    const [timetable, setTimetable] = useState<any[]>([]);
+
+    const fetchTimetable = async (userId: string) => {
+        try {
+            const res = await getTimetableApi(userId);
+            setTimetable(res.timetable || []);
+        } catch (err) {
+            console.error('Failed to fetch timetable', err);
+        }
+    };
+
+    useEffect(() => {
+        const userData = localStorage.getItem('user');
+        if (userData) {
+            const parsedUser = JSON.parse(userData);
+            setUser(parsedUser);
+
+            // Fetch full profile from DB
+            getProfileApi()
+                .then(res => {
+                    setUser(res.user);
+                    localStorage.setItem('user', JSON.stringify(res.user));
+                    if (res.user.isFirstLogin !== undefined) {
+                        localStorage.setItem('isFirstLogin', String(res.user.isFirstLogin));
+                    }
+
+                    // Check for MFA and warn
+                    if (!res.user.twoFactorEnabled) {
+                        const mfaNotif = {
+                            id: 'mfa-warning-' + Date.now(),
+                            type: 'security_advisory',
+                            title: 'Enable MFA',
+                            message: 'Add an extra layer of security to your account by enabling Multi-Factor Authentication.',
+                            time: 'Recommended',
+                            icon: <ShieldCheck className="text-orange-500" size={18} />,
+                            isNew: true,
+                            action: () => setActiveTab('profile')
+                        };
+                        setNotifications(prev => [mfaNotif, ...prev]);
+                        setShowMfaModal(true);
+                    }
+                })
+                .catch(err => console.error('Failed to fetch profile', err));
+
+            // Fetch timetable
+            fetchTimetable(parsedUser.id);
+        } else {
+            window.location.href = '/login';
+        }
+    }, []);
+
+    const notifiedSessions = useRef<Set<string>>(new Set());
+    const searchInputRef = useRef<HTMLInputElement>(null);
+
+    const navItems = [
+        { id: 'overview', label: 'Overview', icon: <LayoutDashboard size={18} />, keywords: ['home', 'dashboard', 'main'] },
+        { id: 'registration', label: 'Student Registration', icon: <UserPlus size={18} />, keywords: ['add', 'register', 'new', 'photo', 'capture'] },
+        { id: 'students', label: 'Student Management', icon: <Users size={18} />, keywords: ['list', 'search', 'edit', 'delete', 'all students'] },
+        { id: 'timetable', label: 'Timetable', icon: <BookOpen size={18} />, keywords: ['schedule', 'classes', 'sessions', 'time'] },
+        { id: 'reports', label: 'Attendance Reports', icon: <History size={18} />, keywords: ['analytics', 'records', 'past', 'history', 'pdf', 'csv'] },
+        { id: 'audit', label: 'Security Logs', icon: <Activity size={18} />, keywords: ['audit', 'logs', 'security', 'activity', 'surveillance'] },
+        { id: 'profile', label: 'My Profile', icon: <User size={18} />, keywords: ['account', 'settings', 'password', 'email', 'mfa', 'otp', '2fa'] },
+        { id: 'devices', label: 'My Devices', icon: <ShieldCheck size={18} />, keywords: ['security', 'hardware', 'logout', 'remote', 'trust', 'mfa', 'otp', '2fa'] },
+    ];
+
+    const searchResults = searchQuery.trim() === '' ? [] : navItems.filter(item =>
+        item.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.keywords.some(k => k.toLowerCase().includes(searchQuery.toLowerCase()))
+    );
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (searchInputRef.current && !searchInputRef.current.contains(event.target as Node)) {
+                setShowSearchResults(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    // Socket and Notification Logic
+    useEffect(() => {
+        if (!user?.id) return;
+
+        const apiUrl = import.meta.env.VITE_API_URL;
+        const socketUrl = apiUrl.split(',')[0].trim();
+        const socket = io(socketUrl, {
+            transports: ['websocket', 'polling'],
+            auth: { token: localStorage.getItem('token') },
+            reconnection: true,
+            reconnectionAttempts: 5
+        });
+
+        socket.on('connect', () => {
+            socket.emit('join_room', `faculty_${user.id}`);
+        });
+
+        socket.on('devices_updated', () => {
+            const newNotif = {
+                id: Date.now(),
+                type: 'device',
+                title: 'Security Sync',
+                message: 'Hardware trust status updated across your devices.',
+                time: 'Just now',
+                icon: <Smartphone className="text-blue-500" size={18} />,
+                isNew: true
+            };
+            setNotifications(prev => [newNotif, ...prev.slice(0, 9)]);
+        });
+
+        socket.on('attendance_updated', (data) => {
+            console.log('Attendance updated:', data);
+            // We can add a notification or just let components refresh
+            if (data.type === 'session_started') {
+                const newNotif = {
+                    id: Date.now(),
+                    type: 'attendance',
+                    title: 'Session Started',
+                    message: `${data.subject} (${data.section}) attendance session is live.`,
+                    time: 'Just now',
+                    icon: <CheckCircle2 className="text-emerald-500" size={18} />,
+                    isNew: true
+                };
+                setNotifications(prev => [newNotif, ...prev.slice(0, 9)]);
+            }
+
+            // Trigger a refresh of the metrics
+            // We'll use a custom event or state change
+            window.dispatchEvent(new CustomEvent('refresh-attendance-metrics'));
+        });
+
+        socket.on('timetable_updated', (data: { timetable: any[] }) => {
+            console.log('Timetable updated via socket:', data);
+            setTimetable(data.timetable);
+
+            // Notification for sync
+            const newNotif = {
+                id: Date.now(),
+                type: 'timetable',
+                title: 'Schedule Updated',
+                message: 'Your timetable has been synchronized with the latest ERP changes.',
+                time: 'Just now',
+                icon: <Calendar className="text-blue-500" size={18} />,
+                isNew: true
+            };
+            setNotifications(prev => [newNotif, ...prev.slice(0, 9)]);
+        });
+
+        socket.on('new_audit_log', (data: { log: any }) => {
+            console.log('New audit log received:', data.log);
+            window.dispatchEvent(new CustomEvent('new-audit-log', { detail: data.log }));
+
+            if (data.log.action.includes('Login') || data.log.action.includes('Revoke') || data.log.action.includes('Logout')) {
+                const newNotif = {
+                    id: Date.now(),
+                    type: 'security',
+                    title: 'Security Alert',
+                    message: `${data.log.action}: ${data.log.details}`,
+                    time: 'Just now',
+                    icon: <ShieldCheck className="text-red-500" size={18} />,
+                    isNew: true
+                };
+                setNotifications(prev => [newNotif, ...prev.slice(0, 9)]);
+            }
+        });
+
+
+        // Interval for session checks
+        const checkSessions = () => {
+            const current = getCurrentSession(timetable);
+            const next = getNextSession(timetable);
+
+            const newNotifs: any[] = [];
+
+            if (current) {
+                const sessionKey = `current-${current.subject}-${current.timeSlot}-${new Date().toDateString()}`;
+                if (!notifiedSessions.current.has(sessionKey)) {
+                    notifiedSessions.current.add(sessionKey);
+                    newNotifs.push({
+                        id: 'current-' + Date.now(),
+                        type: 'current',
+                        title: 'Ongoing Session',
+                        message: `Currently: ${current.subject} (${current.timeSlot})`,
+                        time: 'Live',
+                        icon: <Clock className="text-green-500" size={18} />,
+                        isNew: true
+                    });
+                }
+            }
+
+            if (next && next.minutesUntil <= 20) {
+                const sessionKey = `reminder-${next.subject}-${next.startTime}-${new Date().toDateString()}`;
+                if (!notifiedSessions.current.has(sessionKey)) {
+                    notifiedSessions.current.add(sessionKey);
+                    newNotifs.push({
+                        id: 'reminder-' + Date.now(),
+                        type: 'reminder',
+                        title: 'Upcoming Session',
+                        message: `Starts in ${next.minutesUntil}m: ${next.subject}`,
+                        time: '20m early',
+                        icon: <Calendar className="text-orange-500" size={18} />,
+                        isNew: true,
+                        action: () => setActiveTab('timetable')
+                    });
+                }
+            }
+
+            if (newNotifs.length > 0) {
+                setNotifications(prev => [...newNotifs, ...prev].slice(0, 10));
+            }
+        };
+
+        const interval = setInterval(checkSessions, 60000); // Check every minute
+        checkSessions(); // Initial check
+
+        return () => {
+            socket.disconnect();
+            clearInterval(interval);
+        };
+    }, [user?.id, timetable]);
+
+    const handleLogout = async () => {
+        try {
+            await logoutApi();
+        } catch (error) {
+            console.error('Logout API failed:', error);
+        } finally {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            localStorage.removeItem('isFirstLogin');
+            window.location.href = '/login';
+        }
+    };
+
+    if (!user) return null;
+
+    return (
+        <div className="h-screen bg-slate-50 flex font-sans overflow-hidden">
+            {/* Sidebar */}
+            <aside className={cn(
+                "bg-slate-900 text-white transition-all duration-300 z-50 flex flex-col flex-shrink-0",
+                isSidebarOpen ? "w-72" : "w-20"
+            )}>
+                {/* Sidebar Header */}
+                <div className="p-6 flex items-center gap-4 border-b border-slate-800 hover:bg-slate-800/50 transition-colors cursor-pointer" onClick={() => setActiveTab('overview')}>
+                    <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center p-1 flex-shrink-0">
+                        <img src={logoImg} alt="Logo" className="w-full h-full object-contain" />
+                    </div>
+                    {isSidebarOpen && <span className="text-xl font-bold tracking-tight italic">FaceAttend</span>}
+                </div>
+
+                {/* Sidebar Content */}
+                <nav className="flex-1 p-4 space-y-2 overflow-y-auto scrollbar-hide">
+                    <SidebarItem
+                        icon={<LayoutDashboard />}
+                        label="Overview"
+                        active={activeTab === 'overview'}
+                        isOpen={isSidebarOpen}
+                        onClick={() => {
+                            setActiveTab('overview');
+                            window.history.pushState({}, '', '/dashboard');
+                        }}
+                    />
+                    <SidebarItem
+                        icon={<UserPlus />}
+                        label="Registration"
+                        active={activeTab === 'registration'}
+                        isOpen={isSidebarOpen}
+                        onClick={() => {
+                            setActiveTab('registration');
+                            window.history.pushState({}, '', '/dashboard/registration');
+                        }}
+                    />
+                    <SidebarItem
+                        icon={<Users />}
+                        label="Students"
+                        active={activeTab === 'students'}
+                        isOpen={isSidebarOpen}
+                        onClick={() => {
+                            setActiveTab('students');
+                            window.history.pushState({}, '', '/dashboard/students');
+                        }}
+                    />
+                    <SidebarItem
+                        icon={<BookOpen />}
+                        label="Timetable"
+                        active={activeTab === 'timetable'}
+                        isOpen={isSidebarOpen}
+                        onClick={() => {
+                            setActiveTab('timetable');
+                            window.history.pushState({}, '', '/dashboard/timetable');
+                        }}
+                    />
+                    <SidebarItem
+                        icon={<History />}
+                        label="Attendance Reports"
+                        active={activeTab === 'reports'}
+                        isOpen={isSidebarOpen}
+                        onClick={() => {
+                            setActiveTab('reports');
+                            window.history.pushState({}, '', '/dashboard/reports');
+                        }}
+                    />
+                    <SidebarItem
+                        icon={<Activity />}
+                        label="Security Logs"
+                        active={activeTab === 'audit'}
+                        isOpen={isSidebarOpen}
+                        onClick={() => {
+                            setActiveTab('audit');
+                            window.history.pushState({}, '', '/dashboard/audit');
+                        }}
+                    />
+                    <div className="my-2 border-t border-slate-800/50 mx-4" />
+                    <SidebarItem
+                        icon={<User />}
+                        label="My Profile"
+                        active={activeTab === 'profile'}
+                        isOpen={isSidebarOpen}
+                        onClick={() => {
+                            setActiveTab('profile');
+                            window.history.pushState({}, '', '/dashboard/profile');
+                        }}
+                    />
+                    <SidebarItem
+                        icon={<ShieldCheck />}
+                        label="My Devices"
+                        active={activeTab === 'devices'}
+                        isOpen={isSidebarOpen}
+                        onClick={() => {
+                            setActiveTab('devices');
+                            window.history.pushState({}, '', '/dashboard/devices');
+                        }}
+                    />
+                </nav>
+
+                {/* Sidebar Footer */}
+                <div className="p-4 border-t border-slate-800">
+                    <button
+                        onClick={handleLogout}
+                        className={cn(
+                            "flex items-center gap-4 w-full p-4 rounded-xl text-slate-400 hover:bg-red-500/10 hover:text-red-500 transition-all",
+                            !isSidebarOpen && "justify-center px-0"
+                        )}
+                    >
+                        <LogOut size={24} />
+                        {isSidebarOpen && <span className="font-bold uppercase tracking-widest text-sm">Logout</span>}
+                    </button>
+                </div>
+            </aside>
+
+            {/* Main Content Area */}
+            <main className="flex-1 flex flex-col h-full overflow-hidden min-w-0">
+                {/* Header */}
+                <header className="bg-white border-b border-slate-200 sticky top-0 z-40 px-6 py-4">
+                    <div className="flex justify-between items-center">
+                        <button
+                            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                            className="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-all"
+                        >
+                            <Menu size={24} />
+                        </button>
+
+                        <div className="flex items-center gap-6">
+                            <div className="relative hidden md:block" ref={searchInputRef}>
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                <input
+                                    type="text"
+                                    placeholder="Jump to (e.g. Timetable...)"
+                                    value={searchQuery}
+                                    onChange={(e) => {
+                                        setSearchQuery(e.target.value);
+                                        setShowSearchResults(true);
+                                    }}
+                                    onFocus={() => setShowSearchResults(true)}
+                                    className="pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 w-64 text-sm transition-all text-slate-900"
+                                />
+                                {showSearchResults && searchResults.length > 0 && (
+                                    <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-200 z-[100] overflow-hidden py-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                                        <p className="px-4 py-1 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Quick Results</p>
+                                        {searchResults.map((result) => (
+                                            <button
+                                                key={result.id}
+                                                onClick={() => {
+                                                    setActiveTab(result.id);
+                                                    setSearchQuery('');
+                                                    setShowSearchResults(false);
+                                                }}
+                                                className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-slate-50 transition-colors text-left group"
+                                            >
+                                                <div className="text-slate-400 group-hover:text-blue-600 transition-colors">
+                                                    {result.icon}
+                                                </div>
+                                                <span className="text-sm font-bold text-slate-700 group-hover:text-slate-900">{result.label}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <div className="relative">
+                                    <button
+                                        onClick={() => setIsNotificationOpen(!isNotificationOpen)}
+                                        className={cn(
+                                            "p-2 hover:bg-slate-100 rounded-lg text-slate-600 relative transition-all",
+                                            isNotificationOpen && "bg-slate-100 text-blue-600"
+                                        )}
+                                    >
+                                        <Bell size={22} />
+                                        {notifications.some(n => n.isNew) && (
+                                            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>
+                                        )}
+                                    </button>
+
+                                    {/* Notification Dropdown */}
+                                    {isNotificationOpen && (
+                                        <div className="absolute right-0 mt-3 w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 z-[100] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                                            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                                                <h3 className="font-bold text-slate-900 flex items-center gap-2">
+                                                    Notifications
+                                                    <span className="bg-blue-100 text-blue-600 text-[10px] px-1.5 py-0.5 rounded-full font-black">
+                                                        {notifications.length}
+                                                    </span>
+                                                </h3>
+                                                <button
+                                                    onClick={() => setIsNotificationOpen(false)}
+                                                    className="p-1 hover:bg-slate-200 rounded-lg text-slate-400 transition-colors"
+                                                >
+                                                    <X size={16} />
+                                                </button>
+                                            </div>
+                                            <div className="max-h-[400px] overflow-y-auto">
+                                                {notifications.length > 0 ? (
+                                                    notifications.map((notif) => (
+                                                        <div
+                                                            key={notif.id}
+                                                            onClick={() => {
+                                                                if (notif.action) notif.action();
+                                                                setIsNotificationOpen(false);
+                                                                // Clear new status
+                                                                setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, isNew: false } : n));
+                                                            }}
+                                                            className={cn(
+                                                                "p-4 border-b border-slate-50 hover:bg-slate-50 transition-colors cursor-pointer group relative",
+                                                                notif.isNew && "bg-blue-50/30"
+                                                            )}
+                                                        >
+                                                            <div className="flex gap-4">
+                                                                <div className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center flex-shrink-0 shadow-sm group-hover:scale-110 transition-transform">
+                                                                    {notif.icon}
+                                                                </div>
+                                                                <div className="flex-1 min-w-0">
+                                                                    <div className="flex justify-between items-start mb-0.5">
+                                                                        <p className="text-sm font-bold text-slate-900 truncate">{notif.title}</p>
+                                                                        <span className="text-[10px] text-slate-400 font-medium">{notif.time}</span>
+                                                                    </div>
+                                                                    <p className="text-xs text-slate-500 leading-normal line-clamp-2">{notif.message}</p>
+                                                                    {notif.action && (
+                                                                        <div className="mt-2 flex items-center gap-1 text-[10px] font-bold text-blue-600 uppercase tracking-tight">
+                                                                            View Details <ExternalLink size={10} />
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            {notif.isNew && (
+                                                                <div className="absolute left-1 top-1/2 -translate-y-1/2 w-1 h-8 bg-blue-500 rounded-full" />
+                                                            )}
+                                                        </div>
+                                                    ))
+                                                ) : (
+                                                    <div className="p-8 text-center">
+                                                        <Bell className="mx-auto text-slate-200 mb-2" size={32} />
+                                                        <p className="text-sm text-slate-400 font-medium">No new notifications</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            {notifications.length > 0 && (
+                                                <button
+                                                    onClick={() => setNotifications([])}
+                                                    className="w-full p-3 text-xs font-bold text-slate-500 hover:text-red-500 hover:bg-red-50/50 transition-all border-t border-slate-100 bg-slate-50/30"
+                                                >
+                                                    Clear All Notifications
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="h-10 w-[1px] bg-slate-200" />
+                                <div className="flex items-center gap-3 bg-slate-50 p-1 pr-4 rounded-full border border-slate-100">
+                                    <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-blue-200">
+                                        {user.name?.charAt(0).toUpperCase()}
+                                    </div>
+                                    <span className="text-sm font-bold text-slate-700 hidden sm:block">{user.name}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </header>
+
+                {/* Dashboard Content - Flexible scrolling area */}
+                <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 lg:p-10 scrollbar-hide">
+                    <div className="max-w-6xl mx-auto">
+                        {activeTab === 'overview' && <OverviewSection user={user} timetable={timetable} setNotifications={setNotifications} />}
+                        {activeTab === 'registration' && <StudentRegistration user={user} timetable={timetable} />}
+                        {activeTab === 'students' && <StudentManagement user={user} timetable={timetable} />}
+                        {activeTab === 'timetable' && <TimetableManager />}
+                        {activeTab === 'reports' && <AttendanceReports />}
+                        {activeTab === 'profile' && <Profile user={user} />}
+                        {activeTab === 'devices' && <MyDevices user={user} />}
+                        {activeTab === 'audit' && <AuditLog />}
+                    </div>
+                </div>
+            </main>
+
+            {/* MFA Recommendation Modal */}
+            {showMfaModal && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
+                    <div className="bg-white rounded-[2rem] w-full max-w-md p-8 shadow-2xl relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-orange-50 rounded-full blur-3xl -mt-16 -mr-16 opacity-50" />
+
+
+                        <div className="text-center mb-6 relative z-10">
+                            <div className="w-20 h-20 bg-orange-50 rounded-full flex items-center justify-center mx-auto mb-6 text-orange-500 shadow-sm border border-orange-100">
+                                <ShieldAlert size={40} />
+                            </div>
+                            <h3 className="text-2xl font-black text-slate-900 uppercase italic tracking-tight">Security Alert</h3>
+                            <p className="text-slate-500 font-medium text-sm mt-3 leading-relaxed">
+                                Your account is currently at risk. <br />
+                                <strong className="text-slate-700">Multi-Factor Authentication (MFA)</strong> is disabled.
+                            </p>
+                        </div>
+
+                        <div className="space-y-3 relative z-10">
+                            <button
+                                onClick={() => {
+                                    setShowMfaModal(false);
+                                    setActiveTab('profile');
+                                }}
+                                className="w-full py-4 bg-slate-900 text-white rounded-xl font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg shadow-slate-200 active:scale-95 flex items-center justify-center gap-2"
+                            >
+                                <ShieldCheck size={18} />
+                                ENABLE SECURITY
+                            </button>
+                            <button
+                                onClick={() => setShowMfaModal(false)}
+                                className="w-full py-4 bg-white border border-slate-200 text-slate-500 rounded-xl font-bold uppercase tracking-widest hover:bg-slate-50 transition-all hover:text-slate-700 hover:border-slate-300"
+                            >
+                                Remind Me Later
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+function SidebarItem({ icon, label, active, isOpen, onClick }: any) {
+    return (
+        <button
+            onClick={onClick}
+            className={cn(
+                "flex items-center gap-4 w-full p-4 rounded-2xl transition-all duration-200 group relative text-left",
+                active
+                    ? "bg-blue-600 text-white shadow-xl shadow-blue-600/20"
+                    : "text-slate-400 hover:bg-slate-800 hover:text-white",
+                !isOpen && "justify-center px-0"
+            )}
+        >
+            <div className={cn("flex-shrink-0 transition-transform group-hover:scale-110", active && "scale-110")}>
+                {React.cloneElement(icon, { size: 24 })}
+            </div>
+            {isOpen && <span className="font-bold text-sm uppercase tracking-widest flex-1">{label}</span>}
+            {!isOpen && active && (
+                <div className="absolute left-0 w-1 h-8 bg-white rounded-r-full" />
+            )}
+        </button>
+    );
+}
+
+function OverviewSection({ user, timetable, setNotifications }: any) {
+    const currentSession = getCurrentSession(timetable);
+    const [remainingMinutes, setRemainingMinutes] = useState<number | null>(null);
+    const [missedSessions, setMissedSessions] = useState<any[]>([]);
+    const [showMissedModal, setShowMissedModal] = useState(false);
+    const [selectedMissedSession, setSelectedMissedSession] = useState<any>(null);
+    const notifiedMissed = useRef<Set<string>>(new Set());
+
+    // Calculate missed sessions
+    useEffect(() => {
+        if (!timetable || timetable.length === 0) return;
+
+        const checkMissedSessions = async () => {
+            // 1. Get Today's Schedule
+            const now = new Date();
+            const currentDay = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][now.getDay()];
+            const todaySchedule = timetable.find((day: any) => day.day === currentDay);
+
+            if (!todaySchedule || !todaySchedule.sessions) return;
+
+            // 2. Fetch Actual Attendance Records for Today 
+            // Use local date string (YYYY-MM-DD) to ensure consistency with currentDay
+            const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+            try {
+                const report = await getAttendanceReportsApi({ startDate: todayStr, endDate: todayStr });
+                const attendedSessions = report.sessions || [];
+
+                // 3. Identify Missed Sessions
+                // 3. Identify and Group Missed Sessions
+                const missingMap = new Map();
+
+                todaySchedule.sessions.forEach((schedSession: any) => {
+                    // Check if session has ended
+                    const lastHour = Math.max(...schedSession.hours);
+                    const lastSlot = getTimeSlotByHour(lastHour);
+                    if (!lastSlot || !lastSlot.endMinutes) return;
+
+                    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+                    const isEnded = currentMinutes > lastSlot.endMinutes;
+
+                    if (!isEnded) return;
+
+                    // Check if attendance exists
+                    const hasAttendance = attendedSessions.some(att =>
+                        att.subject.trim().toUpperCase() === schedSession.subject.trim().toUpperCase() &&
+                        att.section.trim().toUpperCase() === schedSession.section.trim().toUpperCase() &&
+                        att.sessionType === schedSession.sessionType
+                    );
+
+                    if (!hasAttendance) {
+                        const key = `${schedSession.subject.trim().toUpperCase()}-${schedSession.section.trim().toUpperCase()}-${schedSession.sessionType}`;
+
+                        if (missingMap.has(key)) {
+                            // Merge hours if already exists
+                            const existing = missingMap.get(key);
+                            const mergedHours = Array.from(new Set([...existing.hours, ...schedSession.hours]));
+                            missingMap.set(key, { ...existing, hours: mergedHours });
+                        } else {
+                            missingMap.set(key, { ...schedSession });
+                        }
+                    }
+                });
+
+                const missing = Array.from(missingMap.values()).map((s: any) => {
+                    const sortedHours = [...s.hours].sort((a: number, b: number) => a - b);
+                    const firstSlot = getTimeSlotByHour(sortedHours[0]);
+                    const endSlot = getTimeSlotByHour(sortedHours[sortedHours.length - 1]);
+                    const timeSlot = firstSlot && endSlot
+                        ? `${firstSlot.time.split(' - ')[0]} - ${endSlot.time.split(' - ')[1]}`
+                        : '';
+                    return { ...s, timeSlot };
+                });
+
+                // Trigger notifications for newly discovered missed sessions
+                missing.forEach((ms: any) => {
+                    const notifKey = `${ms.subject}-${ms.section}-${ms.sessionType}-${todayStr}`;
+                    if (!notifiedMissed.current.has(notifKey)) {
+                        notifiedMissed.current.add(notifKey);
+                        setNotifications((prev: any) => [{
+                            id: 'missed-' + Date.now() + Math.random(),
+                            type: 'missed_attendance',
+                            title: 'Missed Attendance',
+                            message: `Attendance not taken for ${ms.subject} (${ms.section}). Click to provide reason.`,
+                            time: 'Action Required',
+                            icon: <ShieldAlert className="text-red-500" size={18} />,
+                            isNew: true,
+                            action: () => {
+                                window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }
+                        }, ...prev.slice(0, 9)]);
+                    }
+                });
+
+                setMissedSessions(missing);
+            } catch (err) {
+                console.error('Failed to check missed sessions', err);
+            }
+        };
+
+        checkMissedSessions();
+        const interval = setInterval(checkMissedSessions, 60000);
+        return () => clearInterval(interval);
+    }, [timetable]);
+
+    useEffect(() => {
+        if (!currentSession) {
+            setRemainingMinutes(null);
+            return;
+        }
+        const checkTime = () => {
+            const remaining = getRemainingMinutes(currentSession.hours);
+            setRemainingMinutes(remaining);
+        };
+        checkTime();
+        const interval = setInterval(checkTime, 10000);
+        return () => clearInterval(interval);
+    }, [currentSession]);
+
+    const isFirstLogin = localStorage.getItem('isFirstLogin') === 'true' || user.isFirstLogin;
+
+    return (
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 text-center max-w-4xl mx-auto">
+            <div className="space-y-2">
+                <h1 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tight">
+                    {isFirstLogin ? 'Welcome, ' : 'Welcome back, '}
+                    <span className="text-blue-600 italic">{user.name}</span> !
+                </h1>
+                <p className="text-slate-500 text-lg font-medium max-w-2xl mx-auto leading-relaxed">
+                    Manage your attendance records and profile from the ERP console.
+                </p>
+            </div>
+
+            {currentSession ? (
+                <div className="bg-white overflow-hidden rounded-[2.5rem] border border-slate-200 shadow-xl flex flex-col md:flex-row items-stretch group hover:scale-[1.01] transition-transform duration-500">
+                    <div className="bg-slate-900 p-6 md:p-8 flex flex-col items-center justify-center text-white min-w-[200px] relative overflow-hidden">
+                        <div className="absolute top-0 left-0 w-full h-full opacity-10" style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '15px 15px' }} />
+                        <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center mb-3 shadow-xl relative z-10 group-hover:rotate-12 transition-transform">
+                            <Clock size={24} />
+                        </div>
+                        <span className="text-blue-400 font-black uppercase tracking-[0.2em] text-[10px] mb-1 relative z-10">Current Session</span>
+                        <h4 className="text-2xl font-black italic tracking-tighter relative z-10">{currentSession.timeSlot}</h4>
+                    </div>
+                    <div className="flex-1 p-6 md:p-8 text-left flex flex-col justify-center relative">
+                        <div className="absolute top-0 right-0 p-6 opacity-[0.03] group-hover:opacity-[0.07] transition-opacity">
+                            <BookOpen size={100} />
+                        </div>
+                        <div className="flex items-center gap-2 mb-4">
+                            <span className="px-4 py-1 bg-blue-50 text-blue-600 text-[9px] font-black rounded-full uppercase tracking-widest border border-blue-100 italic">
+                                {currentSession.sessionType}
+                            </span>
+                            <span className="px-4 py-1 bg-emerald-50 text-emerald-600 text-[9px] font-black rounded-full uppercase tracking-widest border border-emerald-100 italic">
+                                SEC: {currentSession.section}
+                            </span>
+                        </div>
+                        <h3 className="text-3xl font-black text-slate-900 mb-4 tracking-tighter group-hover:text-blue-600 transition-colors uppercase italic">{currentSession.subject}</h3>
+                        <div className="flex items-center gap-4 text-slate-500 font-bold">
+                            <div className="flex items-center gap-2">
+                                <MapPinIcon size={18} className="text-blue-500" />
+                                <span className="text-base uppercase tracking-tight">Room {currentSession.roomNumber}</span>
+                            </div>
+                        </div>
+
+                        {remainingMinutes !== null && remainingMinutes <= 10 && remainingMinutes > 0 && (
+                            <div className={cn(
+                                "mt-6 p-4 rounded-xl flex items-center gap-3 border animate-pulse",
+                                remainingMinutes <= 1 ? "bg-red-50 text-red-700 border-red-200" :
+                                    remainingMinutes <= 5 ? "bg-orange-50 text-orange-700 border-orange-200" :
+                                        "bg-blue-50 text-blue-700 border-blue-200"
+                            )}>
+                                {remainingMinutes <= 5 ? <ShieldAlert size={20} /> : <Clock size={20} />}
+                                <span className="font-bold uppercase text-xs tracking-wide">
+                                    {remainingMinutes <= 1 ? "URGENT: Session ending in < 1 minute!" :
+                                        remainingMinutes <= 5 ? `Warning: Ending in ${remainingMinutes} mins` :
+                                            `Note: ${remainingMinutes} minutes remaining`}
+                                </span>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            ) : (
+                <div className="bg-slate-50 rounded-[2.5rem] border-2 border-dashed border-slate-200 p-10 group hover:border-slate-300 transition-colors">
+                    <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm border border-slate-100 group-hover:scale-110 transition-transform">
+                        <Clock size={28} className="text-slate-300" />
+                    </div>
+                    <h3 className="text-xl font-black text-slate-400 tracking-tight italic uppercase">No Ongoing Session</h3>
+                    <p className="text-slate-400 text-sm font-medium mt-1">Check your timetable for upcoming classes.</p>
+                </div>
+            )}
+
+            {missedSessions.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start animate-in fade-in slide-in-from-bottom-4 duration-700 delay-200">
+                    <div className="col-span-full text-left">
+                        <h3 className="text-xl font-black text-slate-900 uppercase italic tracking-tight mb-4 flex items-center gap-2">
+                            <ShieldAlert className="text-red-500" /> Pending Actions
+                        </h3>
+                    </div>
+                    {missedSessions.map((ms, i) => (
+                        <div key={i} className="bg-white rounded-[2rem] border border-red-100 shadow-xl overflow-hidden group hover:scale-[1.02] transition-transform duration-300 relative">
+                            <div className="absolute top-0 right-0 p-6 opacity-[0.05]">
+                                <ShieldAlert size={120} className="text-red-500" />
+                            </div>
+                            <div className="p-6 md:p-8 text-left">
+                                <span className="px-4 py-1 bg-red-50 text-red-600 text-[10px] font-black rounded-full uppercase tracking-widest border border-red-100 italic mb-4 inline-block">
+                                    Missed Attendance
+                                </span>
+                                <h4 className="text-2xl font-black text-slate-900 tracking-tighter mb-1">{ms.subject}</h4>
+                                <p className="text-slate-500 font-bold mb-6 text-sm flex items-center gap-2">
+                                    <span className="bg-slate-100 px-2 py-0.5 rounded text-xs">{ms.section}</span>
+                                    <span>{ms.timeSlot}</span>
+                                </p>
+
+                                <button
+                                    onClick={() => {
+                                        setSelectedMissedSession(ms);
+                                        setShowMissedModal(true);
+                                    }}
+                                    className="w-full py-3 bg-red-600 text-white rounded-xl font-bold uppercase tracking-widest hover:bg-red-700 transition-all shadow-lg shadow-red-200 text-sm flex items-center justify-center gap-2"
+                                >
+                                    Provide Reason <ExternalLink size={14} />
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {showMissedModal && selectedMissedSession && (
+                <MissedAttendanceModal
+                    session={selectedMissedSession}
+                    onClose={() => {
+                        setShowMissedModal(false);
+                        setSelectedMissedSession(null);
+                    }}
+                    onSuccess={() => {
+                        setMissedSessions(prev => prev.filter(s => s !== selectedMissedSession));
+                    }}
+                />
+            )}
+
+
+            <FacultyActivitySummary user={user} timetable={timetable} />
+        </div>
+    );
+}
+
+function MissedAttendanceModal({ session, onClose, onSuccess }: any) {
+    const [reason, setReason] = useState('Class Cancelled');
+    const [note, setNote] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const reasons = [
+        'Class Cancelled',
+        'Extra Class Taken',
+        'Technical Issue',
+        'Faculty Absent',
+        'Other'
+    ];
+
+    const handleSubmit = async () => {
+        setIsSubmitting(true);
+        const now = new Date();
+        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        try {
+            await markSessionMissedApi({
+                subject: session.subject,
+                section: session.section,
+                sessionType: session.sessionType,
+                hours: session.hours,
+                date: todayStr,
+                reason,
+                note
+            });
+            onSuccess();
+            onClose();
+        } catch (error) {
+            console.error('Failed to mark session as missed', error);
+            alert('Failed to save. Please try again.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4 animate-in fade-in duration-300">
+            <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl relative">
+                <button
+                    onClick={onClose}
+                    className="absolute right-4 top-4 text-slate-400 hover:text-slate-600"
+                >
+                    <X size={20} />
+                </button>
+
+                <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 bg-red-100 text-red-600 rounded-full flex items-center justify-center">
+                        <ShieldAlert size={20} />
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-bold text-slate-900">Missing Attendance</h3>
+                        <p className="text-xs text-slate-500">Please provide a reason for the missed session.</p>
+                    </div>
+                </div>
+
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-6">
+                    <div className="flex justify-between mb-2">
+                        <span className="text-xs font-bold text-slate-500 uppercase">Subject</span>
+                        <span className="text-xs font-black text-slate-900">{session.subject}</span>
+                    </div>
+                    <div className="flex justify-between mb-2">
+                        <span className="text-xs font-bold text-slate-500 uppercase">Section</span>
+                        <span className="text-xs font-black text-slate-900">{session.section}</span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span className="text-xs font-bold text-slate-500 uppercase">Time Slot</span>
+                        <span className="text-xs font-black text-slate-900">{session.timeSlot}</span>
+                    </div>
+                </div>
+
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-xs font-bold text-slate-700 uppercase mb-2">Reason</label>
+                        <select
+                            value={reason}
+                            onChange={(e) => setReason(e.target.value)}
+                            className="w-full p-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm font-medium"
+                        >
+                            {reasons.map(r => (
+                                <option key={r} value={r}>{r}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-bold text-slate-700 uppercase mb-2">Note (Optional)</label>
+                        <textarea
+                            value={note}
+                            onChange={(e) => setNote(e.target.value)}
+                            className="w-full p-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm font-medium h-24 resize-none"
+                            placeholder="Add any additional details..."
+                        />
+                    </div>
+
+                    <button
+                        onClick={handleSubmit}
+                        disabled={isSubmitting}
+                        className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold uppercase tracking-widest hover:bg-black transition-all shadow-lg shadow-slate-200 disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+                    >
+                        {isSubmitting ? 'Saving...' : 'Submit Reason'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, Pressable, Modal } from 'react-native';
-import { StyleSheet } from 'react-native';
+import { View, Text, Pressable, Modal, StyleSheet, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 
 type HourSelectModalProps = {
   visible: boolean;
@@ -16,17 +16,16 @@ type HourSelectModalProps = {
 
 export function HourSelectModal({ visible, onClose, onSelectHour, hours, timeSlots, subject, section, sessionType }: HourSelectModalProps) {
   const [selectedHours, setSelectedHours] = useState<number[]>([]);
+  const router = useRouter();
 
   const toggleHour = (hour: number) => {
-    setSelectedHours(prev => 
-      prev.includes(hour) 
+    setSelectedHours(prev =>
+      prev.includes(hour)
         ? prev.filter(h => h !== hour)
         : [...prev, hour]
     );
   };
 
-  const router = useRouter();
-  
   const handleSubmit = async () => {
     if (selectedHours.length > 0) {
       await router.push({
@@ -44,60 +43,71 @@ export function HourSelectModal({ visible, onClose, onSelectHour, hours, timeSlo
 
   return (
     <Modal
-      animationType="slide"
+      animationType="fade"
       transparent={true}
       visible={visible}
       onRequestClose={onClose}
     >
-      <View style={styles.centeredView}>
-        <View style={styles.modalView}>
-          <Text style={styles.modalTitle}>Select Hours</Text>
-          <Text style={styles.modalSubtitle}>Select one or multiple hours</Text>
-          
-          {hours.map((hour) => {
-            const timeSlot = timeSlots.find(slot => slot.hour === hour);
-            if (!timeSlot) return null;
-            
-            const isSelected = selectedHours.includes(hour);
-            
-            return (
-              <Pressable
-                key={hour}
-                style={styles.hourItem}
-                onPress={() => toggleHour(hour)}
-              >
-                <View style={styles.checkboxContainer}>
-                  <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-                    {isSelected && <Text style={styles.checkmark}>✓</Text>}
-                  </View>
-                </View>
-                <View style={styles.hourInfo}>
-                  <Text style={styles.hourText}>Hour {hour}</Text>
-                  <Text style={styles.timeText}>{timeSlot.time}</Text>
-                </View>
-              </Pressable>
-            );
-          })}
+      <View style={styles.overlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.header}>
+            <View style={styles.iconContainer}>
+              <Ionicons name="time" size={32} color="#2563EB" />
+            </View>
+            <Text style={styles.title}>Select Hours</Text>
+            <Text style={styles.subtitle}>Choose one or multiple sessions</Text>
+          </View>
 
-          <View style={styles.buttonContainer}>
+          <View style={styles.listContainer}>
+            {hours.map((hour) => {
+              const timeSlot = timeSlots.find(slot => slot.hour === hour);
+              if (!timeSlot) return null;
+              const isSelected = selectedHours.includes(hour);
+
+              return (
+                <Pressable
+                  key={hour}
+                  style={({ pressed }) => [
+                    styles.hourCard,
+                    isSelected && styles.hourCardSelected,
+                    pressed && styles.pressed
+                  ]}
+                  onPress={() => toggleHour(hour)}
+                >
+                  <View style={styles.hourCardLeft}>
+                    <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+                      {isSelected && <Ionicons name="checkmark" size={16} color="white" />}
+                    </View>
+                    <View style={styles.hourInfo}>
+                      <Text style={[styles.hourText, isSelected && styles.hourTextSelected]}>
+                        Hour {hour}
+                      </Text>
+                      <Text style={styles.timeText}>{timeSlot.time}</Text>
+                    </View>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <View style={styles.footer}>
             <Pressable
-              style={[styles.button, styles.cancelButton]}
+              style={({ pressed }) => [styles.button, styles.cancelButton, pressed && styles.pressed]}
               onPress={onClose}
             >
-              <Text style={styles.buttonText}>Cancel</Text>
+              <Text style={styles.cancelButtonText}>CANCEL</Text>
             </Pressable>
             <Pressable
-              style={[styles.button, styles.submitButton, selectedHours.length === 0 && styles.buttonDisabled]}
+              style={({ pressed }) => [
+                styles.button,
+                styles.submitButton,
+                selectedHours.length === 0 && styles.buttonDisabled,
+                pressed && selectedHours.length > 0 && styles.pressed
+              ]}
               onPress={handleSubmit}
               disabled={selectedHours.length === 0}
             >
-              <Text style={[
-                styles.buttonText,
-                styles.submitButtonText,
-                selectedHours.length === 0 && styles.buttonTextDisabled
-              ]}>
-                Take Attendance
-              </Text>
+              <Text style={styles.submitButtonText}>CONTINUE</Text>
             </Pressable>
           </View>
         </View>
@@ -107,104 +117,151 @@ export function HourSelectModal({ visible, onClose, onSelectHour, hours, timeSlo
 }
 
 const styles = StyleSheet.create({
-  centeredView: {
+  overlay: {
     flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    padding: 24,
   },
-  modalView: {
+  modalContent: {
     backgroundColor: 'white',
+    borderRadius: 32,
+    width: '100%',
+    maxWidth: 400,
+    shadowColor: '#2563EB',
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
+    overflow: 'hidden',
+  },
+  header: {
+    padding: 32,
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  iconContainer: {
+    width: 64,
+    height: 64,
+    backgroundColor: '#EFF6FF',
     borderRadius: 20,
-    padding: 20,
-    width: '80%',
-    maxHeight: '80%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
   },
-  modalTitle: {
+  title: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: '900',
+    color: '#1E293B',
     marginBottom: 8,
-    color: '#000',
-    textAlign: 'center',
+    letterSpacing: -0.5,
   },
-  modalSubtitle: {
+  subtitle: {
     fontSize: 14,
-    color: '#666',
-    marginBottom: 20,
+    color: '#64748B',
+    fontWeight: '500',
     textAlign: 'center',
   },
-  hourItem: {
+  listContainer: {
+    padding: 16,
+    gap: 8,
+  },
+  hourCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    padding: 16,
+    borderRadius: 20,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#F1F5F9',
   },
-  checkboxContainer: {
-    marginRight: 12,
+  hourCardSelected: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#DBEAFE',
+  },
+  hourCardLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
   },
   checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
+    width: 28,
+    height: 28,
+    borderRadius: 10,
     borderWidth: 2,
-    borderColor: '#666',
+    borderColor: '#CBD5E1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+    backgroundColor: 'white',
   },
   checkboxSelected: {
-    borderColor: '#000',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  checkmark: {
-    color: '#000',
-    fontSize: 14,
-    fontWeight: 'bold',
+    backgroundColor: '#2563EB',
+    borderColor: '#2563EB',
   },
   hourInfo: {
     flex: 1,
   },
   hourText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#000',
-    marginBottom: 4,
+    fontWeight: '700',
+    color: '#475569',
+    marginBottom: 2,
+  },
+  hourTextSelected: {
+    color: '#1E40AF',
   },
   timeText: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '500',
   },
-  buttonContainer: {
+  footer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 20,
-    gap: 10,
+    padding: 24,
+    gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
   },
   button: {
     flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+    height: 56,
+    borderRadius: 16,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   cancelButton: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#F1F5F9',
+  },
+  cancelButtonText: {
+    color: '#64748B',
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 1,
   },
   submitButton: {
-    backgroundColor: '#dc3545',
-  },
-  buttonDisabled: {
-    backgroundColor: '#ccc',
-  },
-  buttonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000',
+    backgroundColor: '#2563EB',
+    shadowColor: '#2563EB',
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
   },
   submitButtonText: {
-    color: '#fff',
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 1,
   },
-  buttonTextDisabled: {
-    color: '#666',
+  buttonDisabled: {
+    backgroundColor: '#CBD5E1',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  pressed: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.9,
   },
 });

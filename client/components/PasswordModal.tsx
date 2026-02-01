@@ -3,14 +3,16 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
+  Pressable,
   Modal,
   StyleSheet,
   Alert,
   KeyboardAvoidingView,
   Platform,
   Animated,
+  ActivityIndicator,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useKiosk } from '../contexts/KioskContext';
 
 interface PasswordModalProps {
@@ -24,7 +26,7 @@ export const PasswordModal: React.FC<PasswordModalProps> = ({ visible, onClose, 
   const [isLoading, setIsLoading] = useState(false);
   const { disableKioskMode } = useKiosk();
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
 
   // Animate modal appearance
   useEffect(() => {
@@ -46,12 +48,12 @@ export const PasswordModal: React.FC<PasswordModalProps> = ({ visible, onClose, 
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 0,
-          duration: 200,
+          duration: 250,
           useNativeDriver: true,
         }),
         Animated.timing(scaleAnim, {
-          toValue: 0.8,
-          duration: 200,
+          toValue: 0.9,
+          duration: 250,
           useNativeDriver: true,
         }),
       ]).start();
@@ -70,20 +72,17 @@ export const PasswordModal: React.FC<PasswordModalProps> = ({ visible, onClose, 
       if (success) {
         setPassword('');
         onClose();
-        // Call onSuccess callback if provided
-        if (onSuccess) {
-          onSuccess();
-        }
+        if (onSuccess) onSuccess();
       }
     } catch (error) {
-      console.error('Password verification error:', error);
-      Alert.alert('Error', 'Failed to verify password');
+      Alert.alert('Error', 'Verification failed');
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleCancel = () => {
+    if (isLoading) return;
     setPassword('');
     onClose();
   };
@@ -98,63 +97,68 @@ export const PasswordModal: React.FC<PasswordModalProps> = ({ visible, onClose, 
       <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.container}
+          style={styles.centerContainer}
         >
           <Animated.View
             style={[
               styles.modal,
-              {
-                transform: [{ scale: scaleAnim }],
-              },
+              { transform: [{ scale: scaleAnim }] },
             ]}
           >
             {/* Header */}
             <View style={styles.header}>
-              <Text style={styles.title}>Exit</Text>
-              <Text style={styles.subtitle}>
-                Enter your password to exit
-              </Text>
+              <View style={styles.iconContainer}>
+                <Ionicons name="lock-closed" size={32} color="#2563EB" />
+              </View>
+              <Text style={styles.title}>Admin Access</Text>
+              <Text style={styles.subtitle}>Enter password to disable Kiosk Mode</Text>
             </View>
 
             {/* Password Input */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Password</Text>
-              <TextInput
-                style={styles.input}
-                value={password}
-                onChangeText={setPassword}
-                placeholder="Enter your password"
-                secureTextEntry
-                autoFocus
-                editable={!isLoading}
-                onSubmitEditing={handleSubmit}
-                returnKeyType="done"
-              />
-            </View>
+            <View style={styles.form}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>PASSWORD</Text>
+                <TextInput
+                  style={styles.input}
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="••••••••"
+                  placeholderTextColor="#94A3B8"
+                  secureTextEntry
+                  autoFocus
+                  editable={!isLoading}
+                  onSubmitEditing={handleSubmit}
+                  returnKeyType="done"
+                />
+              </View>
 
-            {/* Buttons */}
-            <View style={styles.buttonContainer}>
-              <TouchableOpacity
-                style={[styles.button, styles.cancelButton]}
-                onPress={handleCancel}
-                disabled={isLoading}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
+              {/* Buttons */}
+              <View style={styles.footer}>
+                <Pressable
+                  style={({ pressed }) => [styles.btn, styles.btnCancel, pressed && styles.pressed]}
+                  onPress={handleCancel}
+                  disabled={isLoading}
+                >
+                  <Text style={styles.btnCancelText}>CANCEL</Text>
+                </Pressable>
 
-              <TouchableOpacity
-                style={[
-                  styles.button,
-                  styles.submitButton,
-                  isLoading && styles.disabledButton,
-                ]}
-                onPress={handleSubmit}
-                disabled={isLoading}
-              >
-                <Text style={styles.submitButtonText}>
-                  {isLoading ? 'Verifying...' : 'Exit'}
-                </Text>
-              </TouchableOpacity>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.btn,
+                    styles.btnSubmit,
+                    isLoading && styles.btnDisabled,
+                    pressed && !isLoading && styles.pressed
+                  ]}
+                  onPress={handleSubmit}
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <ActivityIndicator size="small" color="white" />
+                  ) : (
+                    <Text style={styles.btnSubmitText}>EXIT KIOSK</Text>
+                  )}
+                </Pressable>
+              </View>
             </View>
           </Animated.View>
         </KeyboardAvoidingView>
@@ -166,96 +170,122 @@ export const PasswordModal: React.FC<PasswordModalProps> = ({ visible, onClose, 
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  container: {
-    justifyContent: 'center',
+  centerContainer: {
+    width: '100%',
     alignItems: 'center',
-    padding: 20,
+    padding: 24,
   },
   modal: {
     backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 24,
-    height: 300,
-    width: 300,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 10,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 10,
+    borderRadius: 32,
+    width: '100%',
+    maxWidth: 340,
+    shadowColor: '#2563EB',
+    shadowOpacity: 0.2,
+    shadowRadius: 25,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 12,
+    overflow: 'hidden',
   },
   header: {
-    marginBottom: 24,
+    paddingTop: 32,
+    paddingHorizontal: 24,
     alignItems: 'center',
   },
+  iconContainer: {
+    width: 64,
+    height: 64,
+    backgroundColor: '#EFF6FF',
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
   title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#1E293B',
     marginBottom: 8,
+    letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: 16,
-    color: '#666',
+    fontSize: 14,
+    color: '#64748B',
     textAlign: 'center',
-    lineHeight: 22,
+    fontWeight: '500',
+    lineHeight: 20,
+    paddingHorizontal: 12,
   },
-  inputContainer: {
+  form: {
+    padding: 24,
+  },
+  inputGroup: {
     marginBottom: 24,
   },
   label: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#3B82F6',
+    letterSpacing: 1.5,
+    marginBottom: 10,
+    marginLeft: 4,
   },
   input: {
-    borderWidth: 2,
-    borderColor: '#e1e1e1',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    height: 56,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#F1F5F9',
+    borderRadius: 16,
+    paddingHorizontal: 20,
     fontSize: 16,
-    backgroundColor: '#f9f9f9',
-    color: '#333',
+    fontWeight: '600',
+    color: '#1E293B',
   },
-  buttonContainer: {
+  footer: {
     flexDirection: 'row',
     gap: 12,
-    marginBottom: 16,
   },
-  button: {
+  btn: {
     flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
+    height: 56,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cancelButton: {
-    backgroundColor: '#f5f5f5',
-    borderWidth: 1,
-    borderColor: '#e1e1e1',
+  btnCancel: {
+    backgroundColor: '#F1F5F9',
   },
-  submitButton: {
-    backgroundColor: '#EF4444',
+  btnCancelText: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#64748B',
+    letterSpacing: 1,
   },
-  disabledButton: {
-    backgroundColor: '#ccc',
+  btnSubmit: {
+    backgroundColor: '#2563EB',
+    shadowColor: '#2563EB',
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
   },
-  cancelButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#666',
-  },
-  submitButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
+  btnSubmitText: {
+    fontSize: 13,
+    fontWeight: '900',
     color: 'white',
-  }
+    letterSpacing: 1,
+  },
+  btnDisabled: {
+    backgroundColor: '#CBD5E1',
+    shadowOpacity: 0,
+  },
+  pressed: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.9,
+  },
 });
+
+

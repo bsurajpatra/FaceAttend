@@ -1,27 +1,24 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Image } from 'expo-image';
-import { SafeAreaView, View, Text, Animated, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, Animated, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { styles } from '@/components/styles/welcome-styles';
 import Login from '@/components/login';
-import Register from '@/components/register';
-import TimetableSetup from '@/components/timetable-setup';
-import TimetableView from '@/components/timetable-view';
 import Dashboard from '@/components/dashboard';
-import { loginApi, registerApi } from '@/api/auth';
-import { getTimetableApi, updateTimetableApi, TimetableDay } from '@/api/timetable';
+import { loginApi, logoutApi } from '@/api/auth';
+import { getTimetableApi, TimetableDay } from '@/api/timetable';
 import { useKiosk } from '@/contexts/KioskContext';
+import { useSocket } from '@/contexts/SocketContext';
+import { getDeviceId } from '@/utils/device';
 
 export default function WelcomeScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [user, setUser] = useState<{ id: string; name: string; username: string } | null>(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [showRegister, setShowRegister] = useState(false);
-  const [showTimetableSetup, setShowTimetableSetup] = useState(false);
-  const [showTimetableView, setShowTimetableView] = useState(false);
   const { setStoredPassword } = useKiosk();
   // Initialize with proper empty timetable structure
   const getEmptyTimetable = (): TimetableDay[] => [
@@ -46,12 +43,15 @@ export default function WelcomeScreen() {
       try {
         const savedUser = await AsyncStorage.getItem('user');
         const savedToken = await AsyncStorage.getItem('token');
-        
+
         if (savedUser && savedToken) {
           const parsedUser = JSON.parse(savedUser);
           setUser(parsedUser);
           setIsLoggedIn(true);
-          
+
+          const savedIsTrusted = await AsyncStorage.getItem('isTrusted');
+          setIsTrusted(savedIsTrusted === 'true');
+
           // Fetch timetable data
           try {
             const response = await getTimetableApi(parsedUser.id);
@@ -70,9 +70,44 @@ export default function WelcomeScreen() {
     checkLoginState();
   }, []);
 
+  const { socket, isTrusted, setIsTrusted } = useSocket();
+
+  useEffect(() => {
+    if (!socket || !isLoggedIn || !user) return;
+
+    const handleTimetableUpdate = (data: { timetable: TimetableDay[] }) => {
+      console.log('Socket: Received timetable_updated event');
+      setTimetable(data.timetable || getEmptyTimetable());
+    };
+
+    socket.on('timetable_updated', handleTimetableUpdate);
+
+    socket.on('force_logout', async (data: { deviceId: string }) => {
+      const deviceId = await getDeviceId();
+      console.log(`WelcomeScreen: force_logout check - incoming: ${data.deviceId}, local: ${deviceId}`);
+
+      if (data.deviceId.toLowerCase().trim() === deviceId.toLowerCase().trim()) {
+        console.log('WelcomeScreen: ID match! Logging out...');
+        // Clear saved login state
+        await AsyncStorage.removeItem('user');
+        await AsyncStorage.removeItem('token');
+        await AsyncStorage.removeItem('isTrusted');
+        setIsLoggedIn(false);
+        setUser(null);
+        setIsTrusted(null);
+        setErrorMessage(null);
+      }
+    });
+
+    return () => {
+      socket.off('timetable_updated', handleTimetableUpdate);
+      socket.off('force_logout');
+    };
+  }, [socket, isLoggedIn, user]);
+
   useEffect(() => {
     if (isLoading) return; // Don't show animation while loading
-    
+
     const delayMs = 2000; // keep logo centered for 2 seconds
     const shiftUpBy = 0;
     setTimeout(() => {
@@ -109,93 +144,28 @@ export default function WelcomeScreen() {
     );
   }
 
-  if (showTimetableView && user) {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
-        <TimetableView
-          timetable={timetable}
-          onBack={() => setShowTimetableView(false)}
-          onAdd={() => {
-            setShowTimetableView(false);
-            setShowTimetableSetup(true);
-          }}
-          onEdit={() => {
-            setShowTimetableView(false);
-            setShowTimetableSetup(true);
-          }}
-        />
-      </SafeAreaView>
-    );
-  }
-
-  if (showTimetableSetup && user) {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
-        <TimetableSetup
-          existingTimetable={timetable.length > 0 ? timetable : getEmptyTimetable()}
-          onSubmit={async (timetableData) => {
-            try {
-              setIsSubmitting(true);
-              if (user) {
-                await updateTimetableApi(user.id, timetableData);
-                setTimetable(timetableData);
-              }
-              setShowTimetableSetup(false);
-              setShowTimetableView(true);
-            } catch (error) {
-              console.error('Failed to save timetable:', error);
-            } finally {
-              setIsSubmitting(false);
-            }
-          }}
-          onSkip={() => {
-            setShowTimetableSetup(false);
-            setShowTimetableView(timetable.length > 0);
-            setIsLoggedIn(true);
-          }}
-          isSubmitting={isSubmitting}
-        />
-      </SafeAreaView>
-    );
-  }
-
   if (isLoggedIn && user) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
-        <Dashboard
-          user={user}
-          timetable={timetable}
-          onLogout={async () => {
-            // Clear saved login state
-            await AsyncStorage.removeItem('user');
-            await AsyncStorage.removeItem('token');
-            setIsLoggedIn(false);
-            setUser(null);
-            setErrorMessage(null);
-          }}
-          onTakeAttendance={(hours) => {
-            // The HourSelectModal will handle navigation to camera
-          }}
-          onTimetablePress={async () => {
-            try {
-              if (user) {
-                const response = await getTimetableApi(user.id);
-                const timetableData = response.timetable || getEmptyTimetable();
-                setTimetable(timetableData);
-                setShowTimetableView(true);
-              }
-            } catch (error) {
-              // Set empty timetable and show timetable view (will show empty state)
-              const emptyData = getEmptyTimetable();
-              setTimetable(emptyData);
-              setShowTimetableView(true);
-            }
-          }}
-          onViewReports={() => {
-            // console.log('View Reports pressed');
-          }}
-        />
-      </SafeAreaView>
+      <Dashboard
+        user={user}
+        timetable={timetable}
+        isTrusted={isTrusted ?? false}
+        onLogout={async () => {
+          // Call server-side logout for audit logging
+          await logoutApi();
+          // Clear saved login state
+          await AsyncStorage.removeItem('user');
+          await AsyncStorage.removeItem('token');
+          await AsyncStorage.removeItem('isTrusted');
+          setIsLoggedIn(false);
+          setUser(null);
+          setIsTrusted(null);
+          setErrorMessage(null);
+        }}
+        onTakeAttendance={(hours) => {
+          // The HourSelectModal will handle navigation to camera
+        }}
+      />
     );
   }
 
@@ -214,78 +184,47 @@ export default function WelcomeScreen() {
         >
           <View style={styles.content}>
             <Animated.View style={[
-          styles.headerContainer,
-          { transform: [{ translateY: headerTranslateY }, { scale: headerScale }] },
-        ]}
-        >
-          <Image
-            source={require('@/assets/images/logo.png')}
-            style={styles.logo}
-            contentFit="contain"
-            accessibilityLabel="FaceAttend logo"
-          />
-          <View style={styles.messageContainer}>
-            <Text style={styles.appName}>FaceAttend</Text>
-          </View>
+              styles.headerContainer,
+              { transform: [{ translateY: headerTranslateY }, { scale: headerScale }] },
+            ]}
+            >
+              <Image
+                source={require('@/assets/images/logo.png')}
+                style={styles.logo}
+                contentFit="contain"
+                accessibilityLabel="FaceAttend logo"
+              />
+              <View style={styles.messageContainer}>
+                <Text style={styles.appName}>FaceAttend</Text>
+              </View>
             </Animated.View>
 
             <Animated.View style={[styles.loginContainer, { opacity: loginOpacity, transform: [{ translateY: loginTranslateY }] }]}>
-              {showRegister ? (
-                <Register
-                  onSubmit={async ({ name, email, username, password, confirmPassword }) => {
-                    setErrorMessage(null);
-                    setIsSubmitting(true);
-                    try {
-                      if (password !== confirmPassword) {
-                        setErrorMessage('Passwords do not match');
-                        return;
-                      }
-                      const { token, user } = await registerApi({ name, email, username, password });
-                      // Save login state to AsyncStorage
-                      await AsyncStorage.setItem('user', JSON.stringify(user));
-                      await AsyncStorage.setItem('token', token);
-                      // Store password for kiosk mode
-                      await setStoredPassword(password);
-                      setUser(user);
-                      setIsLoggedIn(true);
-                    } catch (err: any) {
-                      const msg = err?.response?.data?.message || 'Registration failed';
-                      setErrorMessage(msg);
-                    } finally {
-                      setIsSubmitting(false);
-                    }
-                  }}
-                  onLoginPress={() => setShowRegister(false)}
-                  isSubmitting={isSubmitting}
-                  errorMessage={errorMessage}
-                />
-              ) : (
-                <Login
-                  onSubmit={async ({ username, password }) => {
-                    setErrorMessage(null);
-                    setIsSubmitting(true);
-                    try {
-                      const { token, user } = await loginApi({ username, password });
-                      // Save login state to AsyncStorage
-                      await AsyncStorage.setItem('user', JSON.stringify(user));
-                      await AsyncStorage.setItem('token', token);
-                      // Store password for kiosk mode
-                      await setStoredPassword(password);
-                      setUser(user);
-                      setIsLoggedIn(true);
-                    } catch (err: any) {
-                      const msg = err?.response?.data?.message || 'Login failed';
-                      setErrorMessage(msg);
-                    } finally {
-                      setIsSubmitting(false);
-                    }
-                  }}
-                  onRegisterPress={() => setShowRegister(true)}
-                  onForgotPasswordPress={() => {}}
-                  isSubmitting={isSubmitting}
-                  errorMessage={errorMessage}
-                />
-              )}
+              <Login
+                onSubmit={async ({ username, password }) => {
+                  setErrorMessage(null);
+                  setIsSubmitting(true);
+                  try {
+                    const { token, user, isTrusted: trusted } = await loginApi({ username, password });
+                    // Save login state to AsyncStorage
+                    await AsyncStorage.setItem('user', JSON.stringify(user));
+                    await AsyncStorage.setItem('token', token);
+                    await AsyncStorage.setItem('isTrusted', String(trusted));
+                    // Store password for kiosk mode
+                    await setStoredPassword(password);
+                    setUser(user);
+                    setIsTrusted(trusted ?? false);
+                    setIsLoggedIn(true);
+                  } catch (err: any) {
+                    const msg = err?.response?.data?.message || 'Login failed';
+                    setErrorMessage(msg);
+                  } finally {
+                    setIsSubmitting(false);
+                  }
+                }}
+                isSubmitting={isSubmitting}
+                errorMessage={errorMessage}
+              />
             </Animated.View>
           </View>
         </ScrollView>

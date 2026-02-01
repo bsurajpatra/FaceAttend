@@ -2,12 +2,20 @@ import { createApp } from './app';
 import { connectToDatabase } from './config/db';
 import { env } from './config/env';
 
+import { createServer } from 'http';
+import { initSocket } from './socket';
+
 async function bootstrap(): Promise<void> {
   await connectToDatabase();
   const app = createApp();
-  app.listen(env.port, () => {
+  const httpServer = createServer(app);
+
+  // Initialize Socket.io
+  initSocket(httpServer);
+
+  httpServer.listen(env.port, '0.0.0.0', () => {
     // eslint-disable-next-line no-console
-    console.log(`Server running on http://localhost:${env.port}`);
+    console.log(`Server running on all interfaces at port ${env.port}`);
   });
 }
 

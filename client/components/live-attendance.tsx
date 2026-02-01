@@ -1,20 +1,21 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  Alert, 
-  Platform, 
-  StatusBar, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  Alert,
+  Platform,
+  StatusBar,
   Dimensions,
-  TouchableOpacity,
+  Pressable,
   ActivityIndicator
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { Ionicons } from '@expo/vector-icons';
 import { useKiosk } from '../contexts/KioskContext';
 import { PasswordModal } from './PasswordModal';
 import { markAttendanceApi, MarkAttendanceInput } from '@/api/attendance';
-import { getTimeRange, getSessionDuration } from '@/utils/timeSlots';
+import { getTimeRange, getSessionDuration, getRemainingMinutes } from '@/utils/timeSlots';
 
 type LiveAttendanceProps = {
   sessionId: string;
@@ -43,19 +44,19 @@ type AttendanceStats = {
   total: number;
 };
 
-export default function LiveAttendance({ 
-  sessionId, 
-  subject, 
-  section, 
-  sessionType, 
-  hours, 
+export default function LiveAttendance({
+  sessionId,
+  subject,
+  section,
+  sessionType,
+  hours,
   totalStudents,
   onAttendanceMarked,
   onClose,
   existingAttendance
 }: LiveAttendanceProps) {
   const [permission, requestPermission] = useCameraPermissions();
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [attendanceStats, setAttendanceStats] = useState<AttendanceStats>(() => {
     if (existingAttendance) {
       return {
@@ -64,29 +65,25 @@ export default function LiveAttendance({
         total: totalStudents
       };
     }
-    return {
-      present: 0,
-      absent: totalStudents,
-      total: totalStudents
-    };
+    return { present: 0, absent: totalStudents, total: totalStudents };
   });
-  const [recentlyMarked, setRecentlyMarked] = useState<string[]>([]);
   const [isDetecting, setIsDetecting] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
-  const [markedStudents, setMarkedStudents] = useState<Set<string>>(new Set());
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [statusType, setStatusType] = useState<'success' | 'duplicate' | 'notfound' | 'error' | null>(null);
   const [isButtonDisabled, setIsButtonDisabled] = useState(false);
-  const [lastProcessedImage, setLastProcessedImage] = useState<string | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
-  
+  const [remainingMinutes, setRemainingMinutes] = useState<number | null>(null);
+
   const cameraRef = useRef<CameraView>(null);
   const detectionIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isCapturingRef = useRef(false);
+  const activeRequestsRef = useRef(0);
+  const analyzingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const markedStudentsRef = useRef<Set<string>>(new Set());
-  const isDetectingRef = useRef<boolean>(false);
   const { isKioskMode, enableKioskMode, showPasswordModal, setShowPasswordModal } = useKiosk();
 
-  // Initialize marked students with existing attendance data
   useEffect(() => {
     if (existingAttendance) {
       const alreadyMarked = new Set(
@@ -95,248 +92,171 @@ export default function LiveAttendance({
           .map(student => student.id)
       );
       markedStudentsRef.current = alreadyMarked;
-      setMarkedStudents(alreadyMarked);
-      
-      // Add recently marked students to the display
-      const recentlyMarkedNames = existingAttendance.markedStudents
-        .filter(student => student.isPresent)
-        .map(student => `${student.name} (${student.rollNumber})`)
-        .slice(0, 4);
-      setRecentlyMarked(recentlyMarkedNames);
     }
   }, [existingAttendance]);
 
-  // Enable kiosk mode when component mounts
   useEffect(() => {
-    const initializeKioskMode = async () => {
-      if (Platform.OS === 'android') {
-        try {
-          await enableKioskMode();
-          console.log('Kiosk mode activated for live attendance');
-        } catch (error) {
-          console.error('Failed to enable kiosk mode:', error);
-        }
-      }
-    };
-
-    initializeKioskMode();
+    if (Platform.OS === 'android') {
+      enableKioskMode().catch(console.error);
+    }
   }, []);
 
-  // Start continuous face detection
-  const startFaceDetection = useCallback(() => {
-    
-    if (detectionIntervalRef.current) {
-      clearInterval(detectionIntervalRef.current);
-      detectionIntervalRef.current = null;
-      setIsDetecting(false);
-      isDetectingRef.current = false;
+  const processFrameAsync = useCallback(async (base64: string) => {
+    activeRequestsRef.current++;
+
+    // Only show analyzing indicator if request takes > 800ms
+    if (!analyzingTimerRef.current) {
+      analyzingTimerRef.current = setTimeout(() => {
+        setIsAnalyzing(true);
+      }, 800);
     }
-    
-    if (!isInitialized) {
+
+    try {
+      const result = await markAttendanceApi({ sessionId, faceImageBase64: base64 });
+      const isAlreadyMarked = result.message === 'Student already marked present';
+
+      if (!isAlreadyMarked) {
+        setAttendanceStats({
+          present: result.attendance.present,
+          absent: result.attendance.absent,
+          total: result.attendance.total
+        });
+        markedStudentsRef.current.add(result.student.id);
+        setStatusType('success');
+        setStatusMessage(`${result.student.name} (${result.student.rollNumber || 'N/A'}) marked!`);
+        onAttendanceMarked(result);
+      } else {
+        setStatusType('duplicate');
+        setStatusMessage(`Already marked: ${result.student.name} (${result.student.rollNumber || 'N/A'})`);
+      }
+    } catch (apiError: any) {
+      if (apiError.response?.status === 404 || apiError.response?.status === 400) {
+        setStatusType('notfound');
+        setStatusMessage('Not found');
+      } else {
+        setStatusType('error');
+        setStatusMessage('Connection error');
+      }
+    } finally {
+      activeRequestsRef.current--;
+
+      // If no more active requests, clear the analyzing state and timer
+      if (activeRequestsRef.current === 0) {
+        if (analyzingTimerRef.current) {
+          clearTimeout(analyzingTimerRef.current);
+          analyzingTimerRef.current = null;
+        }
+        setIsAnalyzing(false);
+      }
+
+      // Handle status message clearing safely
+      if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
+      statusTimerRef.current = setTimeout(() => {
+        setStatusMessage(null);
+        setStatusType(null);
+        statusTimerRef.current = null;
+      }, 2500);
+    }
+  }, [sessionId, onAttendanceMarked]);
+
+  useEffect(() => {
+    if (!isDetecting || !isInitialized || !cameraRef.current) {
+      if (detectionIntervalRef.current) {
+        clearInterval(detectionIntervalRef.current);
+        detectionIntervalRef.current = null;
+      }
       return;
     }
-    
-    setIsDetecting(true);
-    isDetectingRef.current = true;
-    
-    // Small delay to ensure state is set
-    setTimeout(() => {
-      detectionIntervalRef.current = setInterval(async () => {
-      
-      if (isProcessing || !cameraRef.current || !isInitialized || !isDetectingRef.current) {
-        return;
-      }
-      
+
+    // Decoupled loop: captures frames every 2.2s without waiting for API response
+    detectionIntervalRef.current = setInterval(async () => {
+      if (isCapturingRef.current || !cameraRef.current || !isDetecting) return;
+
       try {
-        setIsProcessing(true);
-        
-        // Capture frame
+        isCapturingRef.current = true;
+
+        // Fast capture: skip processing, lower quality, no EXIF
         const photo = await cameraRef.current.takePictureAsync({
-          quality: 0.7,
+          quality: 0.3,
           base64: true,
+          skipProcessing: true,
+          exif: false,
         });
-        
-        if (!photo?.base64) {
-          setIsProcessing(false);
-          return;
-        }
-        
-        // Prevent processing the same image multiple times
-        const imageHash = photo.base64.substring(0, 100); // Use first 100 chars as simple hash
-        if (lastProcessedImage === imageHash) {
-          setIsProcessing(false);
-          return;
-        }
-        setLastProcessedImage(imageHash);
-        
-        // Process face descriptor
-        // All face recognition is handled by the Python FaceNet microservice
-        // We'll send the image directly for server-side processing
-        
-        // Mark attendance with image data for server-side processing
-        const markData: MarkAttendanceInput = {
-          sessionId,
-          faceImageBase64: photo.base64 // Send image for server-side processing
-        };
-        
-        try {
-            const result = await markAttendanceApi(markData);
-            
-            // Check server response message to determine if it's a duplicate
-            const studentId = result.student.id;
-            const isAlreadyMarked = result.message === 'Student already marked present';
-            
-            if (!isAlreadyMarked) {
-              // Update UI
-              setAttendanceStats({
-                present: result.attendance.present,
-                absent: result.attendance.absent,
-                total: result.attendance.total
-              });
-              
-              // Add to marked students set
-              markedStudentsRef.current.add(studentId);
-              setMarkedStudents(new Set(markedStudentsRef.current));
-              
-              // Show success feedback
-              setStatusType('success');
-              setStatusMessage(`✅ ${result.student.name} (ID: ${result.student.rollNumber}) marked present!`);
-              setRecentlyMarked(prev => [`${result.student.name} (${result.student.rollNumber})`, ...prev.slice(0, 4)]);
-              onAttendanceMarked(result);
-              
-              // Clear success message after 2 seconds
-              setTimeout(() => {
-                setStatusMessage(null);
-                setStatusType(null);
-              }, 2000);
-              
-              // Clear recent list after 5 seconds
-              setTimeout(() => {
-                setRecentlyMarked(prev => prev.slice(1));
-              }, 5000);
-            } else {
-              // Show duplicate punch message
-              setStatusType('duplicate');
-              setStatusMessage(`⚠️ ${result.student.name} (ID: ${result.student.rollNumber}) already marked`);
-              setTimeout(() => {
-                setStatusMessage(null);
-                setStatusType(null);
-              }, 1500);
-            }
-          } catch (apiError: any) {
-            
-            // Show user-friendly error message
-            if (apiError.response?.status === 404) {
-              setStatusType('notfound');
-              setStatusMessage('❌ No matching student found');
-            } else if (apiError.response?.status === 400) {
-              setStatusType('notfound');
-              setStatusMessage('❌ Face not recognized');
-            } else {
-              setStatusType('error');
-              setStatusMessage('❌ Detection failed');
-            }
-            
-            setTimeout(() => {
-              setStatusMessage(null);
-              setStatusType(null);
-            }, 2000);
-          }
-        } catch (error: any) {
-          // Silently handle errors to avoid interrupting detection
-        } finally {
-          setIsProcessing(false);
-        }
-      }, 3000); // Check every 3 seconds for stability
-      }, 100); // Small delay to ensure state is set
-    }, [sessionId, isInitialized, onAttendanceMarked]);
 
-  // Stop face detection
-  const stopFaceDetection = useCallback(() => {
-    if (detectionIntervalRef.current) {
-      clearInterval(detectionIntervalRef.current);
-      detectionIntervalRef.current = null;
-    }
-    setIsDetecting(false);
-    isDetectingRef.current = false;
-    setIsProcessing(false);
-    setLastProcessedImage(null); // Clear image hash
-    // DO NOT clear markedStudentsRef - we want to maintain the list of already marked students
-  }, []);
+        isCapturingRef.current = false;
 
-  // Cleanup on unmount
-  useEffect(() => {
+        if (photo?.base64) {
+          // Process asynchronously
+          processFrameAsync(photo.base64);
+        }
+      } catch (err) {
+        isCapturingRef.current = false;
+        console.error("Frame capture error:", err);
+      }
+    }, 2200);
+
     return () => {
-      stopFaceDetection();
+      if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current);
+      if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
+      if (analyzingTimerRef.current) clearTimeout(analyzingTimerRef.current);
     };
-  }, [stopFaceDetection]);
+  }, [isDetecting, isInitialized, processFrameAsync]);
 
-  // Initialize after permission is granted and camera is ready
   useEffect(() => {
     if (permission?.granted && cameraReady && !isInitialized) {
-      const timer = setTimeout(() => {
-        setIsInitialized(true);
-        console.log('Camera fully initialized and ready');
-        // Don't auto-start detection - let user control it
-      }, 1000); // Reduced wait time since camera is already ready
-      
+      const timer = setTimeout(() => setIsInitialized(true), 1000);
       return () => clearTimeout(timer);
     }
   }, [permission?.granted, cameraReady, isInitialized]);
 
+  // Check remaining time
+  useEffect(() => {
+    const checkTime = () => {
+      const remaining = getRemainingMinutes(hours);
+      setRemainingMinutes(remaining);
+
+      if (remaining <= 0 && isDetecting) {
+        setIsDetecting(false);
+        Alert.alert("Session Ended", "The attendance time slot has ended. Scanning has been stopped.");
+      }
+    };
+
+    checkTime();
+    const interval = setInterval(checkTime, 10000); // Check every 10s
+    return () => clearInterval(interval);
+  }, [hours, isDetecting]);
+
   const handleBackPress = () => {
-    if (isKioskMode) {
-      setShowPasswordModal(true);
-    } else {
-      onClose();
-    }
+    if (isKioskMode) setShowPasswordModal(true);
+    else onClose();
   };
 
   const toggleDetection = () => {
-    if (isButtonDisabled) return;
-    
-    setIsButtonDisabled(true);
-    
-    if (isDetecting) {
-      stopFaceDetection();
-    } else if (isInitialized) {
-      startFaceDetection();
+    if (isButtonDisabled || !isInitialized) return;
+
+    // Prevent starting if time is up
+    if (remainingMinutes !== null && remainingMinutes <= 0) {
+      Alert.alert("Session Ended", "Attendance cannot be taken after the time slot has ended.");
+      return;
     }
-    
-    // Re-enable button after a short delay
-    setTimeout(() => {
-      setIsButtonDisabled(false);
-    }, 1000);
+
+    setIsButtonDisabled(true);
+    setIsDetecting(prev => !prev);
+    setTimeout(() => setIsButtonDisabled(false), 1000);
   };
 
-  if (!permission) {
+  if (!permission?.granted) {
     return (
-      <View style={styles.container}>
-        <StatusBar hidden />
-        <Text style={styles.permissionText}>Requesting camera permission...</Text>
-      </View>
-    );
-  }
-
-  if (!permission.granted) {
-    return (
-      <View style={styles.container}>
-        <StatusBar hidden />
-        <Text style={styles.permissionText}>No access to camera</Text>
-        <TouchableOpacity 
-          style={styles.permissionButton}
-          onPress={requestPermission}
-        >
-          <Text style={styles.permissionButtonText}>Grant Permission</Text>
-        </TouchableOpacity>
-        {!isKioskMode && (
-          <TouchableOpacity 
-            style={[styles.permissionButton, { backgroundColor: '#666', marginTop: 10 }]}
-            onPress={onClose}
-          >
-            <Text style={styles.permissionButtonText}>Go Back</Text>
-          </TouchableOpacity>
-        )}
+      <View style={styles.centerOverlay}>
+        <Ionicons name="camera-outline" size={80} color="#2563EB" />
+        <Text style={styles.permissionTitle}>Camera Required</Text>
+        <Text style={styles.permissionSub}>To take live attendance, we need camera access.</Text>
+        <Pressable style={styles.permBtn} onPress={requestPermission}>
+          <Text style={styles.permBtnText}>GRANT PERMISSION</Text>
+        </Pressable>
+        <Pressable onPress={onClose} style={styles.backLink}>
+          <Text style={styles.backLinkText}>Go Back</Text>
+        </Pressable>
       </View>
     );
   }
@@ -344,355 +264,387 @@ export default function LiveAttendance({
   return (
     <View style={styles.container}>
       <StatusBar hidden />
-      
-      {/* Camera View */}
       <CameraView
         ref={cameraRef}
         style={styles.camera}
         facing="front"
-        onCameraReady={() => {
-          console.log('Camera ready');
-          setCameraReady(true);
-        }}
-        onMountError={(error) => {
-          console.error('Camera mount error:', error);
-        }}
+        onCameraReady={() => setCameraReady(true)}
       />
-      
-      {/* Overlay UI */}
+
       <View style={styles.overlay}>
-        {/* Top Controls */}
-        <View style={styles.topControls}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={handleBackPress}
-          >
-            <Text style={styles.backButtonText}>← Back</Text>
-          </TouchableOpacity>
-          
-          <View style={styles.sessionInfo}>
-            <Text style={styles.sessionText}>{subject} - {section}</Text>
-            <Text style={styles.sessionSubtext}>{sessionType} • {getTimeRange(hours)} ({getSessionDuration(hours)})</Text>
+        {/* Header */}
+        <View style={[styles.header, { paddingTop: Platform.OS === 'ios' ? 60 : 40 }]}>
+          <Pressable onPress={handleBackPress} style={styles.iconBtn}>
+            <Ionicons name="arrow-back" size={24} color="white" />
+          </Pressable>
+
+          <View style={styles.headerContent}>
+            <Text style={styles.headerTitle}>{subject}</Text>
+            <View style={styles.headerRow}>
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{section}</Text>
+              </View>
+              <Text style={styles.headerSub}>{getTimeRange(hours)}</Text>
+            </View>
           </View>
         </View>
 
-        {/* Detection Status */}
-        <View style={styles.detectionStatus}>
-          {!permission?.granted ? (
-            <View style={[styles.statusIndicator, styles.statusInitializing]}>
-              <ActivityIndicator size="small" color="white" />
-              <Text style={styles.statusText}>Requesting Camera Permission...</Text>
+        {/* Status Indicators */}
+        <View style={styles.statusRow}>
+          <View style={[
+            styles.statusPill,
+            isDetecting ? styles.statusPillActive : styles.statusPillInactive
+          ]}>
+            <View style={[styles.dot, isDetecting && styles.dotActive]} />
+            <Text style={styles.statusPillText}>
+              {isDetecting ? 'SCANNING' : 'PAUSED'}
+            </Text>
+          </View>
+
+          {isAnalyzing && (
+            <View style={styles.processPill}>
+              <ActivityIndicator size="small" color="#2563EB" />
+              <Text style={styles.processPillText}>ANALYZING...</Text>
             </View>
-          ) : !cameraReady ? (
-            <View style={[styles.statusIndicator, styles.statusInitializing]}>
-              <ActivityIndicator size="small" color="white" />
-              <Text style={styles.statusText}>Starting Camera...</Text>
-            </View>
-          ) : !isInitialized ? (
-            <View style={[styles.statusIndicator, styles.statusInitializing]}>
-              <ActivityIndicator size="small" color="white" />
-              <Text style={styles.statusText}>Initializing...</Text>
-            </View>
-          ) : (
-            <>
-              <View style={[styles.statusIndicator, isDetecting ? styles.statusActive : styles.statusInactive]}>
-                <Text style={styles.statusText}>
-                  {isDetecting ? '🔍 Detecting Faces...' : '⏸️ Detection Paused'}
-                </Text>
-              </View>
-              {isProcessing && (
-                <View style={styles.processingIndicator}>
-                  <ActivityIndicator size="small" color="#10B981" />
-                  <Text style={styles.processingText}>Processing...</Text>
-                </View>
-              )}
-            </>
           )}
         </View>
 
-        {/* Attendance Stats removed per request */}
+        {/* Center Guide */}
+        <View style={styles.guideContainer}>
+          <View style={styles.faceGuide} />
+        </View>
 
-        {/* Status messages moved to bottomControls to avoid overlap */}
-
-        {/* Recently Marked Students panel removed per request */}
-
-        {/* Bottom Controls */}
-        <View style={styles.bottomControls}>
+        {/* Bottom Panel */}
+        <View style={styles.bottomPanel}>
           {statusMessage && (
             <View style={[
-              styles.statusBanner,
-              styles.statusBannerTopInControls,
-              statusType === 'success' && styles.statusBannerSuccess,
-              statusType === 'duplicate' && styles.statusBannerDuplicate,
-              statusType === 'notfound' && styles.statusBannerNotFound,
-              statusType === 'error' && styles.statusBannerError,
+              styles.banner,
+              statusType === 'success' && styles.bannerSuccess,
+              statusType === 'duplicate' && styles.bannerWarning,
+              (statusType === 'notfound' || statusType === 'error') && styles.bannerError
             ]}>
-              <Text style={styles.statusBannerText}>{statusMessage}</Text>
+              <Ionicons
+                name={statusType === 'success' ? 'checkmark-circle' : 'alert-circle'}
+                size={20}
+                color="white"
+              />
+              <Text style={styles.bannerText}>{statusMessage}</Text>
             </View>
           )}
-          <TouchableOpacity
-            style={[
-              styles.controlButton, 
-              !isInitialized || isButtonDisabled ? styles.controlButtonDisabled : 
-              isDetecting ? styles.stopButton : styles.startButton
+
+          {/* Time Remaining Warnings */}
+          {remainingMinutes !== null && remainingMinutes <= 10 && remainingMinutes > 0 && (
+            <View style={[
+              styles.banner,
+              remainingMinutes <= 1 ? styles.bannerCritical :
+                remainingMinutes <= 5 ? styles.bannerWarning :
+                  styles.bannerInfo
+            ]}>
+              <Ionicons
+                name={remainingMinutes <= 5 ? "warning" : "information-circle"}
+                size={20}
+                color={remainingMinutes <= 5 ? "white" : "#2563EB"}
+              />
+              <Text style={[
+                styles.bannerText,
+                remainingMinutes > 5 && { color: '#1E293B' }
+              ]}>
+                {remainingMinutes <= 1 ? "URGENT: Session ending in < 1 minute!" :
+                  remainingMinutes <= 5 ? `Warning: Session ending in ${remainingMinutes} mins` :
+                    `Note: ${remainingMinutes} minutes remaining in session`}
+              </Text>
+            </View>
+          )}
+
+          {remainingMinutes !== null && remainingMinutes <= 0 && (
+            <View style={[styles.banner, styles.bannerError]}>
+              <Ionicons name="lock-closed" size={20} color="white" />
+              <Text style={styles.bannerText}>Session Ended</Text>
+            </View>
+          )}
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.mainBtn,
+              !isInitialized ? styles.btnLocked : isDetecting ? styles.btnStop : styles.btnStart,
+              pressed && styles.pressed
             ]}
             onPress={toggleDetection}
             disabled={!isInitialized || isButtonDisabled}
           >
-            <Text style={[
-              styles.controlButtonText,
-              (!isInitialized || isButtonDisabled) && styles.controlButtonTextDisabled
-            ]}>
-              {!permission?.granted ? '⏳ Requesting Permission...' :
-               !cameraReady ? '⏳ Starting Camera...' :
-               !isInitialized ? '⏳ Initializing...' : 
-               isButtonDisabled ? '⏳ Processing...' :
-               isDetecting ? '⏸️ Pause Detection' : '▶️ Start Detection'}
-            </Text>
-          </TouchableOpacity>
+            {isButtonDisabled ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <>
+                <Ionicons
+                  name={isDetecting ? 'pause-circle' : 'play-circle'}
+                  size={24}
+                  color="white"
+                />
+                <Text style={styles.mainBtnText}>
+                  {isDetecting ? 'PAUSE SCANNING' : 'START SCANNING'}
+                </Text>
+              </>
+            )}
+          </Pressable>
         </View>
       </View>
 
-      {/* Password Modal */}
       <PasswordModal
         visible={showPasswordModal}
         onClose={() => setShowPasswordModal(false)}
-        onSuccess={() => {
-          onClose();
-        }}
+        onSuccess={onClose}
       />
     </View>
   );
 }
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'black',
+    backgroundColor: '#0F172A',
   },
   camera: {
     flex: 1,
   },
-  overlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    pointerEvents: 'box-none',
-  },
-  topControls: {
-    position: 'absolute',
-    top: Platform.OS === 'android' ? 20 : 50,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  centerOverlay: {
+    flex: 1,
+    backgroundColor: 'white',
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    zIndex: 1,
+    padding: 32,
   },
-  backButton: {
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  backButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  sessionInfo: {
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    alignItems: 'center',
-  },
-  sessionText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  sessionSubtext: {
-    color: '#ccc',
-    fontSize: 12,
-    marginTop: 2,
-  },
-  detectionStatus: {
-    position: 'absolute',
-    top: Platform.OS === 'android' ? 100 : 130,
-    left: 20,
-    right: 20,
-    alignItems: 'center',
-  },
-  statusIndicator: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+  permissionTitle: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#1E293B',
+    marginTop: 24,
     marginBottom: 8,
   },
-  statusActive: {
-    backgroundColor: 'rgba(16, 185, 129, 0.8)',
+  permissionSub: {
+    fontSize: 16,
+    color: '#64748B',
+    textAlign: 'center',
+    marginBottom: 40,
+    lineHeight: 24,
   },
-  statusInactive: {
-    backgroundColor: 'rgba(239, 68, 68, 0.8)',
+  permBtn: {
+    backgroundColor: '#2563EB',
+    width: '100%',
+    height: 60,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#2563EB',
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
   },
-  statusInitializing: {
-    backgroundColor: 'rgba(59, 130, 246, 0.8)',
+  permBtnText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  backLink: {
+    marginTop: 20,
+    padding: 12,
+  },
+  backLinkText: {
+    color: '#64748B',
+    fontWeight: '700',
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(15, 23, 42, 0.3)',
+  },
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 24,
+    gap: 16,
+  },
+  iconBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerContent: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    padding: 12,
+    borderRadius: 16,
+  },
+  headerTitle: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '900',
+    letterSpacing: -0.5,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
     gap: 8,
   },
-  statusText: {
+  badge: {
+    backgroundColor: '#2563EB',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  badgeText: {
     color: 'white',
-    fontSize: 14,
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  headerSub: {
+    color: '#CBD5E1',
+    fontSize: 12,
     fontWeight: '600',
   },
-  processingIndicator: {
+  statusRow: {
+    flexDirection: 'row',
+    padding: 24,
+    gap: 12,
+    justifyContent: 'center',
+  },
+  statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 15,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(15, 23, 42, 0.8)',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
-  processingText: {
-    color: '#10B981',
-    fontSize: 12,
-    marginLeft: 6,
-    fontWeight: '500',
+  statusPillActive: {
+    borderColor: '#10B981',
+    backgroundColor: 'rgba(15, 23, 42, 0.9)',
   },
-  statsContainer: {
-    position: 'absolute',
-    top: Platform.OS === 'android' ? 180 : 210,
-    left: 20,
-    right: 20,
+  statusPillInactive: {
+    borderColor: '#EF4444',
+    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#EF4444',
+  },
+  dotActive: {
+    backgroundColor: '#10B981',
+    shadowColor: '#10B981',
+    shadowRadius: 4,
+    shadowOpacity: 0.8,
+  },
+  statusPillText: {
+    color: 'white',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  processPill: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingVertical: 16,
-    borderRadius: 12,
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: 'white',
+    gap: 8,
+    shadowColor: '#2563EB',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
-  statItem: {
+  processPillText: {
+    color: '#1E293B',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  guideContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  faceGuide: {
+    width: width * 0.7,
+    height: width * 0.9,
+    borderRadius: 140,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    borderStyle: 'dashed',
+  },
+  bottomPanel: {
+    padding: 24,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
     alignItems: 'center',
   },
-  statNumber: {
-    color: 'white',
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  statLabel: {
-    color: '#ccc',
-    fontSize: 12,
-    marginTop: 4,
-  },
-  recentlyMarked: {
-    position: 'absolute',
-    top: Platform.OS === 'android' ? 280 : 310,
-    left: 20,
-    right: 20,
-    backgroundColor: 'rgba(16, 185, 129, 0.9)',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
-    maxHeight: 120,
-  },
-  recentlyMarkedTitle: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  recentlyMarkedItem: {
-    color: 'white',
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  // Removed old successMessage styles
-  statusBanner: {
-    marginTop: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  statusBannerSuccess: {
-    backgroundColor: 'rgba(16, 185, 129, 0.95)',
-  },
-  statusBannerDuplicate: {
-    backgroundColor: 'rgba(234, 179, 8, 0.95)',
-  },
-  statusBannerNotFound: {
-    backgroundColor: 'rgba(239, 68, 68, 0.95)',
-  },
-  statusBannerError: {
-    backgroundColor: 'rgba(239, 68, 68, 0.95)',
-  },
-  statusBannerText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  statusBannerTopInControls: {
-    marginBottom: 12,
-    alignSelf: 'stretch',
-  },
-  statusBannerBottomInControls: {
-    marginTop: 12,
-    alignSelf: 'stretch',
-  },
-  bottomControls: {
-    position: 'absolute',
-    bottom: Platform.OS === 'android' ? 30 : 50,
-    left: 0,
-    right: 0,
+  banner: {
+    flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-  },
-  controlButton: {
-    paddingHorizontal: 24,
     paddingVertical: 12,
-    borderRadius: 25,
-    minWidth: 200,
-    alignItems: 'center',
-  },
-  startButton: {
-    backgroundColor: 'rgba(16, 185, 129, 0.8)',
-  },
-  stopButton: {
-    backgroundColor: 'rgba(239, 68, 68, 0.8)',
-  },
-  controlButtonDisabled: {
-    backgroundColor: 'rgba(107, 114, 128, 0.8)',
-  },
-  controlButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  controlButtonTextDisabled: {
-    color: '#D1D5DB',
-  },
-  permissionText: {
-    color: 'white',
-    fontSize: 18,
-    textAlign: 'center',
+    borderRadius: 16,
     marginBottom: 20,
+    gap: 10,
+    width: '100%',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
   },
-  permissionButton: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
+  bannerSuccess: { backgroundColor: '#10B981' },
+  bannerWarning: { backgroundColor: '#F59E0B' },
+  bannerError: { backgroundColor: '#EF4444' },
+  bannerInfo: { backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE' },
+  bannerCritical: { backgroundColor: '#DC2626', borderWidth: 2, borderColor: '#991B1B' },
+  bannerText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: -0.2,
   },
-  permissionButtonText: {
+  mainBtn: {
+    width: '100%',
+    height: 72,
+    borderRadius: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  btnStart: {
+    backgroundColor: '#2563EB',
+    shadowColor: '#2563EB',
+    shadowOpacity: 0.4,
+    shadowRadius: 15,
+    shadowOffset: { width: 0, height: 8 },
+  },
+  btnStop: {
+    backgroundColor: '#EF4444',
+    shadowColor: '#EF4444',
+    shadowOpacity: 0.4,
+    shadowRadius: 15,
+    shadowOffset: { width: 0, height: 8 },
+  },
+  btnLocked: {
+    backgroundColor: '#64748B',
+  },
+  mainBtnText: {
     color: 'white',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  pressed: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.9,
   },
 });

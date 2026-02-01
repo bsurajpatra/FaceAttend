@@ -23,20 +23,24 @@ export const TIME_SLOTS: TimeSlot[] = [
   { hour: 10, time: '3:50 - 4:40', startMinutes: 15 * 60 + 50, endMinutes: 16 * 60 + 40, duration: '50 mins' },
   { hour: 11, time: '4:40 - 5:30', startMinutes: 16 * 60 + 40, endMinutes: 17 * 60 + 30, duration: '50 mins' },
   { hour: 12, time: '5:30 - 6:20', startMinutes: 17 * 60 + 30, endMinutes: 18 * 60 + 20, duration: '50 mins' },
-  { hour: 13, time: '12:00 - 12:50', startMinutes: 0 * 60 + 0, endMinutes: 0 * 60 + 50, duration: '50 mins' },
-  // Additional time slots - add more as needed for 24-hour flexibility
-  { hour: 14, time: '6:20 - 7:20', startMinutes: 18 * 60 + 20, endMinutes: 19 * 60 + 20, duration: '50 mins' },
-  // { hour: 15, time: '7:30 - 8:20', startMinutes: 19 * 60 + 30, endMinutes: 20 * 60 + 20, duration: '50 mins' },
-  // { hour: 16, time: '8:30 - 9:20', startMinutes: 20 * 60 + 30, endMinutes: 21 * 60 + 20, duration: '50 mins' },
-  // { hour: 17, time: '9:30 - 10:20', startMinutes: 21 * 60 + 30, endMinutes: 22 * 60 + 20, duration: '50 mins' },
-  // { hour: 18, time: '10:30 - 11:20', startMinutes: 22 * 60 + 30, endMinutes: 23 * 60 + 20, duration: '50 mins' },
-  // { hour: 19, time: '11:30 - 12:20', startMinutes: 23 * 60 + 30, endMinutes: 24 * 60 + 20, duration: '50 mins' },
-  { hour: 20, time: '1:00 - 1:50', startMinutes: 1 * 60 + 0, endMinutes: 1 * 60 + 50, duration: '50 mins' },
-  // { hour: 21, time: '2:00 - 2:50', startMinutes: 2 * 60 + 0, endMinutes: 2 * 60 + 50, duration: '50 mins' },
-  // { hour: 22, time: '3:00 - 3:50', startMinutes: 3 * 60 + 0, endMinutes: 3 * 60 + 50, duration: '50 mins' },
-  // { hour: 23, time: '4:00 - 4:50', startMinutes: 4 * 60 + 0, endMinutes: 4 * 60 + 50, duration: '50 mins' },
-  // { hour: 24, time: '5:00 - 5:50', startMinutes: 5 * 60 + 0, endMinutes: 5 * 60 + 50, duration: '50 mins' },
+
+  // Evening / Flexible Slots
+  { hour: 13, time: '6:20 - 7:20', startMinutes: 18 * 60 + 20, endMinutes: 19 * 60 + 20, duration: '50 mins' },
+  { hour: 14, time: '7:30 - 8:20', startMinutes: 19 * 60 + 30, endMinutes: 20 * 60 + 20, duration: '50 mins' },
+  { hour: 15, time: '8:30 - 9:20', startMinutes: 20 * 60 + 30, endMinutes: 21 * 60 + 20, duration: '50 mins' },
+  { hour: 16, time: '9:30 - 10:20', startMinutes: 21 * 60 + 30, endMinutes: 22 * 60 + 20, duration: '50 mins' },
+  { hour: 17, time: '10:30 - 11:20', startMinutes: 22 * 60 + 30, endMinutes: 23 * 60 + 20, duration: '50 mins' },
+  { hour: 18, time: '11:30 - 12:20', startMinutes: 23 * 60 + 30, endMinutes: 24 * 60 + 20, duration: '50 mins' },
+
+  // Midnight Shift / Late Night Availability
+  { hour: 19, time: '1:00 - 1:50', startMinutes: 1 * 60 + 0, endMinutes: 1 * 60 + 50, duration: '50 mins' },
+  { hour: 20, time: '2:00 - 2:50', startMinutes: 2 * 60 + 0, endMinutes: 2 * 60 + 50, duration: '50 mins' },
+  { hour: 21, time: '3:00 - 3:50', startMinutes: 3 * 60 + 0, endMinutes: 3 * 60 + 50, duration: '50 mins' },
+  { hour: 22, time: '4:00 - 4:50', startMinutes: 4 * 60 + 0, endMinutes: 4 * 60 + 50, duration: '50 mins' },
+  { hour: 23, time: '5:00 - 5:50', startMinutes: 5 * 60 + 0, endMinutes: 5 * 60 + 50, duration: '50 mins' },
+  { hour: 24, time: '6:00 - 6:50', startMinutes: 6 * 60 + 0, endMinutes: 6 * 60 + 50, duration: '50 mins' },
 ];
+
 
 // Days of the week
 export const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -85,8 +89,8 @@ export const getCurrentSession = (timetable: any[], currentTime?: Date) => {
   const currentMinute = now.getMinutes();
 
   // Find today's schedule
-  const todaySchedule = timetable && Array.isArray(timetable) && timetable.length > 0 
-    ? timetable.find(day => day && day.day === currentDay) 
+  const todaySchedule = timetable && Array.isArray(timetable) && timetable.length > 0
+    ? timetable.find(day => day && day.day === currentDay)
     : null;
   if (!todaySchedule || !todaySchedule.sessions || todaySchedule.sessions.length === 0) return null;
 
@@ -118,4 +122,21 @@ export const getCurrentSession = (timetable: any[], currentTime?: Date) => {
   }
 
   return null;
+};
+
+export const getRemainingMinutes = (hours: number[], currentTime?: Date): number => {
+  const now = currentTime || new Date();
+  const currentHour = now.getHours();
+  const currentMinute = now.getMinutes();
+
+  if (!hours || hours.length === 0) return 0;
+
+  const sortedHours = [...hours].sort((a, b) => a - b);
+  const lastHour = sortedHours[sortedHours.length - 1];
+  const lastSlot = getTimeSlotByHour(lastHour);
+
+  if (!lastSlot || lastSlot.endMinutes === undefined) return 0;
+
+  const currentTimeInMinutes = currentHour * 60 + currentMinute;
+  return lastSlot.endMinutes - currentTimeInMinutes;
 };

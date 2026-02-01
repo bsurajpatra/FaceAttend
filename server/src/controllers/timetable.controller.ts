@@ -1,21 +1,23 @@
 import { Request, Response } from 'express';
 import { Faculty } from '../models/Faculty';
+import { getIO } from '../socket';
+import { createAuditLog } from '../utils/auditLogger';
 
 // Check for overlapping hours within the same day
 function hasOverlappingHours(timetable: any[]): { hasOverlap: boolean; conflictDetails?: string } {
   for (const day of timetable) {
     if (!day.sessions || day.sessions.length <= 1) continue;
-    
+
     // Check each session against all other sessions on the same day
     for (let i = 0; i < day.sessions.length; i++) {
       for (let j = i + 1; j < day.sessions.length; j++) {
         const session1 = day.sessions[i];
         const session2 = day.sessions[j];
-        
+
         // Check if any hours overlap
         const hours1 = new Set(session1.hours);
         const hours2 = new Set(session2.hours);
-        
+
         for (const hour of hours1) {
           if (hours2.has(hour)) {
             return {
@@ -27,7 +29,7 @@ function hasOverlappingHours(timetable: any[]): { hasOverlap: boolean; conflictD
       }
     }
   }
-  
+
   return { hasOverlap: false };
 }
 
@@ -45,51 +47,51 @@ export async function updateTimetable(req: Request, res: Response): Promise<void
     for (const day of timetable) {
       // Skip validation if no sessions exist (allows empty timetable)
       if (!day.sessions || day.sessions.length === 0) continue;
-      
+
       for (const session of day.sessions) {
         if (!session.subject?.trim()) {
-          res.status(400).json({ 
+          res.status(400).json({
             message: `Subject is required for a session on ${day.day}`,
             field: 'subject'
           });
           return;
         }
         if (!session.section?.trim()) {
-          res.status(400).json({ 
+          res.status(400).json({
             message: `Section is required for ${session.subject} on ${day.day}`,
             field: 'section'
           });
           return;
         }
         if (!session.sessionType || !['Lecture', 'Tutorial', 'Practical', 'Skill'].includes(session.sessionType)) {
-          res.status(400).json({ 
+          res.status(400).json({
             message: `Invalid session type for ${session.subject} on ${day.day}`,
             field: 'sessionType'
           });
           return;
         }
         if (!session.hours || session.hours.length === 0) {
-          res.status(400).json({ 
+          res.status(400).json({
             message: `Time slots are required for ${session.subject} on ${day.day}`,
             field: 'hours'
           });
           return;
         }
-        
+
         // Validate hour range and consecutive hours
         if (!session.hours.every((hour: number) => hour >= 1 && hour <= 24)) {
-          res.status(400).json({ 
+          res.status(400).json({
             message: `Invalid hour range for ${session.subject} on ${day.day}. Hours must be between 1-24`,
             field: 'hours'
           });
           return;
         }
-        
+
         // Validate consecutive hours
         const sortedHours = [...session.hours].sort((a, b) => a - b);
         for (let i = 1; i < sortedHours.length; i++) {
           if (sortedHours[i] - sortedHours[i - 1] !== 1) {
-            res.status(400).json({ 
+            res.status(400).json({
               message: `Hours must be consecutive for ${session.subject} on ${day.day}`,
               field: 'hours'
             });
@@ -102,7 +104,7 @@ export async function updateTimetable(req: Request, res: Response): Promise<void
     // Check for overlapping hours
     const overlapCheck = hasOverlappingHours(timetable);
     if (overlapCheck.hasOverlap) {
-      res.status(400).json({ 
+      res.status(400).json({
         message: `Schedule conflict detected: ${overlapCheck.conflictDetails}`,
         field: 'hours',
         conflict: overlapCheck.conflictDetails
@@ -121,6 +123,24 @@ export async function updateTimetable(req: Request, res: Response): Promise<void
       return;
     }
 
+    // Notify the client via socket for immediate dashboard refresh
+    try {
+      const io = getIO();
+      io.to(`faculty_${facultyId}`).emit('timetable_updated', {
+        timetable: faculty.timetable
+      });
+    } catch (socketErr) {
+      console.warn('Socket emission failed for timetable update:', socketErr);
+    }
+
+    // Audit Log
+    createAuditLog({
+      action: 'Timetable Updated',
+      details: 'Faculty updated their weekly timetable schedule',
+      req,
+      facultyId
+    });
+
     res.json({
       message: 'Timetable updated successfully',
       timetable: faculty.timetable
@@ -128,12 +148,12 @@ export async function updateTimetable(req: Request, res: Response): Promise<void
   } catch (err) {
     const error = err as any;
     console.error('Timetable update error:', error);
-    
+
     if (error.name === 'ValidationError' && error.errors) {
       // Extract the first validation error message
       const errorField = Object.keys(error.errors)[0];
       const errorMessage = error.errors[errorField].message;
-      res.status(400).json({ 
+      res.status(400).json({
         message: errorMessage,
         field: errorField.split('.').pop() // Get the last part of the path
       });
@@ -148,7 +168,7 @@ export async function getTimetable(req: Request, res: Response): Promise<void> {
     const { facultyId } = req.params;
 
     const faculty = await Faculty.findById(facultyId).select('timetable');
-    
+
     if (!faculty) {
       res.status(404).json({ message: 'Faculty not found' });
       return;
@@ -164,12 +184,12 @@ export async function getTimetable(req: Request, res: Response): Promise<void> {
       { day: 'Saturday', sessions: [] },
       { day: 'Sunday', sessions: [] }
     ];
-    
+
     // Check if timetable is undefined, null, or empty array
     const timetableData = (!faculty.timetable || faculty.timetable.length === 0) ? emptyTimetable : faculty.timetable;
     console.log('Server: faculty.timetable:', faculty.timetable);
     console.log('Server: returning timetableData:', timetableData);
-    
+
     res.json({ timetable: timetableData });
   } catch (error) {
     console.error('Get timetable error:', error);

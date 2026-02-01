@@ -1,7 +1,10 @@
-import React from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, Pressable, ScrollView, Platform } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { styles } from './styles/timetable-view-styles';
 import { TIME_SLOTS, getTimeRange, getSessionDuration } from '@/utils/timeSlots';
+import { Sidebar } from './sidebar';
 
 type Session = {
   subject: string;
@@ -18,118 +21,110 @@ type TimetableDay = {
 
 type TimetableViewProps = {
   timetable: TimetableDay[];
-  onEdit?: () => void;
-  onAdd?: () => void;
   onBack?: () => void;
+  onLogout?: () => void;
 };
 
 
-export default function TimetableView({ timetable, onEdit, onAdd, onBack }: TimetableViewProps) {
+export default function TimetableView({ timetable, onBack, onLogout }: TimetableViewProps) {
+  const insets = useSafeAreaInsets();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // More robust check for empty timetable
   const hasTimetable = () => {
-    if (!timetable || !Array.isArray(timetable)) {
-      console.log('TimetableView: timetable is not an array:', timetable);
-      return false;
-    }
-    if (timetable.length === 0) {
-      console.log('TimetableView: timetable is empty array');
-      return false;
-    }
-    
-    // Check if any day has sessions
-    const hasSessions = timetable.some(day => day && day.sessions && Array.isArray(day.sessions) && day.sessions.length > 0);
-    console.log('TimetableView: hasSessions:', hasSessions, 'timetable:', JSON.stringify(timetable, null, 2));
-    return hasSessions;
+    if (!timetable || !Array.isArray(timetable)) return false;
+    return timetable.some(day => day?.sessions?.length > 0);
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
+      <Sidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        activeRoute="/timetable"
+        onLogout={onLogout}
+      />
+
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <Pressable
-          onPress={onBack}
+          onPress={() => setSidebarOpen(true)}
           style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
-          accessibilityRole="button"
-          accessibilityLabel="Back to Dashboard"
         >
-          <Text style={styles.backButtonText}>← Back</Text>
+          <Ionicons name="menu" size={24} color="white" />
         </Pressable>
-        <Text style={styles.title}>Timetable</Text>
-        {hasTimetable() && (
-          <Pressable
-            onPress={onEdit}
-            style={({ pressed }) => [styles.headerEditButton, pressed && styles.headerEditButtonPressed]}
-            accessibilityRole="button"
-            accessibilityLabel="Edit Timetable"
-          >
-            <Text style={styles.headerEditButtonText}>Edit</Text>
-          </Pressable>
-        )}
-        {!hasTimetable() && <View style={styles.placeholder} />}
+        <Text style={styles.title}>Your Schedule</Text>
+        <View style={{ width: 44 }} />
       </View>
 
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
+        {/* Info Banner */}
+        <View style={{ marginHorizontal: 20, marginTop: 16, marginBottom: 8, padding: 12, backgroundColor: '#EFF6FF', borderRadius: 12, borderLeftWidth: 4, borderLeftColor: '#3B82F6' }}>
+          <Text style={{ fontSize: 13, color: '#1E40AF', lineHeight: 18 }}>
+            To update or modify your timetable, please visit the <Text style={{ fontWeight: '700' }}>ERP Portal</Text>.
+          </Text>
+        </View>
+
         {!hasTimetable() ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyTitle}>No Timetable Set</Text>
+            <View style={{ backgroundColor: '#F1F5F9', padding: 32, borderRadius: 40, marginBottom: 24 }}>
+              <Ionicons name="calendar-outline" size={80} color="#94A3B8" />
+            </View>
+            <Text style={styles.emptyTitle}>No Schedule Found</Text>
             <Text style={styles.emptySubtitle}>
-              Set up your teaching schedule to manage your classes effectively.
+              Please set up your teaching hours in the ERP Portal.
             </Text>
-            <Pressable
-              onPress={onAdd}
-              style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}
-              accessibilityRole="button"
-              accessibilityLabel="Add Timetable"
-            >
-              <Text style={styles.addButtonText}>+ Add Timetable</Text>
-            </Pressable>
           </View>
         ) : (
           <View style={styles.timetableContainer}>
-            {timetable.map((day, dayIndex) => (
+            {timetable.map((day) => day.sessions?.length > 0 && (
               <View key={day.day} style={styles.dayContainer}>
                 <View style={styles.dayHeader}>
                   <Text style={styles.dayName}>{day.day}</Text>
-                  <Text style={styles.sessionCount}>
-                    {day.sessions.length} session{day.sessions.length !== 1 ? 's' : ''}
-                  </Text>
+                  <View style={styles.sessionCount}>
+                    <Text style={{ fontSize: 11, fontWeight: '900', color: '#2563EB' }}>
+                      {day.sessions.length} SESSIONS
+                    </Text>
+                  </View>
                 </View>
 
-                {day.sessions.length === 0 ? (
-                  <View style={styles.noSessions}>
-                    <Text style={styles.noSessionsText}>No sessions scheduled</Text>
-                  </View>
-                ) : (
-                  <View style={styles.sessionsContainer}>
-                    {day.sessions.map((session, sessionIndex) => (
-                      <View key={sessionIndex} style={styles.sessionCard}>
-                        <View style={styles.sessionHeader}>
-                          <Text style={styles.subjectName}>{session.subject}</Text>
-                          <View style={styles.sessionTypeBadge}>
-                            <Text style={styles.sessionTypeText}>{session.sessionType}</Text>
-                          </View>
-                        </View>
-                        
-                        <View style={styles.sessionDetails}>
-                          <View style={styles.sessionInfo}>
-                            <Text style={styles.sectionText}>Section: {session.section}</Text>
-                            <Text style={styles.roomText}>Room: {session.roomNumber}</Text>
-                          </View>
-                          <Text style={styles.timeText}>
-                            {getTimeRange(session.hours)} ({getSessionDuration(session.hours)})
-                          </Text>
+                <View style={styles.sessionsContainer}>
+                  {day.sessions.map((session, sessionIndex) => (
+                    <View key={sessionIndex} style={styles.sessionCard}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                        <Text style={styles.subjectName}>{session.subject}</Text>
+                        <View style={styles.sessionTypeBadge}>
+                          <Text style={styles.sessionTypeText}>{session.sessionType.toUpperCase()}</Text>
                         </View>
                       </View>
-                    ))}
-                  </View>
-                )}
+
+                      <View style={{ flexDirection: 'row', gap: 16, marginBottom: 16 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <Ionicons name="people-outline" size={14} color="#64748B" />
+                          <Text style={styles.sectionText}>{session.section}</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <Ionicons name="location-outline" size={14} color="#64748B" />
+                          <Text style={styles.roomText}>Room {session.roomNumber}</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.timeText}>
+                        <Ionicons name="time-outline" size={16} color="#2563EB" style={{ marginRight: 8 }} />
+                        <Text style={{ fontSize: 14, fontWeight: '800', color: '#1E293B' }}>
+                          {getTimeRange(session.hours)}
+                        </Text>
+                        <Text style={{ fontSize: 13, color: '#64748B', marginLeft: 8 }}>
+                          ({getSessionDuration(session.hours)})
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
               </View>
             ))}
-
           </View>
         )}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }

@@ -1,42 +1,235 @@
-import { StyleSheet } from 'react-native';
+import { StyleSheet, Dimensions } from 'react-native';
+
+const { width } = Dimensions.get('window');
 
 export const styles = StyleSheet.create({
-  // Welcome Styles
-  welcomeContainer: {
-    marginBottom: 24,
-    paddingHorizontal: 16,
-  },
-  welcomeGreeting: {
-    fontSize: 16,
-    color: '#6B7280',
-    marginBottom: 4,
-  },
-  welcomeName: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#111827',
+  // Dashboard Container
+  container: {
+    flex: 1,
+    backgroundColor: '#F8FAFC', // Slate 50
   },
 
-  // Current Session Styles
-  currentSessionCard: {
+  // Sidebar Styles
+  sidebarOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)', // Semi-transparent Slate 900
+    zIndex: 1000,
+  },
+  sidebar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: 280,
+    height: '100%',
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
+    zIndex: 1001,
+    paddingTop: 60,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 4, height: 0 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowRadius: 12,
+    elevation: 20,
+  },
+  sidebarHeader: {
+    paddingHorizontal: 24,
+    paddingBottom: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    marginBottom: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  sidebarLogo: {
+    width: 44,
+    height: 44,
+    marginRight: 12,
+  },
+  sidebarAppName: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#1E3A8A', // Blue 900
+    letterSpacing: -0.5,
+  },
+  sidebarContent: {
+    flex: 1,
+  },
+  navItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    marginHorizontal: 12,
+    borderRadius: 12,
+    marginBottom: 6,
+  },
+  navItemActive: {
+    backgroundColor: '#EFF6FF', // Blue 50
+  },
+  navIcon: {
+    fontSize: 22,
+    marginRight: 16,
+    width: 28,
+    textAlign: 'center',
+  },
+  navText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#64748B', // Slate 500
+  },
+  navTextActive: {
+    color: '#2563EB', // Blue 600
+  },
+  sidebarFooter: {
+    padding: 24,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    marginBottom: 20,
+  },
+  logoutNavItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    backgroundColor: '#FFF1F2', // Rose 50
+  },
+  logoutNavText: {
+    color: '#E11D48', // Rose 600
+    fontSize: 16,
+    fontWeight: '700',
+    marginLeft: 12,
+  },
+
+  // Header Styles
+  topHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 20,
+    backgroundColor: '#2563EB', // Blue 600
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    shadowColor: '#2563EB',
+    shadowOpacity: 0.3,
+    shadowRadius: 15,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 10,
+    zIndex: 10,
+  },
+  menuButton: {
+    padding: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 12,
+  },
+  headerCenter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+  },
+  headerLogo: {
+    width: 32,
+    height: 32,
+    marginRight: 10,
+  },
+  appName: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  profileCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
     elevation: 3,
   },
-  currentSessionLabel: {
+  profileInitial: {
+    color: '#2563EB',
+    fontSize: 18,
+    fontWeight: '900',
+  },
+
+  // Content Styles
+  scrollContainer: {
+    flex: 1,
+  },
+  content: {
+    padding: 20,
+    paddingTop: 30,
+  },
+  welcomeContainer: {
+    marginBottom: 30,
+    backgroundColor: '#FFFFFF',
+    padding: 28,
+    borderRadius: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 15,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 5,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  welcomeGreeting: {
     fontSize: 14,
-    color: '#6B7280',
+    color: '#3B82F6', // Blue 500
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 2,
     marginBottom: 8,
+  },
+  welcomeName: {
+    fontSize: 32,
+    fontWeight: '900',
+    color: '#1E293B', // Slate 800
+    marginBottom: 6,
+    letterSpacing: -1,
+  },
+  welcomeSubtext: {
+    fontSize: 15,
+    color: '#64748B', // Slate 500
     fontWeight: '500',
+    textAlign: 'center',
+  },
+
+  // Current Session Card
+  currentSessionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 24,
+    marginBottom: 20,
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.08,
+    shadowRadius: 20,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: '#EFF6FF',
+  },
+  currentSessionLabel: {
+    fontSize: 12,
+    color: '#3B82F6',
+    marginBottom: 16,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
   },
   currentSessionContent: {
-    gap: 12,
+    gap: 16,
   },
   sessionMainInfo: {
     flexDirection: 'row',
@@ -44,274 +237,177 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
   },
   subjectText: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#111827',
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#1E293B',
     flex: 1,
+    letterSpacing: -0.5,
   },
   sessionTypeBadge: {
-    backgroundColor: '',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    backgroundColor: '#2563EB',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
   },
   sessionTypeText: {
     color: '#FFFFFF',
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '800',
+    textTransform: 'uppercase',
   },
   sessionDetails: {
-    backgroundColor: '#F9FAFB',
-    padding: 12,
-    borderRadius: 8,
-    gap: 4,
+    backgroundColor: '#F8FAFC',
+    padding: 20,
+    borderRadius: 16,
+    gap: 10,
   },
   detailText: {
     fontSize: 14,
-    color: '#374151',
+    color: '#475569', // Slate 600
+    fontWeight: '600',
   },
   takeAttendanceButton: {
-    backgroundColor: '#059669',
-    paddingVertical: 12,
-    borderRadius: 8,
+    backgroundColor: '#2563EB',
+    paddingVertical: 18,
+    borderRadius: 16,
     alignItems: 'center',
+    shadowColor: '#2563EB',
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
   },
   takeAttendanceButtonPressed: {
-    opacity: 0.9,
+    transform: [{ scale: 0.97 }],
+    backgroundColor: '#1D4ED8',
   },
   takeAttendanceButtonText: {
     color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   disabledButton: {
-    backgroundColor: '#9CA3AF',
-    opacity: 0.7,
+    backgroundColor: '#CBD5E1',
+    shadowOpacity: 0,
   },
   refreshButton: {
-    backgroundColor: '#F3F4F6',
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    borderRadius: 6,
+    backgroundColor: '#EFF6FF',
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#D1D5DB',
-    minWidth: 32,
-    minHeight: 32,
+    borderColor: '#DBEAFE',
   },
   refreshButtonPressed: {
-    backgroundColor: '#E5E7EB',
+    backgroundColor: '#DBEAFE',
   },
   refreshButtonText: {
-    color: '#374151',
-    fontSize: 16,
-    fontWeight: '500',
+    fontSize: 20,
   },
+
+  // Attendance Status
   attendanceTakenContainer: {
-    gap: 12,
+    gap: 16,
   },
   attendanceTakenInfo: {
-    backgroundColor: '#10B981',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+    backgroundColor: '#F0FDF4', // Green 50
+    padding: 20,
+    borderRadius: 16,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
   },
   attendanceTakenButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
+    color: '#166534', // Green 800
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 6,
   },
   attendanceDetailsText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '500',
+    color: '#15803D', // Green 700
+    fontSize: 15,
+    fontWeight: '600',
     marginBottom: 2,
   },
   attendanceTimeText: {
-    color: '#D1FAE5',
-    fontSize: 12,
-    fontWeight: '400',
+    color: '#16A34A',
+    fontSize: 13,
+    fontWeight: '500',
+    opacity: 0.8,
   },
   retakeAttendanceButton: {
-    backgroundColor: '#F59E0B',
-    paddingVertical: 12,
-    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 16,
+    borderRadius: 16,
     alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#EFF6FF',
   },
   retakeAttendanceButtonPressed: {
-    backgroundColor: '#D97706',
+    backgroundColor: '#F8FAFC',
   },
   retakeAttendanceButtonText: {
-    color: '#FFFFFF',
+    color: '#2563EB',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
   },
+
+  // Empty State
   noSessionCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 24,
-    marginBottom: 16,
+    borderRadius: 24,
+    padding: 40,
+    marginBottom: 20,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: '#E2E8F0',
   },
   noSessionText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 4,
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#64748B',
+    marginBottom: 10,
+    marginTop: 16,
   },
   noSessionSubtext: {
     fontSize: 14,
-    color: '#6B7280',
-  },
-  container: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-  },
-  topHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 50, // Add extra padding for status bar
-    paddingBottom: 16,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  headerLogo: {
-    width: 32,
-    height: 32,
-    marginRight: 12,
-  },
-  appName: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  headerLogoutButton: {
-    backgroundColor: '#EF4444',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  headerLogoutButtonPressed: {
-    opacity: 0.85,
-  },
-  headerLogoutText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  scrollContainer: {
-    flex: 1,
-  },
-  content: {
-    padding: 20,
-    paddingTop: 24,
-  },
-  welcomeSection: {
-    alignItems: 'center',
-    marginBottom: 32,
-  },
-  welcome: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 8,
-  },
-  userName: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 4,
-  },
-  userEmail: {
-    fontSize: 16,
-    color: '#6B7280',
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 32,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    padding: 20,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginHorizontal: 6,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  statNumber: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#EF4444',
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 14,
-    color: '#6B7280',
+    color: '#94A3B8',
     textAlign: 'center',
+    lineHeight: 20,
   },
+
+  // Action Buttons
   actionsContainer: {
     gap: 12,
+    marginTop: 10,
   },
   actionButton: {
     backgroundColor: '#FFFFFF',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderRadius: 12,
+    paddingVertical: 18,
+    paddingHorizontal: 24,
+    borderRadius: 18,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
     shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.02,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 4 },
     elevation: 2,
   },
   actionButtonPressed: {
-    opacity: 0.8,
+    backgroundColor: '#F8FAFC',
+    transform: [{ scale: 0.98 }],
   },
   actionButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  logoutButton: {
-    backgroundColor: '#EF4444',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  logoutButtonPressed: {
-    opacity: 0.85,
-  },
-  logoutButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#1E293B',
   },
 });
