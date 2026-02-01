@@ -26,11 +26,15 @@ export interface AttendanceSession {
     address?: string;
     accuracy?: number;
   };
+  isMissed?: boolean;
+  missedReason?: string;
+  missedNote?: string;
+  missedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
 
-export interface AttendanceSessionDocument extends Document, AttendanceSession {}
+export interface AttendanceSessionDocument extends Document, AttendanceSession { }
 
 const AttendanceRecordSchema = new Schema<AttendanceRecord>({
   studentId: { type: Schema.Types.ObjectId, ref: 'Student', required: true },
@@ -45,10 +49,10 @@ const AttendanceSessionSchema = new Schema<AttendanceSessionDocument>({
   facultyId: { type: Schema.Types.ObjectId, ref: 'Faculty', required: true },
   subject: { type: String, required: true, trim: true },
   section: { type: String, required: true, trim: true },
-  sessionType: { 
-    type: String, 
-    required: true, 
-    enum: ['Lecture', 'Tutorial', 'Practical', 'Skill'] 
+  sessionType: {
+    type: String,
+    required: true,
+    enum: ['Lecture', 'Tutorial', 'Practical', 'Skill']
   },
   hours: { type: [Number], required: true },
   date: { type: Date, required: true },
@@ -62,6 +66,10 @@ const AttendanceSessionSchema = new Schema<AttendanceSessionDocument>({
     address: { type: String },
     accuracy: { type: Number }
   },
+  isMissed: { type: Boolean, default: false },
+  missedReason: { type: String },
+  missedNote: { type: String },
+  missedAt: { type: Date },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 }, { timestamps: true });

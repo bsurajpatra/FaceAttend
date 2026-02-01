@@ -241,40 +241,58 @@ export function AttendanceReports() {
                                 <span className="px-3 py-1 bg-blue-50 text-blue-600 text-[9px] font-black rounded-full uppercase tracking-widest border border-blue-100 italic mb-3 inline-block">
                                     {selectedSession.sessionType}
                                 </span>
+                                {selectedSession.isMissed && (
+                                    <span className="ml-2 px-3 py-1 bg-red-50 text-red-600 text-[9px] font-black rounded-full uppercase tracking-widest border border-red-100 italic mb-3 inline-block">
+                                        Missed
+                                    </span>
+                                )}
                                 <h3 className="text-xl font-black text-slate-900 mb-1 leading-tight uppercase italic">{selectedSession.subject}</h3>
                                 <p className="text-slate-500 font-bold mb-4 text-xs">SECTION: {selectedSession.section}</p>
 
-                                <div className="space-y-2.5">
-                                    <div className="flex items-center gap-3 text-slate-600">
-                                        <div className="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center text-blue-600 border border-slate-100">
-                                            <Calendar size={14} />
+                                {selectedSession.isMissed ? (
+                                    <div className="bg-red-50 rounded-xl p-4 border border-red-100 mb-4">
+                                        <div className="flex items-center gap-2 mb-2 text-red-700">
+                                            <XCircle size={16} />
+                                            <span className="text-xs font-black uppercase tracking-wide">Session Missed</span>
                                         </div>
-                                        <div>
-                                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-0.5">Session Date</p>
-                                            <p className="text-[11px] font-bold">{new Date(selectedSession.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                                        <p className="text-xs font-bold text-slate-700 mb-1">Reason: <span className="font-normal">{selectedSession.missedReason}</span></p>
+                                        {selectedSession.missedNote && (
+                                            <p className="text-xs font-bold text-slate-700">Note: <span className="font-normal">{selectedSession.missedNote}</span></p>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2.5">
+                                        <div className="flex items-center gap-3 text-slate-600">
+                                            <div className="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center text-blue-600 border border-slate-100">
+                                                <Calendar size={14} />
+                                            </div>
+                                            <div>
+                                                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-0.5">Session Date</p>
+                                                <p className="text-[11px] font-bold">{new Date(selectedSession.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3 text-slate-600">
+                                            <div className="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center text-blue-600 border border-slate-100">
+                                                <Clock size={14} />
+                                            </div>
+                                            <div>
+                                                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-0.5">Schedule</p>
+                                                <p className="text-[11px] font-bold">{getTimeRange(selectedSession.hours)}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3 text-slate-600">
+                                            <div className="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center text-blue-600 border border-slate-100">
+                                                <MapPin size={14} />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-0.5">Location</p>
+                                                <p className="text-[11px] font-bold truncate" title={formatLocation(selectedSession.location)}>
+                                                    {formatLocation(selectedSession.location)}
+                                                </p>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-3 text-slate-600">
-                                        <div className="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center text-blue-600 border border-slate-100">
-                                            <Clock size={14} />
-                                        </div>
-                                        <div>
-                                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-0.5">Schedule</p>
-                                            <p className="text-[11px] font-bold">{getTimeRange(selectedSession.hours)}</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-3 text-slate-600">
-                                        <div className="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center text-blue-600 border border-slate-100">
-                                            <MapPin size={14} />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-0.5">Location</p>
-                                            <p className="text-[11px] font-bold truncate" title={formatLocation(selectedSession.location)}>
-                                                {formatLocation(selectedSession.location)}
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
+                                )}
                             </div>
                         </div>
 
@@ -328,6 +346,7 @@ export function AttendanceReports() {
                                             <th className="px-6 py-3 text-[9px] text-slate-400 uppercase tracking-widest border-b border-slate-100 w-1/3">Student Name</th>
                                             <th className="px-6 py-3 text-[9px] text-slate-400 uppercase tracking-widest border-b border-slate-100 w-1/4">Roll Number</th>
                                             <th className="px-6 py-3 text-[9px] text-slate-400 uppercase tracking-widest border-b border-slate-100 w-1/6">Status</th>
+                                            <th className="px-6 py-3 text-[9px] text-slate-400 uppercase tracking-widest border-b border-slate-100 w-1/6">Time</th>
                                             <th className="px-6 py-3 text-[9px] text-slate-400 uppercase tracking-widest border-b border-slate-100 w-1/4">Confidence</th>
                                         </tr>
                                     </thead>
@@ -347,6 +366,9 @@ export function AttendanceReports() {
                                                     <span className="flex items-center gap-2 text-emerald-600 font-black text-[10px] uppercase italic">
                                                         <CheckCircle2 size={14} /> Present
                                                     </span>
+                                                </td>
+                                                <td className="px-8 py-4 font-bold text-slate-500 text-xs">
+                                                    {st.markedAt ? new Date(st.markedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--'}
                                                 </td>
                                                 <td className="px-8 py-4">
                                                     <div className="flex items-center gap-2">
@@ -377,6 +399,7 @@ export function AttendanceReports() {
                                                         <XCircle size={14} /> Absent
                                                     </span>
                                                 </td>
+                                                <td className="px-8 py-4 text-slate-300 font-black italic">--</td>
                                                 <td className="px-8 py-4 text-slate-300 font-black italic">--</td>
                                             </tr>
                                         ))}
@@ -456,6 +479,13 @@ export function AttendanceReports() {
                                         <span className="truncate">{report.location?.address || 'On Campus'}</span>
                                     </div>
                                 </div>
+                                {report.isMissed && (
+                                    <div className="mb-4 px-3 py-2 bg-red-50 rounded-xl border border-red-100">
+                                        <p className="text-[9px] font-black text-red-600 uppercase tracking-widest flex items-center gap-1.5 truncate">
+                                            <XCircle size={12} /> Missed: {report.missedReason}
+                                        </p>
+                                    </div>
+                                )}
 
                                 <div className="mt-auto grid grid-cols-3 gap-2 border-t border-slate-50 pt-4">
                                     <div className="text-center">

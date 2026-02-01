@@ -79,3 +79,8 @@ export async function verifyEmailChangeApi(otp: string): Promise<UpdateProfileRe
   const res = await http.post<UpdateProfileResponse>('/api/auth/verify-email-change', { otp });
   return res.data;
 }
+
+export async function getDevicesApi(): Promise<{ devices: any[] }> {
+  const res = await http.get<{ devices: any[] }>('/api/auth/devices');
+  return res.data;
+}

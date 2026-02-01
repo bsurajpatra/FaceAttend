@@ -27,7 +27,8 @@ import { cn } from '../lib/utils';
 import logoImg from '../assets/logo.png';
 import { getTimetableApi } from '../api/timetable';
 import { getProfileApi, logoutApi } from '../api/auth';
-import { getCurrentSession, getNextSession } from '../lib/timeSlots';
+import { getAttendanceReportsApi, markSessionMissedApi } from '../api/attendance';
+import { getCurrentSession, getNextSession, getRemainingMinutes, getTimeSlotByHour } from '../lib/timeSlots';
 import { Profile } from './Profile';
 import { AttendanceReports } from './AttendanceReports';
 import TimetableManager from './TimetableManager';
@@ -560,7 +561,7 @@ export default function Dashboard() {
                 {/* Dashboard Content - Flexible scrolling area */}
                 <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 lg:p-10 scrollbar-hide">
                     <div className="max-w-6xl mx-auto">
-                        {activeTab === 'overview' && <OverviewSection user={user} timetable={timetable} />}
+                        {activeTab === 'overview' && <OverviewSection user={user} timetable={timetable} setNotifications={setNotifications} />}
                         {activeTab === 'registration' && <StudentRegistration user={user} timetable={timetable} />}
                         {activeTab === 'students' && <StudentManagement user={user} timetable={timetable} />}
                         {activeTab === 'timetable' && <TimetableManager />}
@@ -578,12 +579,6 @@ export default function Dashboard() {
                     <div className="bg-white rounded-[2rem] w-full max-w-md p-8 shadow-2xl relative overflow-hidden">
                         <div className="absolute top-0 right-0 w-32 h-32 bg-orange-50 rounded-full blur-3xl -mt-16 -mr-16 opacity-50" />
 
-                        <button
-                            onClick={() => setShowMfaModal(false)}
-                            className="absolute right-6 top-6 text-slate-400 hover:text-slate-600 transition-colors z-10"
-                        >
-                            <X size={24} />
-                        </button>
 
                         <div className="text-center mb-6 relative z-10">
                             <div className="w-20 h-20 bg-orange-50 rounded-full flex items-center justify-center mx-auto mb-6 text-orange-500 shadow-sm border border-orange-100">
@@ -644,8 +639,123 @@ function SidebarItem({ icon, label, active, isOpen, onClick }: any) {
     );
 }
 
-function OverviewSection({ user, timetable }: any) {
+function OverviewSection({ user, timetable, setNotifications }: any) {
     const currentSession = getCurrentSession(timetable);
+    const [remainingMinutes, setRemainingMinutes] = useState<number | null>(null);
+    const [missedSessions, setMissedSessions] = useState<any[]>([]);
+    const [showMissedModal, setShowMissedModal] = useState(false);
+    const [selectedMissedSession, setSelectedMissedSession] = useState<any>(null);
+    const notifiedMissed = useRef<Set<string>>(new Set());
+
+    // Calculate missed sessions
+    useEffect(() => {
+        if (!timetable || timetable.length === 0) return;
+
+        const checkMissedSessions = async () => {
+            // 1. Get Today's Schedule
+            const now = new Date();
+            const currentDay = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][now.getDay()];
+            const todaySchedule = timetable.find((day: any) => day.day === currentDay);
+
+            if (!todaySchedule || !todaySchedule.sessions) return;
+
+            // 2. Fetch Actual Attendance Records for Today 
+            // Use local date string (YYYY-MM-DD) to ensure consistency with currentDay
+            const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+            try {
+                const report = await getAttendanceReportsApi({ startDate: todayStr, endDate: todayStr });
+                const attendedSessions = report.sessions || [];
+
+                // 3. Identify Missed Sessions
+                // 3. Identify and Group Missed Sessions
+                const missingMap = new Map();
+
+                todaySchedule.sessions.forEach((schedSession: any) => {
+                    // Check if session has ended
+                    const lastHour = Math.max(...schedSession.hours);
+                    const lastSlot = getTimeSlotByHour(lastHour);
+                    if (!lastSlot || !lastSlot.endMinutes) return;
+
+                    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+                    const isEnded = currentMinutes > lastSlot.endMinutes;
+
+                    if (!isEnded) return;
+
+                    // Check if attendance exists
+                    const hasAttendance = attendedSessions.some(att =>
+                        att.subject.trim().toUpperCase() === schedSession.subject.trim().toUpperCase() &&
+                        att.section.trim().toUpperCase() === schedSession.section.trim().toUpperCase() &&
+                        att.sessionType === schedSession.sessionType
+                    );
+
+                    if (!hasAttendance) {
+                        const key = `${schedSession.subject.trim().toUpperCase()}-${schedSession.section.trim().toUpperCase()}-${schedSession.sessionType}`;
+
+                        if (missingMap.has(key)) {
+                            // Merge hours if already exists
+                            const existing = missingMap.get(key);
+                            const mergedHours = Array.from(new Set([...existing.hours, ...schedSession.hours]));
+                            missingMap.set(key, { ...existing, hours: mergedHours });
+                        } else {
+                            missingMap.set(key, { ...schedSession });
+                        }
+                    }
+                });
+
+                const missing = Array.from(missingMap.values()).map((s: any) => {
+                    const sortedHours = [...s.hours].sort((a: number, b: number) => a - b);
+                    const firstSlot = getTimeSlotByHour(sortedHours[0]);
+                    const endSlot = getTimeSlotByHour(sortedHours[sortedHours.length - 1]);
+                    const timeSlot = firstSlot && endSlot
+                        ? `${firstSlot.time.split(' - ')[0]} - ${endSlot.time.split(' - ')[1]}`
+                        : '';
+                    return { ...s, timeSlot };
+                });
+
+                // Trigger notifications for newly discovered missed sessions
+                missing.forEach((ms: any) => {
+                    const notifKey = `${ms.subject}-${ms.section}-${ms.sessionType}-${todayStr}`;
+                    if (!notifiedMissed.current.has(notifKey)) {
+                        notifiedMissed.current.add(notifKey);
+                        setNotifications((prev: any) => [{
+                            id: 'missed-' + Date.now() + Math.random(),
+                            type: 'missed_attendance',
+                            title: 'Missed Attendance',
+                            message: `Attendance not taken for ${ms.subject} (${ms.section}). Click to provide reason.`,
+                            time: 'Action Required',
+                            icon: <ShieldAlert className="text-red-500" size={18} />,
+                            isNew: true,
+                            action: () => {
+                                window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }
+                        }, ...prev.slice(0, 9)]);
+                    }
+                });
+
+                setMissedSessions(missing);
+            } catch (err) {
+                console.error('Failed to check missed sessions', err);
+            }
+        };
+
+        checkMissedSessions();
+        const interval = setInterval(checkMissedSessions, 60000);
+        return () => clearInterval(interval);
+    }, [timetable]);
+
+    useEffect(() => {
+        if (!currentSession) {
+            setRemainingMinutes(null);
+            return;
+        }
+        const checkTime = () => {
+            const remaining = getRemainingMinutes(currentSession.hours);
+            setRemainingMinutes(remaining);
+        };
+        checkTime();
+        const interval = setInterval(checkTime, 10000);
+        return () => clearInterval(interval);
+    }, [currentSession]);
 
     const isFirstLogin = localStorage.getItem('isFirstLogin') === 'true' || user.isFirstLogin;
 
@@ -690,6 +800,22 @@ function OverviewSection({ user, timetable }: any) {
                                 <span className="text-base uppercase tracking-tight">Room {currentSession.roomNumber}</span>
                             </div>
                         </div>
+
+                        {remainingMinutes !== null && remainingMinutes <= 10 && remainingMinutes > 0 && (
+                            <div className={cn(
+                                "mt-6 p-4 rounded-xl flex items-center gap-3 border animate-pulse",
+                                remainingMinutes <= 1 ? "bg-red-50 text-red-700 border-red-200" :
+                                    remainingMinutes <= 5 ? "bg-orange-50 text-orange-700 border-orange-200" :
+                                        "bg-blue-50 text-blue-700 border-blue-200"
+                            )}>
+                                {remainingMinutes <= 5 ? <ShieldAlert size={20} /> : <Clock size={20} />}
+                                <span className="font-bold uppercase text-xs tracking-wide">
+                                    {remainingMinutes <= 1 ? "URGENT: Session ending in < 1 minute!" :
+                                        remainingMinutes <= 5 ? `Warning: Ending in ${remainingMinutes} mins` :
+                                            `Note: ${remainingMinutes} minutes remaining`}
+                                </span>
+                            </div>
+                        )}
                     </div>
                 </div>
             ) : (
@@ -702,7 +828,167 @@ function OverviewSection({ user, timetable }: any) {
                 </div>
             )}
 
+            {missedSessions.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start animate-in fade-in slide-in-from-bottom-4 duration-700 delay-200">
+                    <div className="col-span-full text-left">
+                        <h3 className="text-xl font-black text-slate-900 uppercase italic tracking-tight mb-4 flex items-center gap-2">
+                            <ShieldAlert className="text-red-500" /> Pending Actions
+                        </h3>
+                    </div>
+                    {missedSessions.map((ms, i) => (
+                        <div key={i} className="bg-white rounded-[2rem] border border-red-100 shadow-xl overflow-hidden group hover:scale-[1.02] transition-transform duration-300 relative">
+                            <div className="absolute top-0 right-0 p-6 opacity-[0.05]">
+                                <ShieldAlert size={120} className="text-red-500" />
+                            </div>
+                            <div className="p-6 md:p-8 text-left">
+                                <span className="px-4 py-1 bg-red-50 text-red-600 text-[10px] font-black rounded-full uppercase tracking-widest border border-red-100 italic mb-4 inline-block">
+                                    Missed Attendance
+                                </span>
+                                <h4 className="text-2xl font-black text-slate-900 tracking-tighter mb-1">{ms.subject}</h4>
+                                <p className="text-slate-500 font-bold mb-6 text-sm flex items-center gap-2">
+                                    <span className="bg-slate-100 px-2 py-0.5 rounded text-xs">{ms.section}</span>
+                                    <span>{ms.timeSlot}</span>
+                                </p>
+
+                                <button
+                                    onClick={() => {
+                                        setSelectedMissedSession(ms);
+                                        setShowMissedModal(true);
+                                    }}
+                                    className="w-full py-3 bg-red-600 text-white rounded-xl font-bold uppercase tracking-widest hover:bg-red-700 transition-all shadow-lg shadow-red-200 text-sm flex items-center justify-center gap-2"
+                                >
+                                    Provide Reason <ExternalLink size={14} />
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {showMissedModal && selectedMissedSession && (
+                <MissedAttendanceModal
+                    session={selectedMissedSession}
+                    onClose={() => {
+                        setShowMissedModal(false);
+                        setSelectedMissedSession(null);
+                    }}
+                    onSuccess={() => {
+                        setMissedSessions(prev => prev.filter(s => s !== selectedMissedSession));
+                    }}
+                />
+            )}
+
+
             <FacultyActivitySummary user={user} timetable={timetable} />
+        </div>
+    );
+}
+
+function MissedAttendanceModal({ session, onClose, onSuccess }: any) {
+    const [reason, setReason] = useState('Class Cancelled');
+    const [note, setNote] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const reasons = [
+        'Class Cancelled',
+        'Extra Class Taken',
+        'Technical Issue',
+        'Faculty Absent',
+        'Other'
+    ];
+
+    const handleSubmit = async () => {
+        setIsSubmitting(true);
+        const now = new Date();
+        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        try {
+            await markSessionMissedApi({
+                subject: session.subject,
+                section: session.section,
+                sessionType: session.sessionType,
+                hours: session.hours,
+                date: todayStr,
+                reason,
+                note
+            });
+            onSuccess();
+            onClose();
+        } catch (error) {
+            console.error('Failed to mark session as missed', error);
+            alert('Failed to save. Please try again.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4 animate-in fade-in duration-300">
+            <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl relative">
+                <button
+                    onClick={onClose}
+                    className="absolute right-4 top-4 text-slate-400 hover:text-slate-600"
+                >
+                    <X size={20} />
+                </button>
+
+                <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 bg-red-100 text-red-600 rounded-full flex items-center justify-center">
+                        <ShieldAlert size={20} />
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-bold text-slate-900">Missing Attendance</h3>
+                        <p className="text-xs text-slate-500">Please provide a reason for the missed session.</p>
+                    </div>
+                </div>
+
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-6">
+                    <div className="flex justify-between mb-2">
+                        <span className="text-xs font-bold text-slate-500 uppercase">Subject</span>
+                        <span className="text-xs font-black text-slate-900">{session.subject}</span>
+                    </div>
+                    <div className="flex justify-between mb-2">
+                        <span className="text-xs font-bold text-slate-500 uppercase">Section</span>
+                        <span className="text-xs font-black text-slate-900">{session.section}</span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span className="text-xs font-bold text-slate-500 uppercase">Time Slot</span>
+                        <span className="text-xs font-black text-slate-900">{session.timeSlot}</span>
+                    </div>
+                </div>
+
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-xs font-bold text-slate-700 uppercase mb-2">Reason</label>
+                        <select
+                            value={reason}
+                            onChange={(e) => setReason(e.target.value)}
+                            className="w-full p-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm font-medium"
+                        >
+                            {reasons.map(r => (
+                                <option key={r} value={r}>{r}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-bold text-slate-700 uppercase mb-2">Note (Optional)</label>
+                        <textarea
+                            value={note}
+                            onChange={(e) => setNote(e.target.value)}
+                            className="w-full p-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm font-medium h-24 resize-none"
+                            placeholder="Add any additional details..."
+                        />
+                    </div>
+
+                    <button
+                        onClick={handleSubmit}
+                        disabled={isSubmitting}
+                        className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold uppercase tracking-widest hover:bg-black transition-all shadow-lg shadow-slate-200 disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+                    >
+                        {isSubmitting ? 'Saving...' : 'Submit Reason'}
+                    </button>
+                </div>
+            </div>
         </div>
     );
 }

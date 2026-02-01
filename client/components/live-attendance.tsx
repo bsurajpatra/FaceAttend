@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useKiosk } from '../contexts/KioskContext';
 import { PasswordModal } from './PasswordModal';
 import { markAttendanceApi, MarkAttendanceInput } from '@/api/attendance';
-import { getTimeRange, getSessionDuration } from '@/utils/timeSlots';
+import { getTimeRange, getSessionDuration, getRemainingMinutes } from '@/utils/timeSlots';
 
 type LiveAttendanceProps = {
   sessionId: string;
@@ -73,6 +73,7 @@ export default function LiveAttendance({
   const [statusType, setStatusType] = useState<'success' | 'duplicate' | 'notfound' | 'error' | null>(null);
   const [isButtonDisabled, setIsButtonDisabled] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
+  const [remainingMinutes, setRemainingMinutes] = useState<number | null>(null);
 
   const cameraRef = useRef<CameraView>(null);
   const detectionIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -208,6 +209,23 @@ export default function LiveAttendance({
     }
   }, [permission?.granted, cameraReady, isInitialized]);
 
+  // Check remaining time
+  useEffect(() => {
+    const checkTime = () => {
+      const remaining = getRemainingMinutes(hours);
+      setRemainingMinutes(remaining);
+
+      if (remaining <= 0 && isDetecting) {
+        setIsDetecting(false);
+        Alert.alert("Session Ended", "The attendance time slot has ended. Scanning has been stopped.");
+      }
+    };
+
+    checkTime();
+    const interval = setInterval(checkTime, 10000); // Check every 10s
+    return () => clearInterval(interval);
+  }, [hours, isDetecting]);
+
   const handleBackPress = () => {
     if (isKioskMode) setShowPasswordModal(true);
     else onClose();
@@ -215,6 +233,13 @@ export default function LiveAttendance({
 
   const toggleDetection = () => {
     if (isButtonDisabled || !isInitialized) return;
+
+    // Prevent starting if time is up
+    if (remainingMinutes !== null && remainingMinutes <= 0) {
+      Alert.alert("Session Ended", "Attendance cannot be taken after the time slot has ended.");
+      return;
+    }
+
     setIsButtonDisabled(true);
     setIsDetecting(prev => !prev);
     setTimeout(() => setIsButtonDisabled(false), 1000);
@@ -304,6 +329,37 @@ export default function LiveAttendance({
                 color="white"
               />
               <Text style={styles.bannerText}>{statusMessage}</Text>
+            </View>
+          )}
+
+          {/* Time Remaining Warnings */}
+          {remainingMinutes !== null && remainingMinutes <= 10 && remainingMinutes > 0 && (
+            <View style={[
+              styles.banner,
+              remainingMinutes <= 1 ? styles.bannerCritical :
+                remainingMinutes <= 5 ? styles.bannerWarning :
+                  styles.bannerInfo
+            ]}>
+              <Ionicons
+                name={remainingMinutes <= 5 ? "warning" : "information-circle"}
+                size={20}
+                color={remainingMinutes <= 5 ? "white" : "#2563EB"}
+              />
+              <Text style={[
+                styles.bannerText,
+                remainingMinutes > 5 && { color: '#1E293B' }
+              ]}>
+                {remainingMinutes <= 1 ? "URGENT: Session ending in < 1 minute!" :
+                  remainingMinutes <= 5 ? `Warning: Session ending in ${remainingMinutes} mins` :
+                    `Note: ${remainingMinutes} minutes remaining in session`}
+              </Text>
+            </View>
+          )}
+
+          {remainingMinutes !== null && remainingMinutes <= 0 && (
+            <View style={[styles.banner, styles.bannerError]}>
+              <Ionicons name="lock-closed" size={20} color="white" />
+              <Text style={styles.bannerText}>Session Ended</Text>
             </View>
           )}
 
@@ -547,6 +603,8 @@ const styles = StyleSheet.create({
   bannerSuccess: { backgroundColor: '#10B981' },
   bannerWarning: { backgroundColor: '#F59E0B' },
   bannerError: { backgroundColor: '#EF4444' },
+  bannerInfo: { backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE' },
+  bannerCritical: { backgroundColor: '#DC2626', borderWidth: 2, borderColor: '#991B1B' },
   bannerText: {
     color: 'white',
     fontSize: 14,

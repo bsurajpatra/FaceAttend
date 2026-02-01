@@ -18,6 +18,10 @@ export type AttendanceReportsResponse = {
             longitude: number;
             address?: string;
         };
+        isMissed?: boolean;
+        missedReason?: string;
+        missedNote?: string;
+        missedAt?: string;
     }>;
 };
 
@@ -74,5 +78,18 @@ export async function getAttendanceReportsApi(params?: {
 
 export async function getAttendanceSessionApi(sessionId: string): Promise<AttendanceSessionResponse> {
     const res = await http.get<AttendanceSessionResponse>(`/api/attendance/session/${sessionId}`);
+    return res.data;
+}
+
+export async function markSessionMissedApi(data: {
+    subject: string;
+    section: string;
+    sessionType: string;
+    hours: number[];
+    date: string;
+    reason: string;
+    note?: string;
+}): Promise<any> {
+    const res = await http.post('/api/attendance/missed', data);
     return res.data;
 }

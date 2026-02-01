@@ -6,6 +6,7 @@ import { Faculty } from '../models/Faculty';
 import { getFaceEmbedding } from '../services/facenet.service';
 import { getIO } from '../socket';
 import { cosineSimilarity } from '../utils/math';
+import { createAuditLog } from '../utils/auditLogger';
 
 // Face matching threshold (cosine similarity) - higher threshold for FaceNet embeddings
 const FACE_MATCH_THRESHOLD = 0.6;
@@ -797,8 +798,16 @@ export async function getAttendanceReports(req: Request, res: Response): Promise
 
     if (startDate || endDate) {
       query.date = {};
-      if (startDate) query.date.$gte = new Date(startDate as string);
-      if (endDate) query.date.$lte = new Date(endDate as string);
+      if (startDate) {
+        const start = new Date(startDate as string);
+        start.setUTCHours(0, 0, 0, 0);
+        query.date.$gte = start;
+      }
+      if (endDate) {
+        const end = new Date(endDate as string);
+        end.setUTCHours(23, 59, 59, 999);
+        query.date.$lte = end;
+      }
     }
 
     const sessions = await AttendanceSession.find(query)
@@ -917,6 +926,10 @@ export async function getAttendanceReports(req: Request, res: Response): Promise
           address: session.location.address,
           accuracy: session.location.accuracy
         } : null,
+        isMissed: session.isMissed,
+        missedReason: session.missedReason,
+        missedNote: session.missedNote,
+        missedAt: session.missedAt,
         createdAt: session.createdAt,
         // Detailed student lists
         presentStudentsList: presentStudents,
@@ -931,5 +944,102 @@ export async function getAttendanceReports(req: Request, res: Response): Promise
   } catch (error) {
     console.error('Get attendance reports error:', error);
     res.status(500).json({ message: 'Failed to get attendance reports' });
+  }
+}
+
+// Mark session as missed (post-lock)
+export async function markSessionMissed(req: Request, res: Response): Promise<void> {
+  try {
+    const facultyId = req.userId;
+    const { subject, section, sessionType, hours, date, reason, note } = req.body;
+
+    if (!facultyId || !mongoose.isValidObjectId(facultyId)) {
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+
+    if (!subject || !section || !sessionType || !hours || !date || !reason) {
+      res.status(400).json({ message: 'Missing required fields' });
+      return;
+    }
+
+    const sessionDate = new Date(date);
+    sessionDate.setUTCHours(0, 0, 0, 0);
+
+    // Check if session exists
+    let session = await AttendanceSession.findOne({
+      facultyId: new mongoose.Types.ObjectId(facultyId),
+      subject,
+      section,
+      sessionType,
+      date: sessionDate,
+      // We might need to match hours specifically, but usually subject/section/type/date is unique enough per faculty?
+      // Actually, if a faculty has multiple sessions of same subject/section/type on same day (e.g. morning and afternoon), hours are critical.
+      // But AttendanceSession schema doesn't seem to have hours in the query usually?
+      // Wait, startAttendanceSession checks for `date: today` only... implying one session per day per subj/sec/type?
+      // Line 95 in startAttendanceSession:
+      // const existingSession = await AttendanceSession.findOne({ ... date: today });
+      // So yes, currently the system assumes one session per subj/sec/type per day.
+    });
+
+    if (session) {
+      // If attendance was taken (present students > 0), we can't mark as missed
+      if (session.presentStudents > 0) {
+        res.status(400).json({ message: 'Cannot mark as missed: Attendance has already been taken for this session.' });
+        return;
+      }
+
+      // Update existing session
+      session.isMissed = true;
+      session.missedReason = reason;
+      session.missedNote = note;
+      session.missedAt = new Date();
+      await session.save();
+    } else {
+      // Create new "Missed" session
+      // We need enrolled students to populate absent count if we want reports to be accurate
+      const enrolledStudents = await Student.find({
+        'enrollments.subject': subject,
+        'enrollments.section': section,
+        'enrollments.facultyId': new mongoose.Types.ObjectId(facultyId)
+      }).select('_id name rollNumber');
+
+      session = await AttendanceSession.create({
+        facultyId: new mongoose.Types.ObjectId(facultyId),
+        subject,
+        section,
+        sessionType,
+        hours,
+        date: sessionDate,
+        totalStudents: enrolledStudents.length,
+        presentStudents: 0,
+        absentStudents: enrolledStudents.length, // Everyone absent effectively? Or do we treat "Missed" differently?
+        // If we set absentStudents = total, reports will show 0% attendance.
+        // If isMissed is true, UI can handle it.
+        records: [], // No records
+        isMissed: true,
+        missedReason: reason,
+        missedNote: note,
+        missedAt: new Date()
+      });
+    }
+
+    // Audit Log
+    await createAuditLog({
+      action: 'Session Missed',
+      details: `Marked "${reason}" for ${subject} (${section}) on ${sessionDate.toDateString()}`,
+      req,
+      facultyId,
+      platform: 'Web'
+    });
+
+    res.status(200).json({
+      message: 'Session marked as missed successfully',
+      session
+    });
+
+  } catch (error) {
+    console.error('Mark session missed error:', error);
+    res.status(500).json({ message: 'Failed to mark session as missed' });
   }
 }

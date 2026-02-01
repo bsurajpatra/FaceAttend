@@ -162,3 +162,20 @@ export const validateConsecutiveHours = (hours: number[]) => {
     }
     return true;
 };
+
+export const getRemainingMinutes = (hours: number[], currentTime?: Date): number => {
+    const now = currentTime || new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+
+    if (!hours || hours.length === 0) return 0;
+
+    const sortedHours = [...hours].sort((a, b) => a - b);
+    const lastHour = sortedHours[sortedHours.length - 1];
+    const lastSlot = getTimeSlotByHour(lastHour);
+
+    if (!lastSlot || lastSlot.endMinutes === undefined) return 0;
+
+    const currentTimeInMinutes = currentHour * 60 + currentMinute;
+    return lastSlot.endMinutes - currentTimeInMinutes;
+};

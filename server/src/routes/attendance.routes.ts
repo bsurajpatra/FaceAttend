@@ -6,7 +6,8 @@ import {
   getAttendanceReports,
   checkAttendanceStatus,
   getStudentAttendanceData,
-  updateAttendanceLocation
+  updateAttendanceLocation,
+  markSessionMissed
 } from '../controllers/attendance.controller';
 import { verifyFacultyToken } from '../middleware/auth';
 import { verifyTrustedDevice } from '../middleware/trustedDevice';
@@ -18,6 +19,9 @@ attendanceRouter.post('/start', verifyFacultyToken, verifyTrustedDevice, startAt
 
 // Mark attendance using face detection
 attendanceRouter.post('/mark', verifyFacultyToken, verifyTrustedDevice, markAttendance);
+
+// Mark session as missed (Post-Lock)
+attendanceRouter.post('/missed', verifyFacultyToken, markSessionMissed);
 
 // Get attendance session details
 attendanceRouter.get('/session/:sessionId', verifyFacultyToken, getAttendanceSession);

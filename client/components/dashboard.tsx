@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, Pressable, ScrollView, Animated, Dimensions, TouchableWithoutFeedback, PanResponder } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { Image } from 'expo-image';
 import { useFocusEffect } from '@react-navigation/native';
@@ -13,6 +14,8 @@ import { TIME_SLOTS, getCurrentSession } from '@/utils/timeSlots';
 import { getStudentsApi } from '@/api/students';
 import { checkAttendanceStatusApi, updateAttendanceLocationApi } from '@/api/attendance';
 import { useSocket } from '@/contexts/SocketContext';
+import { getDevicesApi } from '@/api/auth';
+import { getDeviceId } from '@/utils/device';
 
 type User = {
   id: string;
@@ -223,7 +226,22 @@ export default function Dashboard({
     }, [currentSession])
   );
 
-  const { socket } = useSocket();
+  const { socket, setIsTrusted } = useSocket();
+
+  const checkTrustStatus = async () => {
+    try {
+      const { devices } = await getDevicesApi();
+      const deviceId = await getDeviceId();
+      const currentDevice = devices.find((d: any) =>
+        d.deviceId.toLowerCase().trim() === deviceId.toLowerCase().trim()
+      );
+      const isNowTrusted = currentDevice ? currentDevice.isTrusted : false;
+      setIsTrusted(isNowTrusted);
+      await AsyncStorage.setItem('isTrusted', String(isNowTrusted));
+    } catch (error) {
+      console.error('Failed to check trust status:', error);
+    }
+  };
 
   useEffect(() => {
     if (!socket || !currentSession) return;
@@ -306,6 +324,7 @@ export default function Dashboard({
                         checkRegisteredStudents(currentSession);
                         checkAttendanceStatus(currentSession);
                         syncCurrentLocation();
+                        checkTrustStatus();
                       }}
                       style={({ pressed }) => [
                         styles.refreshButton,
