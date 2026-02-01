@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Image } from 'expo-image';
-import { SafeAreaView, View, Text, Animated, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, Animated, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { styles } from '@/components/styles/welcome-styles';

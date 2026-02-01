@@ -74,7 +74,7 @@ export function Sidebar({ isOpen, onClose, onLogout, onTimetablePress, activeRou
             // Special case for dashboard if it's not a route but the index
             // Depending on how app structure is, usually router.push('/') or router.back() if coming from deeper
             // For now let's assume router.replace('/') goes to dashboard home
-            router.dismissAll();
+            // router.dismissAll(); // Removed to prevent handling error
             router.replace('/');
         } else {
             router.push(route as any);
