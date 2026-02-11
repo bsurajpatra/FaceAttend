@@ -2,6 +2,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, Modal, Pressable, StyleSheet, Alert, Image } from 'react-native';
 import { useSocket } from '../contexts/SocketContext';
+import { useAuth } from '../contexts/AuthContext';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export function GlobalCaptureModal() {
     const { socket } = useSocket();
+    const { isLoggedIn } = useAuth();
     const [request, setRequest] = useState<any>(null);
     const [cameraOpen, setCameraOpen] = useState(false);
     const [capturedImage, setCapturedImage] = useState<string | null>(null);
@@ -20,7 +22,10 @@ export function GlobalCaptureModal() {
     const insets = useSafeAreaInsets();
 
     useEffect(() => {
-        if (!socket) return;
+        if (!socket || !isLoggedIn) {
+            setRequest(null); // Clean up if logged out
+            return;
+        }
 
         const handleRequest = (data: any) => {
             console.log('Received capture request:', data);
@@ -32,7 +37,7 @@ export function GlobalCaptureModal() {
         return () => {
             socket.off('capture_request', handleRequest);
         };
-    }, [socket]);
+    }, [socket, isLoggedIn]);
 
     const handleClose = () => {
         setRequest(null);
