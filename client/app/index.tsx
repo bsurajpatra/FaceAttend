@@ -11,14 +11,13 @@ import { loginApi, logoutApi } from '@/api/auth';
 import { getTimetableApi, TimetableDay } from '@/api/timetable';
 import { useKiosk } from '@/contexts/KioskContext';
 import { useSocket } from '@/contexts/SocketContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { getDeviceId } from '@/utils/device';
 
 export default function WelcomeScreen() {
+  const { isLoggedIn, user, login, logout, isLoading: isAuthLoading } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [user, setUser] = useState<{ id: string; name: string; username: string } | null>(null);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   const { setStoredPassword } = useKiosk();
   // Initialize with proper empty timetable structure
   const getEmptyTimetable = (): TimetableDay[] => [
@@ -39,36 +38,19 @@ export default function WelcomeScreen() {
 
   // Check for saved login state on app start
   useEffect(() => {
-    const checkLoginState = async () => {
-      try {
-        const savedUser = await AsyncStorage.getItem('user');
-        const savedToken = await AsyncStorage.getItem('token');
-
-        if (savedUser && savedToken) {
-          const parsedUser = JSON.parse(savedUser);
-          setUser(parsedUser);
-          setIsLoggedIn(true);
-
-          const savedIsTrusted = await AsyncStorage.getItem('isTrusted');
-          setIsTrusted(savedIsTrusted === 'true');
-
-          // Fetch timetable data
-          try {
-            const response = await getTimetableApi(parsedUser.id);
-            setTimetable(response.timetable || getEmptyTimetable());
-          } catch (error) {
-            setTimetable(getEmptyTimetable());
-          }
+    const fetchTimetable = async () => {
+      if (isLoggedIn && user) {
+        try {
+          const response = await getTimetableApi(user.id);
+          setTimetable(response.timetable || getEmptyTimetable());
+        } catch (error) {
+          setTimetable(getEmptyTimetable());
         }
-      } catch (error) {
-        console.log('Error loading saved login state:', error);
-      } finally {
-        setIsLoading(false);
       }
     };
 
-    checkLoginState();
-  }, []);
+    fetchTimetable();
+  }, [isLoggedIn, user]);
 
   const { socket, isTrusted, setIsTrusted } = useSocket();
 
@@ -88,13 +70,7 @@ export default function WelcomeScreen() {
 
       if (data.deviceId.toLowerCase().trim() === deviceId.toLowerCase().trim()) {
         console.log('WelcomeScreen: ID match! Logging out...');
-        // Clear saved login state
-        await AsyncStorage.removeItem('user');
-        await AsyncStorage.removeItem('token');
-        await AsyncStorage.removeItem('isTrusted');
-        setIsLoggedIn(false);
-        setUser(null);
-        setIsTrusted(null);
+        await logout();
         setErrorMessage(null);
       }
     });
@@ -106,7 +82,7 @@ export default function WelcomeScreen() {
   }, [socket, isLoggedIn, user]);
 
   useEffect(() => {
-    if (isLoading) return; // Don't show animation while loading
+    if (isAuthLoading) return; // Don't show animation while loading
 
     const delayMs = 2000; // keep logo centered for 2 seconds
     const shiftUpBy = 0;
@@ -134,9 +110,9 @@ export default function WelcomeScreen() {
         }),
       ]).start();
     }, delayMs);
-  }, [headerTranslateY, headerScale, loginOpacity, loginTranslateY, isLoading]);
+  }, [headerTranslateY, headerScale, loginOpacity, loginTranslateY, isAuthLoading]);
 
-  if (isLoading) {
+  if (isAuthLoading) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: '#F9FAFB', justifyContent: 'center', alignItems: 'center' }}>
         <Text>Loading...</Text>
@@ -153,16 +129,10 @@ export default function WelcomeScreen() {
         onLogout={async () => {
           // Call server-side logout for audit logging
           await logoutApi();
-          // Clear saved login state
-          await AsyncStorage.removeItem('user');
-          await AsyncStorage.removeItem('token');
-          await AsyncStorage.removeItem('isTrusted');
-          setIsLoggedIn(false);
-          setUser(null);
-          setIsTrusted(null);
+          await logout();
           setErrorMessage(null);
         }}
-        onTakeAttendance={(hours) => {
+        onTakeAttendance={() => {
           // The HourSelectModal will handle navigation to camera
         }}
       />
@@ -206,15 +176,10 @@ export default function WelcomeScreen() {
                   setIsSubmitting(true);
                   try {
                     const { token, user, isTrusted: trusted } = await loginApi({ username, password });
-                    // Save login state to AsyncStorage
-                    await AsyncStorage.setItem('user', JSON.stringify(user));
-                    await AsyncStorage.setItem('token', token);
-                    await AsyncStorage.setItem('isTrusted', String(trusted));
+                    await login(user, token, trusted ?? false);
                     // Store password for kiosk mode
                     await setStoredPassword(password);
-                    setUser(user);
                     setIsTrusted(trusted ?? false);
-                    setIsLoggedIn(true);
                   } catch (err: any) {
                     const msg = err?.response?.data?.message || 'Login failed';
                     setErrorMessage(msg);
@@ -232,5 +197,3 @@ export default function WelcomeScreen() {
     </SafeAreaView>
   );
 }
-
-

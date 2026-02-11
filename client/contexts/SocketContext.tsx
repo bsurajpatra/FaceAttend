@@ -1,8 +1,8 @@
-
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getDeviceId } from '@/utils/device';
+import { useAuth } from './AuthContext';
 
 interface SocketContextType {
     socket: Socket | null;
@@ -16,11 +16,12 @@ const SocketContext = createContext<SocketContextType>({ socket: null, isConnect
 export const useSocket = () => useContext(SocketContext);
 
 export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const { isLoggedIn, user: authUser } = useAuth();
     const [socket, setSocket] = useState<Socket | null>(null);
     const [isConnected, setIsConnected] = useState(false);
     const [isTrusted, setIsTrusted] = useState<boolean | null>(null);
 
-    // Initial load from storage
+    // Initial load from storage for isTrusted
     useEffect(() => {
         AsyncStorage.getItem('isTrusted').then(val => {
             if (val !== null) setIsTrusted(val === 'true');
@@ -31,12 +32,18 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         let newSocket: Socket | null = null;
 
         const connect = async () => {
+            if (!isLoggedIn || !authUser) {
+                if (socket) {
+                    socket.disconnect();
+                    setSocket(null);
+                    setIsConnected(false);
+                }
+                return;
+            }
+
             const token = await AsyncStorage.getItem('token');
-            const userStr = await AsyncStorage.getItem('user');
+            if (!token) return;
 
-            if (!token || !userStr) return;
-
-            const user = JSON.parse(userStr);
             const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.5:3000'; // Fallback
             const socketUrl = apiUrl.split(',')[0].trim();
             const deviceId = await getDeviceId();
@@ -55,7 +62,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             newSocket.on('connect', () => {
                 console.log('Socket connected');
                 setIsConnected(true);
-                newSocket?.emit('join_room', `faculty_${user.id}`);
+                newSocket?.emit('join_room', `faculty_${authUser.id}`);
             });
 
             newSocket.on('disconnect', () => {
@@ -80,10 +87,8 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 console.log(`Socket: force_logout check - incoming: ${data.deviceId}, local: ${deviceId}`);
 
                 if (data.deviceId.toLowerCase().trim() === deviceId.toLowerCase().trim()) {
-                    console.log('Socket: ID match! Triggering force_logout');
-                    await AsyncStorage.removeItem('token');
-                    await AsyncStorage.removeItem('user');
-                    await AsyncStorage.removeItem('isTrusted');
+                    console.log('Socket: ID match! Handled by WelcomeScreen');
+                    // Actual cleanup is handled in WelcomeScreen via logout()
                 }
             });
 
@@ -93,9 +98,12 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         connect();
 
         return () => {
-            if (newSocket) newSocket.disconnect();
+            if (newSocket) {
+                console.log('Cleaning up socket connection');
+                newSocket.disconnect();
+            }
         };
-    }, []);
+    }, [isLoggedIn, authUser]);
 
     return (
         <SocketContext.Provider value={{ socket, isConnected, isTrusted, setIsTrusted }}>
