@@ -954,3 +954,39 @@ export async function verifyEmailChangeOTP(req: Request, res: Response): Promise
     res.status(500).json({ message: 'Failed to verify email change' });
   }
 }
+
+export async function resendEmailChangeOTP(req: Request, res: Response): Promise<void> {
+  try {
+    const userId = req.userId;
+    if (!userId) {
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+
+    const faculty = await Faculty.findById(userId);
+    if (!faculty) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
+
+    if (!faculty.tempEmail) {
+      res.status(400).json({ message: 'No email change in progress' });
+      return;
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
+
+    faculty.otp = otp;
+    faculty.otpExpires = otpExpires;
+    await faculty.save();
+
+    await sendOTPEmail(faculty.tempEmail, otp);
+
+    res.json({ message: 'New verification code sent to your new email' });
+  } catch (error) {
+    console.error('Resend email change OTP error:', error);
+    res.status(500).json({ message: 'Failed to resend verification code' });
+  }
+}
+

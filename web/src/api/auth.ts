@@ -115,3 +115,8 @@ export async function updateProfileApi(data: UpdateProfileInput): Promise<Update
 export async function changePasswordApi(data: any): Promise<void> {
     await http.post('/api/auth/change-password', data);
 }
+
+export async function resendEmailChangeOtpApi(): Promise<void> {
+    await http.post('/api/auth/resend-email-change');
+}
+

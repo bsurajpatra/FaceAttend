@@ -172,7 +172,7 @@ export default function LiveAttendance({
 
     // Decoupled loop: captures frames every 2.2s without waiting for API response
     detectionIntervalRef.current = setInterval(async () => {
-      if (isCapturingRef.current || !cameraRef.current || !isDetecting || !hasFace) return;
+      if (isCapturingRef.current || !cameraRef.current || !isDetecting) return;
 
       try {
         isCapturingRef.current = true;

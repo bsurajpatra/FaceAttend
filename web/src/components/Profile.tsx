@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { User, ShieldCheck, KeyRound, Save, ShieldAlert, Loader2, X, CheckCircle2 } from 'lucide-react';
-import { toggle2faApi, verify2faApi, resend2faApi, updateProfileApi, verifyEmailChangeApi, changePasswordApi } from '../api/auth';
+import { toggle2faApi, verify2faApi, resend2faApi, updateProfileApi, verifyEmailChangeApi, changePasswordApi, resendEmailChangeOtpApi } from '../api/auth';
 import { cn } from '../lib/utils';
 
 interface ProfileProps {
@@ -134,6 +134,8 @@ export function Profile({ user }: ProfileProps) {
         try {
             if (verificationType === '2fa-toggle') {
                 await resend2faApi(user.email);
+            } else {
+                await resendEmailChangeOtpApi();
             }
             setResendTimer(60);
             setError(null);
