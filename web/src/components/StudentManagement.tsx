@@ -40,6 +40,7 @@ export function StudentManagement({ user, timetable }: StudentManagementProps) {
     const [editRollNumber, setEditRollNumber] = useState('');
     const [isUpdating, setIsUpdating] = useState(false);
     const [photoUpdateStatus, setPhotoUpdateStatus] = useState<'idle' | 'waiting_mobile' | 'uploading' | 'success'>('idle');
+    const [deviceOfflineError, setDeviceOfflineError] = useState<{ message: string; hint: string } | null>(null);
     const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 
     // Delete State
@@ -124,6 +125,7 @@ export function StudentManagement({ user, timetable }: StudentManagementProps) {
         setEditName(student.name);
         setEditRollNumber(student.rollNumber);
         setPhotoUpdateStatus('idle');
+        setDeviceOfflineError(null);
         setPhotoPreview(null);
     };
 
@@ -170,8 +172,8 @@ export function StudentManagement({ user, timetable }: StudentManagementProps) {
             console.error(err);
             setPhotoUpdateStatus('idle');
             const msg = err.response?.data?.message || 'Failed to send capture request';
-            const hint = err.response?.data?.hint;
-            alert(hint ? `${msg}\n\n${hint}` : msg);
+            const hint = err.response?.data?.hint || '';
+            setDeviceOfflineError({ message: msg, hint });
         }
     };
 
@@ -470,7 +472,10 @@ export function StudentManagement({ user, timetable }: StudentManagementProps) {
                                 </div>
                                 <div className="flex gap-3 justify-center">
                                     <button
-                                        onClick={handleRetakeMobile}
+                                        onClick={() => {
+                                            setDeviceOfflineError(null);
+                                            handleRetakeMobile();
+                                        }}
                                         disabled={photoUpdateStatus === 'waiting_mobile'}
                                         className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-black uppercase italic tracking-widest shadow-lg shadow-blue-500/20 hover:bg-blue-700 hover:scale-[1.02] transition-all disabled:opacity-50"
                                     >
@@ -494,6 +499,24 @@ export function StudentManagement({ user, timetable }: StudentManagementProps) {
                                         </button>
                                     </div>
                                 </div>
+
+                                {deviceOfflineError && (
+                                    <div className="mt-4 p-4 bg-red-50 border border-red-100 border-dashed rounded-2xl animate-in fade-in slide-in-from-top-2 duration-300">
+                                        <div className="flex items-start gap-3 text-left">
+                                            <div className="mt-0.5 p-1 bg-white rounded-lg text-red-500 shadow-sm border border-red-50">
+                                                <AlertCircle size={14} />
+                                            </div>
+                                            <div>
+                                                <p className="text-[11px] font-black text-red-600 uppercase italic tracking-tight">Device Connection Failed</p>
+                                                <p className="text-[10px] text-red-500 font-bold mt-0.5 leading-relaxed">{deviceOfflineError.message}</p>
+                                                {deviceOfflineError.hint && (
+                                                    <p className="text-[9px] text-red-400 font-medium mt-1 uppercase tracking-wider">{deviceOfflineError.hint}</p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
                                 {photoPreview && (
                                     <div className="mt-6 pt-6 border-t border-slate-100">
                                         <div className="flex flex-col items-center gap-3">

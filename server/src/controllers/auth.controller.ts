@@ -506,7 +506,7 @@ export async function changePassword(req: Request, res: Response): Promise<void>
 
     const isMatch = await faculty.comparePassword(oldPassword);
     if (!isMatch) {
-      res.status(401).json({ message: 'Old password is incorrect' });
+      res.status(400).json({ message: 'Old password is incorrect' });
       return;
     }
 

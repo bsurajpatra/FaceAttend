@@ -77,11 +77,21 @@ export function Profile({ user }: ProfileProps) {
                 if (formData.newPassword !== formData.confirmPassword) {
                     throw new Error('New passwords do not match');
                 }
-                await changePasswordApi({
-                    oldPassword: formData.oldPassword,
-                    newPassword: formData.newPassword,
-                    confirmPassword: formData.confirmPassword
-                });
+
+                try {
+                    await changePasswordApi({
+                        oldPassword: formData.oldPassword,
+                        newPassword: formData.newPassword,
+                        confirmPassword: formData.confirmPassword
+                    });
+                } catch (passErr: any) {
+                    // Critical Fix: If password change fails with 401 (Wrong Old Password), 
+                    // we catch it here to prevent the global axios interceptor from logging us out.
+                    const passErrorMsg = passErr?.response?.data?.message || 'Security sync failed: Verify your old password';
+                    setError(passErrorMsg);
+                    setIsLoading(false);
+                    return; // Stop execution, don't proceed to success
+                }
             }
 
             if (res.emailVerificationRequired) {

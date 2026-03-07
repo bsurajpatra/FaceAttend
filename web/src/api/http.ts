@@ -21,7 +21,14 @@ http.interceptors.request.use((config) => {
 http.interceptors.response.use(
     (response) => response,
     (error) => {
-        if (error.response?.status === 401) {
+        const errorMsg = error.response?.data?.message?.toLowerCase() || '';
+        const isAuthError = error.response?.status === 401;
+
+        // Don't auto-logout if the error message is about credentials (incorrect old password)
+        // This allows individual components to handle user-facing credential errors with status 401 or 400.
+        const isCredentialMismatch = errorMsg.includes('password') || errorMsg.includes('credentials') || errorMsg.includes('otp') || errorMsg.includes('code');
+
+        if (isAuthError && !isCredentialMismatch) {
             localStorage.removeItem('token');
             localStorage.removeItem('user');
             if (window.location.pathname !== '/login') {
