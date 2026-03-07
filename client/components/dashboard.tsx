@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, Pressable, ScrollView, Animated, Dimensions, TouchableWithoutFeedback, PanResponder } from 'react-native';
+import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { Image } from 'expo-image';
@@ -53,6 +54,7 @@ export default function Dashboard({
   onTakeAttendance,
   isTrusted
 }: DashboardProps) {
+  const router = useRouter();
   const [isHoursModalVisible, setHoursModalVisible] = useState(false);
   const [currentSession, setCurrentSession] = useState<any>(null);
   const [hasRegisteredStudents, setHasRegisteredStudents] = useState<boolean | null>(null);
@@ -424,9 +426,20 @@ export default function Dashboard({
                   <HourSelectModal
                     visible={isHoursModalVisible}
                     onClose={() => setHoursModalVisible(false)}
-                    onSelectHour={(hours) => {
+                    onSelectHour={(selectedHours) => {
                       setHoursModalVisible(false);
-                      onTakeAttendance && onTakeAttendance(hours);
+                      if (currentSession) {
+                        router.push({
+                          pathname: '/take-attendance',
+                          params: {
+                            subject: currentSession.subject,
+                            hours: JSON.stringify(selectedHours),
+                            section: currentSession.section,
+                            sessionType: currentSession.sessionType
+                          }
+                        });
+                      }
+                      onTakeAttendance && onTakeAttendance(selectedHours);
                     }}
                     hours={currentSession.hours}
                     timeSlots={TIME_SLOTS}

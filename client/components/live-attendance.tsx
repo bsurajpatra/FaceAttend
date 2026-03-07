@@ -12,7 +12,13 @@ import {
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
-import * as FaceDetector from 'expo-face-detector';
+// import * as FaceDetector from 'expo-face-detector'; // Moved to lazy load to prevent crash if native module is missing
+let FaceDetector: any = null;
+try {
+  FaceDetector = require('expo-face-detector');
+} catch (e) {
+  console.warn('ExpoFaceDetector native module not found. On-device pre-filtering disabled.');
+}
 import { useKiosk } from '../contexts/KioskContext';
 import { PasswordModal } from './PasswordModal';
 import { markAttendanceApi, MarkAttendanceInput } from '@/api/attendance';
@@ -186,20 +192,33 @@ export default function LiveAttendance({
         });
 
         if (photo?.uri) {
-          // On-device Face Detection (Pre-filter)
-          const detection = await FaceDetector.detectFacesAsync(photo.uri, {
-            mode: FaceDetector.FaceDetectorMode.fast,
-            detectLandmarks: FaceDetector.FaceDetectorLandmarks.none,
-            runClassifications: FaceDetector.FaceDetectorClassifications.none,
-          });
+          // On-device Face Detection (Pre-filter) - only run if module exists
+          if (FaceDetector && FaceDetector.detectFacesAsync) {
+            try {
+              const detection = await FaceDetector.detectFacesAsync(photo.uri, {
+                mode: FaceDetector.FaceDetectorMode.fast,
+                detectLandmarks: FaceDetector.FaceDetectorLandmarks.none,
+                runClassifications: FaceDetector.FaceDetectorClassifications.none,
+              });
 
-          if (detection.faces.length > 0) {
-            setHasFace(true);
+              if (detection.faces.length > 0) {
+                setHasFace(true);
+                if (photo.base64) {
+                  processFrameAsync(photo.base64);
+                }
+              } else {
+                setHasFace(false);
+              }
+            } catch (detectorError) {
+              console.error("Face detection error:", detectorError);
+              // Fallback: send anyway if detector fails
+              if (photo.base64) processFrameAsync(photo.base64);
+            }
+          } else {
+            // Fallback: No detector available, send all frames to server
             if (photo.base64) {
               processFrameAsync(photo.base64);
             }
-          } else {
-            setHasFace(false);
           }
         }
 

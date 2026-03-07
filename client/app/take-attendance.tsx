@@ -7,7 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { getDeviceName } from '@/utils/device';
 
-const TakeAttendancePage = () => {
+export default function TakeAttendancePage() {
   const params = useLocalSearchParams<{ subject: string; hours: string; section: string; sessionType: string }>();
 
   // Stabilize hours array to prevent infinite loops in useEffect
@@ -246,4 +246,3 @@ const TakeAttendancePage = () => {
   );
 };
 
-export default TakeAttendancePage;
