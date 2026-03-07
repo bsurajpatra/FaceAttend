@@ -4,23 +4,27 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { StatusBar } from 'expo-status-bar';
 
-// Expo-compatible kiosk mode implementation with Device Owner support
+import Kiosk from '../utils/kiosk';
+
+// Native-integrated kiosk mode implementation
 const ExpoKiosk = {
   enableKioskMode: async () => {
     if (Platform.OS === 'android') {
       try {
         // Lock orientation to portrait
         await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT);
-        
-        // Enable lock task mode (if Device Owner is set)
-        try {
-          // This will work if Device Owner privileges are granted
-          console.log('Attempting to enable Lock Task Mode...');
-          // Note: This requires Device Owner setup
-        } catch (error) {
-          console.log('Lock Task Mode not available (Device Owner required)');
+
+        // Enable lock task mode
+        const isOwner = await Kiosk.isDeviceOwner();
+        console.log(`Lock Task Mode: Device Owner status = ${isOwner}`);
+
+        const success = await Kiosk.startKioskMode();
+        if (success) {
+          console.log('Native Lock Task Mode Enabled');
+        } else {
+          console.log('Lock Task Mode activation failed (Check Device Owner status)');
         }
-        
+
         console.log('Expo Kiosk Mode Enabled - Orientation locked');
       } catch (error) {
         console.error('Failed to enable kiosk mode:', error);
@@ -32,15 +36,10 @@ const ExpoKiosk = {
       try {
         // Unlock orientation
         await ScreenOrientation.unlockAsync();
-        
-        // Disable lock task mode (if Device Owner is set)
-        try {
-          console.log('Attempting to disable Lock Task Mode...');
-          // Note: This requires Device Owner setup
-        } catch (error) {
-          console.log('Lock Task Mode not available (Device Owner required)');
-        }
-        
+
+        // Disable lock task mode
+        await Kiosk.stopKioskMode();
+
         console.log('Expo Kiosk Mode Disabled - Orientation unlocked');
       } catch (error) {
         console.error('Failed to disable kiosk mode:', error);
@@ -48,24 +47,12 @@ const ExpoKiosk = {
     }
   },
   hideSystemUI: async () => {
-    if (Platform.OS === 'android') {
-      try {
-        // Hide system UI (if Device Owner is set)
-        console.log('System UI Hidden (Device Owner required for full effect)');
-      } catch (error) {
-        console.log('System UI hiding not available (Device Owner required)');
-      }
-    }
+    // Hidden automatically by Lock Task Mode on most devices
+    console.log('System UI Hidden via Lock Task Mode');
   },
   showSystemUI: async () => {
-    if (Platform.OS === 'android') {
-      try {
-        // Show system UI (if Device Owner is set)
-        console.log('System UI Shown (Device Owner required for full effect)');
-      } catch (error) {
-        console.log('System UI showing not available (Device Owner required)');
-      }
-    }
+    // Restored automatically by disabling Lock Task Mode
+    console.log('System UI Restored');
   },
 };
 
@@ -151,13 +138,13 @@ export const KioskProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       if (Platform.OS === 'android') {
         // Enable Expo kiosk mode
         await ExpoKiosk.enableKioskMode();
-        
+
         // Hide system UI for immersive experience
         await ExpoKiosk.hideSystemUI();
-        
+
         console.log('Kiosk mode enabled');
       }
-      
+
       setIsKioskMode(true);
     } catch (error) {
       console.error('Error enabling kiosk mode:', error);
@@ -173,13 +160,13 @@ export const KioskProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         if (Platform.OS === 'android') {
           // Disable Expo kiosk mode
           await ExpoKiosk.disableKioskMode();
-          
+
           // Show system UI
           await ExpoKiosk.showSystemUI();
-          
+
           console.log('Kiosk mode disabled');
         }
-        
+
         setIsKioskMode(false);
         setShowPasswordModal(false);
         return true;

@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
+import * as FaceDetector from 'expo-face-detector';
 import { useKiosk } from '../contexts/KioskContext';
 import { PasswordModal } from './PasswordModal';
 import { markAttendanceApi, MarkAttendanceInput } from '@/api/attendance';
@@ -74,6 +75,7 @@ export default function LiveAttendance({
   const [isButtonDisabled, setIsButtonDisabled] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
   const [remainingMinutes, setRemainingMinutes] = useState<number | null>(null);
+  const [hasFace, setHasFace] = useState(false);
 
   const cameraRef = useRef<CameraView>(null);
   const detectionIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -170,7 +172,7 @@ export default function LiveAttendance({
 
     // Decoupled loop: captures frames every 2.2s without waiting for API response
     detectionIntervalRef.current = setInterval(async () => {
-      if (isCapturingRef.current || !cameraRef.current || !isDetecting) return;
+      if (isCapturingRef.current || !cameraRef.current || !isDetecting || !hasFace) return;
 
       try {
         isCapturingRef.current = true;
@@ -183,12 +185,25 @@ export default function LiveAttendance({
           exif: false,
         });
 
-        isCapturingRef.current = false;
+        if (photo?.uri) {
+          // On-device Face Detection (Pre-filter)
+          const detection = await FaceDetector.detectFacesAsync(photo.uri, {
+            mode: FaceDetector.FaceDetectorMode.fast,
+            detectLandmarks: FaceDetector.FaceDetectorLandmarks.none,
+            runClassifications: FaceDetector.FaceDetectorClassifications.none,
+          });
 
-        if (photo?.base64) {
-          // Process asynchronously
-          processFrameAsync(photo.base64);
+          if (detection.faces.length > 0) {
+            setHasFace(true);
+            if (photo.base64) {
+              processFrameAsync(photo.base64);
+            }
+          } else {
+            setHasFace(false);
+          }
         }
+
+        isCapturingRef.current = false;
       } catch (err) {
         isCapturingRef.current = false;
         console.error("Frame capture error:", err);

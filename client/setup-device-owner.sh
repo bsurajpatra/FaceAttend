@@ -50,7 +50,7 @@ if [ "$APP_COUNT" -gt 50 ]; then
 fi
 
 # Package name
-PACKAGE_NAME="com.anonymous.faceattend"
+PACKAGE_NAME="com.faceattend.app"
 echo "📦 Package: $PACKAGE_NAME"
 
 # Check if app is installed

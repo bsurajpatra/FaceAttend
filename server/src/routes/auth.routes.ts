@@ -23,14 +23,25 @@ import {
 import { getAuditLogs } from '../controllers/audit.controller';
 import { verifyFacultyToken } from '../middleware/auth';
 
+import { rateLimit } from 'express-rate-limit';
+
 export const authRouter = Router();
 
-authRouter.post('/register', register);
-authRouter.post('/login', login);
+// Rate limiting: 10 attempts per 15 minutes for sensitive auth routes
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    message: { message: 'Too many login attempts, please try again after 15 minutes' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+authRouter.post('/register', authLimiter, register);
+authRouter.post('/login', authLimiter, login);
 authRouter.post('/logout', verifyFacultyToken, logout);
 authRouter.get('/profile', verifyFacultyToken, getProfile);
 authRouter.put('/profile', verifyFacultyToken, updateProfile);
-authRouter.post('/change-password', verifyFacultyToken, changePassword);
+authRouter.post('/change-password', verifyFacultyToken, authLimiter, changePassword);
 authRouter.get('/subjects', verifyFacultyToken, getFacultySubjects);
 
 // Device management
@@ -39,13 +50,13 @@ authRouter.delete('/devices/:deviceId', verifyFacultyToken, revokeDevice);
 authRouter.post('/devices/trust', verifyFacultyToken, trustDevice);
 authRouter.post('/devices/logout', verifyFacultyToken, logoutDevice);
 authRouter.get('/audit-logs', verifyFacultyToken, getAuditLogs);
-authRouter.post('/forgot-password', forgotPassword);
-authRouter.post('/reset-password', resetPassword);
-authRouter.post('/verify-otp', verifyOTP);
-authRouter.post('/resend-otp', resendOTP);
-authRouter.post('/verify-2fa', verify2FA);
+authRouter.post('/forgot-password', authLimiter, forgotPassword);
+authRouter.post('/reset-password', authLimiter, resetPassword);
+authRouter.post('/verify-otp', authLimiter, verifyOTP);
+authRouter.post('/resend-otp', authLimiter, resendOTP);
+authRouter.post('/verify-2fa', authLimiter, verify2FA);
 authRouter.post('/toggle-2fa', verifyFacultyToken, toggle2FA);
-authRouter.post('/resend-2fa', resend2FA);
+authRouter.post('/resend-2fa', authLimiter, resend2FA);
 authRouter.post('/verify-email-change', verifyFacultyToken, verifyEmailChangeOTP);
 
 

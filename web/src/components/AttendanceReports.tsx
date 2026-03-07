@@ -12,6 +12,7 @@ import {
     FileText,
     Calendar
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { getAttendanceReportsApi, getAttendanceSessionApi } from '../api/attendance';
 import { getTimeRange } from '../lib/timeSlots';
 import { cn } from '../lib/utils';
@@ -154,44 +155,69 @@ export function AttendanceReports() {
         }
     };
 
-    const exportToCSV = (session: any) => {
-        const headers = ['Name', 'Roll Number', 'Status', 'Marked At', 'Confidence'];
-        const rows = [
-            ...(session.presentStudentsList || []).map((s: any) => [
+    const exportToExcel = (session: any) => {
+        const wb = XLSX.utils.book_new();
+
+        // 1. Create Metadata Sheet
+        const metaData = [
+            ['Attendance Report'],
+            ['Subject', session.subject],
+            ['Section', session.section],
+            ['Session Type', session.sessionType],
+            ['Date', new Date(session.date).toLocaleDateString()],
+            ['Time', getTimeRange(session.hours)],
+            ['Location', formatLocation(session.location)],
+            ['Summary', `${session.presentStudents} Present / ${session.totalStudents} Total (${session.attendancePercentage}%)`],
+            [],
+            ['Detailed Attendance Records']
+        ];
+
+        const ws_meta = XLSX.utils.aoa_to_sheet(metaData);
+
+        // 2. Create Records Sheet
+        const recordsData = [
+            ['Name', 'Roll Number', 'Status', 'Marked At', 'Confidence Score']
+        ];
+
+        // Add present students
+        (session.presentStudentsList || []).forEach((s: any) => {
+            recordsData.push([
                 s.name,
                 s.rollNumber,
                 'Present',
                 s.markedAt ? new Date(s.markedAt).toLocaleString() : '',
-                s.confidence ? Math.round(s.confidence * 100) + '%' : ''
-            ]),
-            ...(session.absentStudentsList || []).map((s: any) => [
+                s.confidence ? (Math.round(s.confidence * 100) + '%') : ''
+            ]);
+        });
+
+        // Add absent students
+        (session.absentStudentsList || []).forEach((s: any) => {
+            recordsData.push([
                 s.name,
                 s.rollNumber,
                 'Absent',
                 '',
                 ''
-            ])
+            ]);
+        });
+
+        const ws_records = XLSX.utils.aoa_to_sheet(recordsData);
+
+        // Add styling (column widths)
+        ws_records['!cols'] = [
+            { wch: 25 }, // Name
+            { wch: 15 }, // Roll Number
+            { wch: 10 }, // Status
+            { wch: 25 }, // Marked At
+            { wch: 15 }  // Confidence
         ];
 
-        const csvContent = [
-            ['Report', `${session.subject} - ${session.section}`],
-            ['Date', new Date(session.date).toLocaleString()],
-            ['Type', session.sessionType],
-            ['Location', formatLocation(session.location)],
-            [],
-            headers,
-            ...rows
-        ].map(e => e.join(",")).join("\n");
+        // Add sheets to workbook
+        XLSX.utils.book_append_sheet(wb, ws_meta, "Summary");
+        XLSX.utils.book_append_sheet(wb, ws_records, "Attendance Details");
 
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement("a");
-        const url = URL.createObjectURL(blob);
-        link.setAttribute("href", url);
-        link.setAttribute("download", `Attendance_${session.subject}_${session.section}_${new Date(session.date).toLocaleDateString()}.csv`);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        // Generate and download
+        XLSX.writeFile(wb, `Attendance_${session.subject}_${session.section}_${new Date(session.date).toLocaleDateString().replace(/\//g, '-')}.xlsx`);
     };
 
     const filteredReports = reports.filter(r =>
@@ -213,11 +239,11 @@ export function AttendanceReports() {
 
                     <div className="flex items-center gap-3">
                         <button
-                            onClick={() => exportToCSV(selectedSession)}
+                            onClick={() => exportToExcel(selectedSession)}
                             className="bg-emerald-50 text-emerald-600 border border-emerald-100 px-4 py-2 rounded-xl font-black flex items-center gap-2 hover:bg-emerald-100 transition-all active:scale-[0.98] shadow-sm uppercase tracking-widest text-[10px] italic"
                         >
                             <FileSpreadsheet size={16} />
-                            CSV
+                            EXCEL
                         </button>
                         <button
                             onClick={() => exportToPDF(selectedSession)}
