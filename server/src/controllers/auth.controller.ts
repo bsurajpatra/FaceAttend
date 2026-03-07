@@ -26,14 +26,16 @@ export async function register(req: Request, res: Response): Promise<void> {
     }
 
     // Check if email already exists
-    const existingEmail = await Faculty.findOne({ email });
+    const normalizedEmail = email.trim().toLowerCase();
+    const existingEmail = await Faculty.findOne({ email: normalizedEmail });
     if (existingEmail) {
       res.status(409).json({ message: 'Email already registered' });
       return;
     }
 
     // Check if username already exists
-    const existingUsername = await Faculty.findOne({ username });
+    const normalizedUsername = username.trim().toLowerCase();
+    const existingUsername = await Faculty.findOne({ username: normalizedUsername });
     if (existingUsername) {
       res.status(409).json({ message: 'Username already taken' });
       return;
@@ -44,16 +46,16 @@ export async function register(req: Request, res: Response): Promise<void> {
     const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
     const faculty = await Faculty.create({
-      name,
-      email,
-      username,
+      name: name.trim(),
+      email: normalizedEmail,
+      username: normalizedUsername,
       password,
       otp,
       otpExpires,
       isVerified: false
     });
 
-    await sendOTPEmail(email, otp);
+    await sendOTPEmail(normalizedEmail, otp);
 
     res.status(201).json({
       message: 'Registration successful. Please verify your email with the OTP sent.',
@@ -101,7 +103,8 @@ export async function login(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    const faculty = await Faculty.findOne({ username });
+    const normalizedUsername = username.trim().toLowerCase();
+    const faculty = await Faculty.findOne({ username: normalizedUsername });
     if (!faculty) {
       res.status(401).json({ message: 'Invalid credentials' });
       return;
@@ -403,14 +406,17 @@ export async function updateProfile(req: Request, res: Response): Promise<void> 
       return;
     }
 
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedUsername = username.trim().toLowerCase();
+
     // Ensure uniqueness excluding current user
-    const emailClash = await Faculty.findOne({ email, _id: { $ne: userId } });
+    const emailClash = await Faculty.findOne({ email: normalizedEmail, _id: { $ne: userId } });
     if (emailClash) {
       res.status(409).json({ message: 'Email already in use' });
       return;
     }
 
-    const usernameClash = await Faculty.findOne({ username, _id: { $ne: userId } });
+    const usernameClash = await Faculty.findOne({ username: normalizedUsername, _id: { $ne: userId } });
     if (usernameClash) {
       res.status(409).json({ message: 'Username already taken' });
       return;
@@ -585,7 +591,8 @@ export async function forgotPassword(req: Request, res: Response): Promise<void>
       return;
     }
 
-    const faculty = await Faculty.findOne({ email });
+    const normalizedEmail = email.trim().toLowerCase();
+    const faculty = await Faculty.findOne({ email: normalizedEmail });
     if (!faculty) {
       // For security reasons, don't reveal if user exists
       res.json({ message: 'If an account with that email exists, a password reset link has been sent.' });
@@ -665,8 +672,9 @@ export async function verifyOTP(req: Request, res: Response): Promise<void> {
       return;
     }
 
+    const normalizedEmail = email.trim().toLowerCase();
     const faculty = await Faculty.findOne({
-      email,
+      email: normalizedEmail,
       otp,
       otpExpires: { $gt: Date.now() }
     });
@@ -721,7 +729,8 @@ export async function resendOTP(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    const faculty = await Faculty.findOne({ email });
+    const normalizedEmail = email.trim().toLowerCase();
+    const faculty = await Faculty.findOne({ email: normalizedEmail });
     if (!faculty) {
       res.status(404).json({ message: 'User not found' });
       return;
@@ -739,7 +748,7 @@ export async function resendOTP(req: Request, res: Response): Promise<void> {
     faculty.otpExpires = otpExpires;
     await faculty.save();
 
-    await sendOTPEmail(email, otp);
+    await sendOTPEmail(normalizedEmail, otp);
 
     res.json({ message: 'New OTP sent to your email' });
   } catch (error) {
@@ -756,8 +765,9 @@ export async function verify2FA(req: Request, res: Response): Promise<void> {
       return;
     }
 
+    const normalizedEmail = email.trim().toLowerCase();
     const faculty = await Faculty.findOne({
-      email,
+      email: normalizedEmail,
       otp,
       otpExpires: { $gt: Date.now() }
     });
@@ -840,7 +850,8 @@ export async function toggle2FA(req: Request, res: Response): Promise<void> {
 export async function resend2FA(req: Request, res: Response): Promise<void> {
   try {
     const { email } = req.body;
-    const faculty = await Faculty.findOne({ email });
+    const normalizedEmail = email.trim().toLowerCase();
+    const faculty = await Faculty.findOne({ email: normalizedEmail });
     if (!faculty) {
       res.status(404).json({ message: 'User not found' });
       return;
@@ -858,7 +869,7 @@ export async function resend2FA(req: Request, res: Response): Promise<void> {
     faculty.otpExpires = otpExpires;
     await faculty.save();
 
-    await send2FAEmail(email, otp);
+    await send2FAEmail(normalizedEmail, otp);
 
     res.json({ message: 'New security code sent to your email' });
   } catch (error) {

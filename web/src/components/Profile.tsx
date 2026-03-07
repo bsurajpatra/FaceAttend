@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { User, ShieldCheck, KeyRound, Save, ShieldAlert, Loader2, X } from 'lucide-react';
-import { toggle2faApi, verify2faApi, resend2faApi, updateProfileApi, verifyEmailChangeApi } from '../api/auth';
+import { User, ShieldCheck, KeyRound, Save, ShieldAlert, Loader2, X, CheckCircle2 } from 'lucide-react';
+import { toggle2faApi, verify2faApi, resend2faApi, updateProfileApi, verifyEmailChangeApi, changePasswordApi } from '../api/auth';
 import { cn } from '../lib/utils';
 
 interface ProfileProps {
@@ -12,6 +12,9 @@ export function Profile({ user }: ProfileProps) {
         name: user?.name || '',
         username: user?.username || '',
         email: user?.email || '',
+        oldPassword: '',
+        newPassword: '',
+        confirmPassword: '',
     });
 
     const [twoFactorEnabled, setTwoFactorEnabled] = useState(user?.twoFactorEnabled || false);
@@ -22,6 +25,7 @@ export function Profile({ user }: ProfileProps) {
     const [verificationType, setVerificationType] = useState<'2fa-toggle' | 'email-change'>('2fa-toggle');
     const [otp, setOtp] = useState('');
     const [error, setError] = useState<string | null>(null);
+    const [successMessage, setSuccessMessage] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [resendTimer, setResendTimer] = useState(0);
 
@@ -31,6 +35,9 @@ export function Profile({ user }: ProfileProps) {
                 name: user.name || '',
                 username: user.username || '',
                 email: user.email || '',
+                oldPassword: '',
+                newPassword: '',
+                confirmPassword: '',
             });
             setTwoFactorEnabled(user.twoFactorEnabled || false);
         }
@@ -53,21 +60,49 @@ export function Profile({ user }: ProfileProps) {
     const handleUpdateProfile = async () => {
         setIsLoading(true);
         setError(null);
+        setSuccessMessage(null);
         try {
-            const res = await updateProfileApi(formData);
+            // 1. Update Profile Info
+            const res = await updateProfileApi({
+                name: formData.name,
+                username: formData.username,
+                email: formData.email
+            });
+
+            // 2. Handle Password Change if requested
+            if (formData.oldPassword || formData.newPassword || formData.confirmPassword) {
+                if (!formData.oldPassword || !formData.newPassword || !formData.confirmPassword) {
+                    throw new Error('All password fields are required for security sync');
+                }
+                if (formData.newPassword !== formData.confirmPassword) {
+                    throw new Error('New passwords do not match');
+                }
+                await changePasswordApi({
+                    oldPassword: formData.oldPassword,
+                    newPassword: formData.newPassword,
+                    confirmPassword: formData.confirmPassword
+                });
+            }
 
             if (res.emailVerificationRequired) {
                 setVerificationType('email-change');
                 setShowOtpModal(true);
                 setResendTimer(60);
             } else {
-                // Optionally show success message
-                setError(null);
-                // Force reload or state update if needed, but for now assuming silent success or parent update
-                window.location.reload();
+                setSuccessMessage('Profile & Security synced successfully');
+                setFormData(prev => ({
+                    ...prev,
+                    oldPassword: '',
+                    newPassword: '',
+                    confirmPassword: '',
+                }));
+                // Only reload if email or username changed to reflect in overall app state
+                if (user.email !== formData.email || user.username !== formData.username || user.name !== formData.name) {
+                    setTimeout(() => window.location.reload(), 1500);
+                }
             }
         } catch (err: any) {
-            setError(err?.response?.data?.message || 'Failed to update profile');
+            setError(err?.response?.data?.message || err.message || 'Failed to update profile');
         } finally {
             if (!showOtpModal) setIsLoading(false);
         }
@@ -99,9 +134,6 @@ export function Profile({ user }: ProfileProps) {
         try {
             if (verificationType === '2fa-toggle') {
                 await resend2faApi(user.email);
-            } else {
-                // Logic for resending email change OTP if endpoint existed
-                // For now, no-op or rely on user re-initiating
             }
             setResendTimer(60);
             setError(null);
@@ -123,7 +155,7 @@ export function Profile({ user }: ProfileProps) {
     };
 
     return (
-        <div className="h-full flex flex-col animate-in fade-in slide-in-from-right-4 duration-500 overflow-hidden scrollbar-hide">
+        <div className="h-full flex flex-col animate-in fade-in slide-in-from-right-4 duration-500 overflow-hidden scrollbar-hide relative">
             <h2 className="text-2xl font-black text-slate-900 mb-4 mt-1 tracking-tight uppercase italic flex items-center gap-3 flex-shrink-0">
                 <User size={28} className="text-blue-600" />
                 Profile
@@ -218,16 +250,30 @@ export function Profile({ user }: ProfileProps) {
                                     </h3>
                                     <div className="space-y-4">
                                         <div className="w-full sm:w-1/2">
-                                            <InputGroup label="Old Password" type="password" placeholder="••••••••" />
+                                            <InputGroup label="Old Password" name="oldPassword" type="password" placeholder="••••••••" value={formData.oldPassword} onChange={handleChange} />
                                         </div>
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                            <InputGroup label="New Password" type="password" placeholder="••••••••" />
-                                            <InputGroup label="Confirm Password" type="password" placeholder="••••••••" />
+                                            <InputGroup label="New Password" name="newPassword" type="password" placeholder="••••••••" value={formData.newPassword} onChange={handleChange} />
+                                            <InputGroup label="Confirm Password" name="confirmPassword" type="password" placeholder="••••••••" value={formData.confirmPassword} onChange={handleChange} />
                                         </div>
                                     </div>
                                 </section>
 
-                                <div className="pt-2 flex justify-end">
+                                <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-4">
+                                    <div className="flex flex-col gap-2">
+                                        {error && (
+                                            <div className="p-3 bg-red-50 text-red-600 text-xs font-bold rounded-xl flex items-center gap-2 animate-in slide-in-from-top-2">
+                                                <ShieldAlert size={14} />
+                                                {error}
+                                            </div>
+                                        )}
+                                        {successMessage && (
+                                            <div className="p-3 bg-emerald-50 text-emerald-600 text-xs font-bold rounded-xl flex items-center gap-2 animate-in slide-in-from-top-2">
+                                                <CheckCircle2 size={14} />
+                                                {successMessage}
+                                            </div>
+                                        )}
+                                    </div>
                                     <button
                                         type="button"
                                         onClick={handleUpdateProfile}
@@ -242,6 +288,7 @@ export function Profile({ user }: ProfileProps) {
                     </div>
                 </div>
             </div>
+
             {/* OTP Verification Modal */}
             {showOtpModal && (
                 <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
