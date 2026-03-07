@@ -171,14 +171,20 @@ export async function registerStudent(req: Request, res: Response): Promise<void
 
       if (!hasEnrollment) {
         console.log('➕ Adding new enrollment');
-        existing.enrollments.push({ subject, section, facultyId: new mongoose.Types.ObjectId(facultyId) });
+        existing.enrollments.push({ subject, section, sessionType, facultyId: new mongoose.Types.ObjectId(facultyId) });
       } else {
         console.log('ℹ️ Enrollment already exists');
       }
 
       // Update embeddings with latest capture (keep legacy faceDescriptor for compatibility)
       existing.faceDescriptor = faceEmbedding; // Keep legacy field
-      existing.embeddings = [faceEmbedding]; // Add to FaceNet embeddings
+
+      if (!existing.embeddings) existing.embeddings = [];
+      existing.embeddings.push(faceEmbedding);
+      // Cap at 5 embeddings to improve recognition accuracy across different conditions
+      if (existing.embeddings.length > 5) {
+        existing.embeddings.shift();
+      }
 
       await existing.save();
       console.log('✅ Student updated successfully');
@@ -197,7 +203,7 @@ export async function registerStudent(req: Request, res: Response): Promise<void
     const created = await Student.create({
       name,
       rollNumber,
-      enrollments: [{ subject, section, facultyId: new mongoose.Types.ObjectId(facultyId) }],
+      enrollments: [{ subject, section, sessionType, facultyId: new mongoose.Types.ObjectId(facultyId) }],
       faceDescriptor: faceEmbedding, // Keep legacy field
       embeddings: [faceEmbedding], // Add to FaceNet embeddings
     });
@@ -290,7 +296,7 @@ export async function getStudents(req: Request, res: Response): Promise<void> {
         rollNumber: student.rollNumber,
         subject: subject,
         section: section,
-        sessionType: 'Lecture', // Default session type since it's not stored in enrollment
+        sessionType: enrollment?.sessionType || 'Lecture',
         createdAt: student.createdAt,
         attendancePercentage // Added field
       };
@@ -370,7 +376,12 @@ export async function updateStudent(req: Request, res: Response): Promise<void> 
 
         // Update both legacy and new embedding fields
         student.faceDescriptor = faceEmbedding;
-        student.embeddings = [faceEmbedding];
+
+        if (!student.embeddings) student.embeddings = [];
+        student.embeddings.push(faceEmbedding);
+        if (student.embeddings.length > 5) {
+          student.embeddings.shift();
+        }
       } catch (error: any) {
         console.error('❌ FaceNet processing error during update:', error);
         const isServiceDown = error.message.includes('FaceNet service is not running');
@@ -568,7 +579,7 @@ export async function initiateStudentRegistration(req: Request, res: Response): 
     const newStudent = await Student.create({
       name,
       rollNumber,
-      enrollments: [{ subject, section, facultyId: new mongoose.Types.ObjectId(facultyId) }],
+      enrollments: [{ subject, section, sessionType, facultyId: new mongoose.Types.ObjectId(facultyId) }],
       faceDescriptor: [],
       embeddings: []
     });
@@ -657,12 +668,38 @@ export async function uploadStudentFace(req: Request, res: Response): Promise<vo
     });
 
     if (duplicateFaceDescriptor) {
-      // reuse similarity logic if needed, skipping for brevity/speed as this is crucial flow
-      // Assume check passed for now or implement full check
+      // Check if the face descriptor is similar to any existing embedding
+      const existingEmbeddings = duplicateFaceDescriptor.embeddings || (duplicateFaceDescriptor.faceDescriptor.length > 0 ? [duplicateFaceDescriptor.faceDescriptor] : []);
+      let isDuplicateFace = false;
+
+      for (const existingEmbedding of existingEmbeddings) {
+        if (existingEmbedding && existingEmbedding.length > 0) {
+          const similarity = cosineSimilarity(faceEmbedding, existingEmbedding);
+          console.log(`📊 Remote Upload: Face similarity with ${duplicateFaceDescriptor.name}: ${similarity.toFixed(4)}`);
+          if (similarity > 0.8) {
+            isDuplicateFace = true;
+            break;
+          }
+        }
+      }
+
+      if (isDuplicateFace) {
+        console.log('❌ Duplicate face found during remote upload');
+        res.status(400).json({
+          message: 'Face data already exists in this class',
+          hint: `The person in the photo is already registered as ${duplicateFaceDescriptor.name}. Proxy registration is not allowed.`
+        });
+        return;
+      }
     }
 
     student.faceDescriptor = faceEmbedding;
-    student.embeddings = [faceEmbedding];
+
+    if (!student.embeddings) student.embeddings = [];
+    student.embeddings.push(faceEmbedding);
+    if (student.embeddings.length > 5) {
+      student.embeddings.shift();
+    }
     // potentially save photoUri if using storage service, currently base64 is processed but maybe storing raw image?
     // The original registerStudent didn't save photoUri explicitly in the snippet shown but the model supports it.
     // Let's assume just embeddings for now or if `photoUri` is needed we'd upload to S3/disk. The current code doesn't show S3 logic.

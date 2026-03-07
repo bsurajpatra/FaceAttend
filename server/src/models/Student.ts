@@ -3,6 +3,7 @@ import mongoose, { Document, Model, Schema, Types } from 'mongoose';
 export interface Enrollment {
   subject: string;
   section: string;
+  sessionType: 'Lecture' | 'Tutorial' | 'Practical' | 'Skill';
   facultyId: Types.ObjectId;
 }
 
@@ -18,6 +19,12 @@ export interface StudentDocument extends Document {
 const EnrollmentSchema = new Schema<Enrollment>({
   subject: { type: String, required: true, trim: true },
   section: { type: String, required: true, trim: true },
+  sessionType: {
+    type: String,
+    required: true,
+    enum: ['Lecture', 'Tutorial', 'Practical', 'Skill'],
+    default: 'Lecture'
+  },
   facultyId: { type: Schema.Types.ObjectId, ref: 'Faculty', required: true },
 });
 
