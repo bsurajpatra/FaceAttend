@@ -14,22 +14,28 @@ const ExpoKiosk = {
         // Lock orientation to portrait
         await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT);
 
-        // Enable lock task mode
-        const isOwner = await Kiosk.isDeviceOwner();
-        console.log(`Lock Task Mode: Device Owner status = ${isOwner}`);
-
-        const success = await Kiosk.startKioskMode();
-        if (success) {
-          console.log('Native Lock Task Mode Enabled');
-        } else {
-          console.log('Lock Task Mode activation failed (Check Device Owner status)');
+        if (!Kiosk.isAvailable()) {
+          console.warn('Native Kiosk Module not available.');
+          return false; // Return false to indicate full kiosk mode was NOT enabled
         }
 
-        console.log('Expo Kiosk Mode Enabled - Orientation locked');
+        // Enable lock task mode
+        const isOwner = await Kiosk.isDeviceOwner();
+        const success = await Kiosk.startKioskMode();
+        
+        if (success) {
+          console.log('Native Lock Task Mode Enabled');
+          return true;
+        } else {
+          console.log('Lock Task Mode activation failed');
+          return false;
+        }
       } catch (error) {
-        console.error('Failed to enable kiosk mode:', error);
+        console.error('Failed to enable native kiosk mode:', error);
+        return false;
       }
     }
+    return false;
   },
   disableKioskMode: async () => {
     if (Platform.OS === 'android') {
@@ -38,7 +44,9 @@ const ExpoKiosk = {
         await ScreenOrientation.unlockAsync();
 
         // Disable lock task mode
-        await Kiosk.stopKioskMode();
+        if (Kiosk.isAvailable()) {
+          await Kiosk.stopKioskMode();
+        }
 
         console.log('Expo Kiosk Mode Disabled - Orientation unlocked');
       } catch (error) {
@@ -65,6 +73,12 @@ export interface KioskContextType {
   setShowPasswordModal: (show: boolean) => void;
   storedPassword: string | null;
   setStoredPassword: (password: string) => Promise<void>;
+  // Readiness Dashboard fields
+  isDeviceOwner: boolean;
+  hasOverlayPermission: boolean;
+  isKioskAvailable: boolean;
+  checkKioskStatus: () => Promise<void>;
+  requestOverlayPermission: () => Promise<void>;
 }
 
 // Create the context
@@ -75,11 +89,37 @@ export const KioskProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [isKioskMode, setIsKioskMode] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [storedPassword, setStoredPassword] = useState<string | null>(null);
+  
+  // Readiness states
+  const [isDeviceOwner, setIsDeviceOwner] = useState(false);
+  const [hasOverlayPermission, setHasOverlayPermission] = useState(false);
+  const [isKioskAvailable, setIsKioskAvailable] = useState(Kiosk.isAvailable());
 
-  // Load stored password on component mount
+  // Load stored password and check status on mount
   useEffect(() => {
     loadStoredPassword();
+    checkKioskStatus();
   }, []);
+
+  // Check kiosk status periodically or when app returns to foreground
+  const checkKioskStatus = async () => {
+    if (Platform.OS === 'android' && Kiosk.isAvailable()) {
+      const owner = await Kiosk.isDeviceOwner();
+      const overlay = await Kiosk.checkOverlayPermission();
+      setIsDeviceOwner(owner);
+      setHasOverlayPermission(overlay);
+      setIsKioskAvailable(true);
+    } else {
+      setIsKioskAvailable(false);
+    }
+  };
+
+  const requestOverlayPermission = async () => {
+    if (Platform.OS === 'android' && Kiosk.isAvailable()) {
+      await Kiosk.requestOverlayPermission();
+      // Status will refresh when user comes back to the app
+    }
+  };
 
   // Handle back button when in kiosk mode
   useEffect(() => {
@@ -97,17 +137,9 @@ export const KioskProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   // Additional navigation blocking for Expo Go
   useEffect(() => {
     if (isKioskMode) {
-      // Block navigation gestures and hardware buttons
-      const preventNavigation = (e: any) => {
-        e.preventDefault();
-        setShowPasswordModal(true);
-        return false;
-      };
-
       // Add event listeners for additional navigation blocking
       if (Platform.OS === 'android') {
-        // This helps with some navigation blocking in Expo Go
-        console.log('Enhanced navigation blocking enabled for Expo Go');
+        console.log('Enhanced navigation blocking enabled');
       }
     }
   }, [isKioskMode]);
@@ -136,16 +168,52 @@ export const KioskProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const enableKioskMode = async () => {
     try {
       if (Platform.OS === 'android') {
-        // Enable Expo kiosk mode
-        await ExpoKiosk.enableKioskMode();
+        // 1. Check for Overlay permission first
+        const isAvailable = Kiosk.isAvailable();
+        if (isAvailable) {
+          const hasOverlay = await Kiosk.checkOverlayPermission();
+          if (!hasOverlay) {
+            Alert.alert(
+              'Permission Required',
+              'To fully secure the attendance screen, FaceAttend needs the "Display over other apps" permission.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Go to Settings', onPress: () => Kiosk.requestOverlayPermission() }
+              ]
+            );
+            return;
+          }
+        }
 
-        // Hide system UI for immersive experience
+        // 2. Attempt to enable Native Kiosk Mode
+        const fullyEnabled = await ExpoKiosk.enableKioskMode();
+
+        if (!fullyEnabled) {
+          // If native mode failed (Expo Go or missing Device Owner)
+          Alert.alert(
+            'Full Kiosk Unavailable',
+            isAvailable 
+              ? 'Could not enable "Lock Task" mode. Ensure the app is set as Device Owner via ADB.'
+              : 'Full kiosk mode is only available in a development build. Orientation will be locked, but system buttons remain active.',
+            [
+              { text: 'Cancel', style: 'cancel', onPress: () => setIsKioskMode(false) },
+              { 
+                text: 'Continue (Limited)', 
+                onPress: async () => {
+                  await ExpoKiosk.hideSystemUI();
+                  setIsKioskMode(true); 
+                }
+              }
+            ]
+          );
+          return;
+        }
+
+        // 3. If fully enabled, update UI and hide system UI
         await ExpoKiosk.hideSystemUI();
-
-        console.log('Kiosk mode enabled');
+        setIsKioskMode(true);
+        console.log('Kiosk mode fully enabled');
       }
-
-      setIsKioskMode(true);
     } catch (error) {
       console.error('Error enabling kiosk mode:', error);
       Alert.alert('Error', 'Failed to enable kiosk mode');
@@ -194,6 +262,11 @@ export const KioskProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     setShowPasswordModal,
     storedPassword,
     setStoredPassword: storeUserPassword,
+    isDeviceOwner,
+    hasOverlayPermission,
+    isKioskAvailable,
+    checkKioskStatus,
+    requestOverlayPermission,
   };
 
   return (

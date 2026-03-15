@@ -8,6 +8,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Sidebar } from '../components/sidebar';
+import { useKiosk } from '../contexts/KioskContext';
 
 export default function SettingsScreen() {
   const [permission, requestPermission] = useCameraPermissions();
@@ -106,18 +107,20 @@ export default function SettingsScreen() {
     title,
     status,
     value,
-    onToggle
+    onToggle,
+    iconColor
   }: {
     icon: keyof typeof Ionicons.glyphMap;
     title: string;
     status: string;
     value: boolean;
     onToggle: (val: boolean) => void;
+    iconColor?: string;
   }) => (
     <View style={styles.permissionRow}>
       <View style={styles.permissionInfo}>
         <View style={[styles.iconContainer, value ? styles.iconActive : styles.iconInactive]}>
-          <Ionicons name={icon} size={20} color={value ? '#2563EB' : '#94A3B8'} />
+          <Ionicons name={icon} size={20} color={value ? '#2563EB' : (iconColor || '#94A3B8')} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.permissionTitle}>{title}</Text>
@@ -134,6 +137,13 @@ export default function SettingsScreen() {
       />
     </View>
   );
+
+  const {
+    isKioskMode,
+    enableKioskMode,
+    disableKioskMode,
+  } = useKiosk();
+
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
@@ -155,7 +165,11 @@ export default function SettingsScreen() {
         <View style={{ width: 44 }} />
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
 
         {/* Permissions Section */}
         <Text style={styles.sectionHeader}>APP PERMISSIONS</Text>
@@ -207,7 +221,23 @@ export default function SettingsScreen() {
               ]);
             }}
           />
+          <View style={styles.divider} />
+          <PermissionRow
+            icon="lock-closed"
+            title="Kiosk Mode"
+            status={isKioskMode ? 'Locked' : 'Secure Attendance'}
+            value={isKioskMode}
+            iconColor="#2563EB"
+            onToggle={async (next) => {
+              if (next) {
+                await enableKioskMode();
+              } else {
+                Alert.alert('Admin Access', 'Please use the "Exit Kiosk" button on the attendance screen to disable this mode.');
+              }
+            }}
+          />
         </View>
+
 
         {/* Profile Info Section */}
         <Text style={styles.sectionHeader}>PROFILE & SECURITY</Text>
@@ -271,10 +301,10 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     letterSpacing: 0.5,
   },
-  content: {
-    flex: 1,
+  scrollContent: {
     padding: 20,
     paddingTop: 30,
+    paddingBottom: 8,
   },
   sectionHeader: {
     fontSize: 12,
@@ -373,7 +403,7 @@ const styles = StyleSheet.create({
   },
   footer: {
     alignItems: 'center',
-    paddingVertical: 24,
+    paddingVertical: 12,
   },
   footerText: {
     fontSize: 14,
