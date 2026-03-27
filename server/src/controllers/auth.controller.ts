@@ -594,8 +594,7 @@ export async function forgotPassword(req: Request, res: Response): Promise<void>
     const normalizedEmail = email.trim().toLowerCase();
     const faculty = await Faculty.findOne({ email: normalizedEmail });
     if (!faculty) {
-      // For security reasons, don't reveal if user exists
-      res.json({ message: 'If an account with that email exists, a password reset link has been sent.' });
+      res.status(404).json({ message: 'Email not registered' });
       return;
     }
 
@@ -615,7 +614,7 @@ export async function forgotPassword(req: Request, res: Response): Promise<void>
       facultyId: faculty.id
     });
 
-    res.json({ message: 'If an account with that email exists, a password reset link has been sent.' });
+    res.json({ message: 'Password reset link has been sent to your email.' });
   } catch (error) {
     console.error('Forgot password error:', error);
     res.status(500).json({ message: 'Failed to process request' });
