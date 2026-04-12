@@ -28,6 +28,7 @@ export const env = {
   emailUser: process.env.EMAIL_USER,
   emailPass: process.env.EMAIL_PASS,
   clientUrl: process.env.CLIENT_URL,
+  redisUrl: requireEnv('REDIS_URL'),
 } as const;
 
 

@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import jwt, { SignOptions } from 'jsonwebtoken';
 import { Faculty } from '../models/Faculty';
 import { env } from '../config/env';
+import redisClient from '../config/redis';
 import { getIO } from '../socket';
 import { createAuditLog } from '../utils/auditLogger';
 import { sendPasswordResetEmail, sendPasswordResetSuccessEmail, sendOTPEmail, sendWelcomeEmail, send2FAEmail } from '../utils/email';
@@ -81,6 +82,9 @@ export async function logout(req: Request, res: Response): Promise<void> {
       details: 'Faculty manually logged out of their account',
       req
     });
+
+    // Clear Redis session
+    await redisClient.del(`session:${userId}`);
 
     res.json({ message: 'Logged out successfully' });
   } catch (error) {
@@ -188,6 +192,9 @@ export async function login(req: Request, res: Response): Promise<void> {
     }
 
     const token = signToken(faculty.id);
+    // Store session in Redis (7 days TTL to match JWT)
+    await redisClient.setEx(`session:${faculty.id}`, 604800, token);
+
     const isFirstLogin = faculty.isFirstLogin;
 
     if (isFirstLogin) {
@@ -260,6 +267,9 @@ export async function revokeDevice(req: Request, res: Response): Promise<void> {
 
     faculty.devices = faculty.devices.filter(d => d.deviceId !== deviceId);
     await faculty.save();
+
+    // Clear session from Redis if it matches this device (or just clear all for simple enforcement)
+    await redisClient.del(`session:${userId}`);
 
     // Notify the client via socket
     try {
@@ -689,6 +699,9 @@ export async function verifyOTP(req: Request, res: Response): Promise<void> {
     await faculty.save();
 
     const token = signToken(faculty.id);
+    // Store session in Redis
+    await redisClient.setEx(`session:${faculty.id}`, 604800, token);
+
     const isFirstLogin = faculty.isFirstLogin;
 
     if (isFirstLogin) {
@@ -782,6 +795,8 @@ export async function verify2FA(req: Request, res: Response): Promise<void> {
     await faculty.save();
 
     const token = signToken(faculty.id);
+    // Store session in Redis
+    await redisClient.setEx(`session:${faculty.id}`, 604800, token);
 
     // Audit Log
     createAuditLog({
