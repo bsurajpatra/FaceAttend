@@ -10,8 +10,9 @@ The system uses a **triple-tier architecture** separated into a robust Node.js b
 
 1.  **Mobile Client (React Native + Expo):** A streamlined, high-speed app dedicated to the "field work"—taking live attendance and viewing schedules.
 2.  **Web ERP Portal (React + Vite):** The command center. Handles all administrative tasks: student registration, profile management, timetable configuration, and detailed reporting.
-3.  **Core Backend (Express + TypeScript):** The central API orchestration layer managing authentication, data integrity, and real-time Socket.IO synchronization.
-4.  **FaceNet Microservice (Python):** A dedicated AI service for generating 512-dimensional face embeddings and performing cosine-similarity matching.
+3.  **Core Backend (Express + TypeScript):** The central orchestration API managing authentication, web-tier logic, and database operations.
+4.  **Distributed Processing Pipeline (Redis + BullMQ):** Handles high-frequency ML payload requests. Validates, deduplicates, and manages ML confidence windows natively in Redis memory.
+5.  **FaceNet Microservice (Python):** A dedicated AI service for generating 512-dimensional face embeddings and performing cosine-similarity matching.
 
 ---
 
@@ -27,15 +28,16 @@ The system uses a **triple-tier architecture** separated into a robust Node.js b
 
 ### 📱 Mobile App (The Operational Tool)
 *   **Focused UI:** Clutter-free interface designed purely for speed and efficiency in the classroom.
-*   **Live Attendance:** Continuous scanning mode marks students in real-time (0.5s intervals).
+*   **High-Speed Frame Processing:** Accelerated continuous throttled background scanning combined with dynamic JPEG payload compression.
 *   **Smart Dashboard:** Shows ongoing and upcoming classes with "One-Tap" attendance start.
-*   **Kiosk Mode:** (Android) Locks the interface during attendance sessions for security.
+*   **Zero-Lag Asynchrony:** Pushes face buffers to an async queue (BullMQ), yielding 4ms node-response times, updating UI fully offline using realtime WebSocket broadcasts.
 *   **Real-Time Sync:** Instantly reflects timetable changes and student updates made on the Web Portal.
 
-### 🤖 Intelligent Sync & AI
-*   **Socket.IO Real-time Loop:** Changes on the Web Portal (e.g., untrusting a device) reflect on the mobile app within milliseconds.
+### 🤖 Intelligent Queueing & AI
+*   **Event-Driven Inference:** Mobile uploads trigger BullMQ parallel workers (running 20+ concurrent threads) to communicate seamlessly with Python models.
+*   **Redis Real-Time State:** Buffers tracking "live attendance state", detection window cooldowns, and cryptographic hash deduplication caching directly in fast memory.
+*   **Socket.IO Real-time Loop:** AI output, UI updates, and remote trust management reflect on the mobile app within milliseconds.
 *   **FaceNet Embeddings:** State-of-the-art deep learning model for high-accuracy face verification.
-*   **MFA Security:** OTP-based verification for critical profile changes and logins.
 
 ---
 
@@ -72,8 +74,9 @@ client/
 ```
 
 ### Backend Services
-*   **`server/` (Node.js):** REST API, Socket.IO handlers, Database (MongoDB) connection, and Email services.
+*   **`server/` (Node.js):** REST API, BullMQ worker configuration, WebSocket emitters, and Background Sync services.
 *   **`facenet_service/` (Python):** Flask API exposing `/recognize` and `/train` endpoints.
+*   **`redis` (In-Memory Datastore):** Holds JWT sessions, blazing state records, message brokerage queues, and ML face-caching hashes.
 
 ---
 
@@ -82,6 +85,7 @@ client/
 ### 1. Prerequisites
 *   Node.js (v18+) & Python (v3.9+)
 *   MongoDB (Local or Atlas)
+*   Redis Server (Local or Docker)
 *   Expo Go app (for mobile testing)
 
 ### 2. Start Instructions
