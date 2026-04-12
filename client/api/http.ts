@@ -24,6 +24,12 @@ export const http: AxiosInstance = axios.create({
   }
 })();
 
+// Global unauth handler
+let unauthHandler: (() => void) | null = null;
+export const setUnauthHandler = (handler: () => void) => {
+  unauthHandler = handler;
+};
+
 /**
  * Update the HTTP client base URL dynamically
  * @param url - The server URL to set. If undefined, gets from storage. If null, uses default from .env
@@ -96,6 +102,11 @@ http.interceptors.request.use(async (config) => {
 http.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
+    // Intercept 401 Unauthorized globally
+    if (error.response?.status === 401) {
+      if (unauthHandler) unauthHandler();
+    }
+
     const config = error.config as (AxiosRequestConfig & { _retryIndex?: number });
 
     const isNetworkLevel = !error.response;

@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImageManipulator from 'expo-image-manipulator';
 // import * as FaceDetector from 'expo-face-detector'; // Moved to lazy load to prevent crash if native module is missing
 let FaceDetector: any = null;
 try {
@@ -20,8 +21,9 @@ try {
   console.warn('ExpoFaceDetector native module not found. On-device pre-filtering disabled.');
 }
 import { useKiosk } from '../contexts/KioskContext';
+import { useSocket } from '../contexts/SocketContext';
 import { PasswordModal } from './PasswordModal';
-import { markAttendanceApi, MarkAttendanceInput } from '@/api/attendance';
+import { markAttendanceApi, markAttendanceAsyncApi, MarkAttendanceInput } from '@/api/attendance';
 import { getTimeRange, getSessionDuration, getRemainingMinutes } from '@/utils/timeSlots';
 
 type LiveAttendanceProps = {
@@ -87,10 +89,12 @@ export default function LiveAttendance({
   const detectionIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isCapturingRef = useRef(false);
+  const isSendingRef = useRef(false);
   const activeRequestsRef = useRef(0);
   const analyzingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const markedStudentsRef = useRef<Set<string>>(new Set());
   const { isKioskMode, enableKioskMode, showPasswordModal, setShowPasswordModal } = useKiosk();
+  const { socket } = useSocket();
 
   useEffect(() => {
     if (existingAttendance) {
@@ -109,63 +113,71 @@ export default function LiveAttendance({
     }
   }, []);
 
+
+
+
   const processFrameAsync = useCallback(async (base64: string) => {
-    activeRequestsRef.current++;
-
-    // Only show analyzing indicator if request takes > 800ms
-    if (!analyzingTimerRef.current) {
-      analyzingTimerRef.current = setTimeout(() => {
-        setIsAnalyzing(true);
-      }, 800);
-    }
-
     try {
-      const result = await markAttendanceApi({ sessionId, faceImageBase64: base64 });
-      const isAlreadyMarked = result.message === 'Student already marked present';
+      // Just push to queue, don't wait for AI
+      await markAttendanceAsyncApi(sessionId, base64);
+    } catch (err) {
+      console.error("Async API Error:", err);
+    }
+  }, [sessionId]);
 
-      if (!isAlreadyMarked) {
-        setAttendanceStats({
-          present: result.attendance.present,
-          absent: result.attendance.absent,
-          total: result.attendance.total
-        });
-        markedStudentsRef.current.add(result.student.id);
-        setStatusType('success');
-        setStatusMessage(`${result.student.name} (${result.student.rollNumber || 'N/A'}) marked!`);
-        onAttendanceMarked(result);
-      } else {
-        setStatusType('duplicate');
-        setStatusMessage(`Already marked: ${result.student.name} (${result.student.rollNumber || 'N/A'})`);
-      }
-    } catch (apiError: any) {
-      if (apiError.response?.status === 404 || apiError.response?.status === 400) {
-        setStatusType('notfound');
-        setStatusMessage('Not found');
-      } else {
-        setStatusType('error');
-        setStatusMessage('Connection error');
-      }
-    } finally {
-      activeRequestsRef.current--;
+  // --- 🧩 2. Socket.IO Listeners for Async Results ---
+  useEffect(() => {
+    if (!socket) return;
 
-      // If no more active requests, clear the analyzing state and timer
-      if (activeRequestsRef.current === 0) {
-        if (analyzingTimerRef.current) {
-          clearTimeout(analyzingTimerRef.current);
-          analyzingTimerRef.current = null;
-        }
-        setIsAnalyzing(false);
-      }
-
-      // Handle status message clearing safely
+    const showTempStatus = (type: any, msg: string) => {
+      setStatusType(type);
+      setStatusMessage(msg);
       if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
       statusTimerRef.current = setTimeout(() => {
         setStatusMessage(null);
         setStatusType(null);
         statusTimerRef.current = null;
-      }, 2500);
-    }
-  }, [sessionId, onAttendanceMarked]);
+      }, 800); // 0.5 seconds duration
+    };
+
+    const handleResult = (data: any) => {
+      console.log('✅ Background Attendance Success:', data);
+      setAttendanceStats(prev => ({
+        ...prev,
+        present: data.attendance.present,
+        absent: data.attendance.absent
+      }));
+      // Display ID alongside name
+      const idStr = data.rollNumber ? ` (${data.rollNumber})` : '';
+      showTempStatus('success', `${data.studentName}${idStr} marked!`);
+      onAttendanceMarked(data);
+    };
+
+    const handleRecognizing = (data: any) => {
+      showTempStatus('duplicate', `Verifying: ${data.studentName} (${data.count}/${data.threshold})`);
+    };
+
+    const handleDuplicate = (data: any) => {
+      const idStr = data.rollNumber ? ` (${data.rollNumber})` : '';
+      showTempStatus('duplicate', `Already marked: ${data.studentName}${idStr}`);
+    };
+
+    const handleError = (data: any) => {
+      showTempStatus('notfound', data.message);
+    };
+
+    socket.on('attendance_result', handleResult);
+    socket.on('attendance_recognizing', handleRecognizing);
+    socket.on('attendance_duplicate', handleDuplicate);
+    socket.on('attendance_error', handleError);
+
+    return () => {
+      socket.off('attendance_result', handleResult);
+      socket.off('attendance_recognizing', handleRecognizing);
+      socket.off('attendance_duplicate', handleDuplicate);
+      socket.off('attendance_error', handleError);
+    };
+  }, [socket, onAttendanceMarked]);
 
   useEffect(() => {
     if (!isDetecting || !isInitialized || !cameraRef.current) {
@@ -176,58 +188,62 @@ export default function LiveAttendance({
       return;
     }
 
-    // Decoupled loop: captures frames every 2.2s without waiting for API response
+    // Decoupled loop: captures frames every 600ms
     detectionIntervalRef.current = setInterval(async () => {
-      if (isCapturingRef.current || !cameraRef.current || !isDetecting) return;
+      // 1. Skip if already capturing from camera OR if previous frame is still being processed (Throttling)
+      if (isCapturingRef.current || isSendingRef.current || !cameraRef.current || !isDetecting) return;
 
       try {
         isCapturingRef.current = true;
 
-        // Fast capture: skip processing, lower quality, no EXIF
         const photo = await cameraRef.current.takePictureAsync({
-          quality: 0.3,
-          base64: true,
+          quality: 0.2, // Base quality, further optimized below
+          base64: false, // Don't need base64 yet, we manipulate URI
           skipProcessing: true,
           exif: false,
         });
 
-        if (photo?.uri) {
-          // On-device Face Detection (Pre-filter) - only run if module exists
-          if (FaceDetector && FaceDetector.detectFacesAsync) {
-            try {
-              const detection = await FaceDetector.detectFacesAsync(photo.uri, {
-                mode: FaceDetector.FaceDetectorMode.fast,
-                detectLandmarks: FaceDetector.FaceDetectorLandmarks.none,
-                runClassifications: FaceDetector.FaceDetectorClassifications.none,
-              });
+        isCapturingRef.current = false; // We took the photo, camera is free
 
-              if (detection.faces.length > 0) {
-                setHasFace(true);
-                if (photo.base64) {
-                  processFrameAsync(photo.base64);
-                }
-              } else {
-                setHasFace(false);
+        if (photo?.uri) {
+          let hasFaceInFrame = true;
+
+          if (FaceDetector && FaceDetector.detectFacesAsync) {
+            const detection = await FaceDetector.detectFacesAsync(photo.uri, {
+              mode: FaceDetector.FaceDetectorMode.fast,
+            });
+            hasFaceInFrame = detection.faces.length > 0;
+          }
+
+          if (hasFaceInFrame) {
+            setHasFace(true);
+            isSendingRef.current = true;
+
+            try {
+              // 2. Optimize Image Payload (Resize & Compress)
+              const manipResult = await ImageManipulator.manipulateAsync(
+                photo.uri,
+                [{ resize: { width: 480 } }], // Increased width so FaceNet can still detect faces
+                { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+              );
+
+              if (manipResult.base64) {
+                await processFrameAsync(manipResult.base64);
               }
-            } catch (detectorError) {
-              console.error("Face detection error:", detectorError);
-              // Fallback: send anyway if detector fails
-              if (photo.base64) processFrameAsync(photo.base64);
+            } catch (manipError) {
+              console.error("Image manipulation error:", manipError);
+            } finally {
+              isSendingRef.current = false;
             }
           } else {
-            // Fallback: No detector available, send all frames to server
-            if (photo.base64) {
-              processFrameAsync(photo.base64);
-            }
+            setHasFace(false);
           }
         }
-
-        isCapturingRef.current = false;
       } catch (err) {
         isCapturingRef.current = false;
         console.error("Frame capture error:", err);
       }
-    }, 2200);
+    }, 600);
 
     return () => {
       if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current);

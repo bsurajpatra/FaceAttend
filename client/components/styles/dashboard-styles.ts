@@ -248,6 +248,7 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 10,
+    marginRight: 12,
   },
   sessionTypeText: {
     color: '#FFFFFF',

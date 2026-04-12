@@ -130,6 +130,16 @@ export async function markAttendanceApi(data: MarkAttendanceInput): Promise<Mark
   return res.data;
 }
 
+export async function markAttendanceBatchApi(sessionId: string, frames: string[]): Promise<any> {
+  const res = await http.post('/api/attendance/mark-batch', { sessionId, frames });
+  return res.data;
+}
+
+export async function markAttendanceAsyncApi(sessionId: string, faceImageBase64: string): Promise<any> {
+  const res = await http.post('/api/attendance/mark-async', { sessionId, faceImageBase64 });
+  return res.data;
+}
+
 // Get attendance session details
 export async function getAttendanceSessionApi(sessionId: string): Promise<AttendanceSessionResponse> {
   const res = await http.get<AttendanceSessionResponse>(`/api/attendance/session/${sessionId}`);

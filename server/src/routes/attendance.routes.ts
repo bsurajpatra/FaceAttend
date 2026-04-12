@@ -2,6 +2,8 @@ import { Router } from 'express';
 import {
   startAttendanceSession,
   markAttendance,
+  markAttendanceBatch,
+  markAttendanceAsync,
   getAttendanceSession,
   getAttendanceReports,
   checkAttendanceStatus,
@@ -19,6 +21,8 @@ attendanceRouter.post('/start', verifyFacultyToken, verifyTrustedDevice, startAt
 
 // Mark attendance using face detection
 attendanceRouter.post('/mark', verifyFacultyToken, verifyTrustedDevice, markAttendance);
+attendanceRouter.post('/mark-batch', verifyFacultyToken, verifyTrustedDevice, markAttendanceBatch);
+attendanceRouter.post('/mark-async', verifyFacultyToken, verifyTrustedDevice, markAttendanceAsync);
 
 // Mark session as missed (Post-Lock)
 attendanceRouter.post('/missed', verifyFacultyToken, markSessionMissed);

@@ -13,6 +13,13 @@ async function bootstrap(): Promise<void> {
   // Initialize Socket.io
   initSocket(httpServer);
 
+  // Start background sync jobs
+  const { startAttendanceSyncJob } = require('./services/attendanceSync');
+  startAttendanceSyncJob();
+
+  // Start BullMQ Worker
+  require('./queues/attendance.worker');
+
   httpServer.listen(env.port, '0.0.0.0', () => {
     // eslint-disable-next-line no-console
     console.log(`Server running on all interfaces at port ${env.port}`);

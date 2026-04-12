@@ -7,6 +7,9 @@ import { getFaceEmbedding } from '../services/facenet.service';
 import { getIO } from '../socket';
 import { cosineSimilarity } from '../utils/math';
 import { createAuditLog } from '../utils/auditLogger';
+import redisClient from '../config/redis';
+import crypto from 'crypto';
+import { attendanceQueue } from '../queues/attendance.queue';
 
 // Face matching threshold (cosine similarity) - higher threshold for FaceNet embeddings
 const FACE_MATCH_THRESHOLD = 0.6;
@@ -225,41 +228,106 @@ export async function markAttendance(req: Request, res: Response): Promise<void>
       return;
     }
 
-    // Generate FaceNet embedding from the image
-    console.log('🔄 Processing face image with FaceNet...');
-    let faceEmbedding: number[];
+    // --- 🧩 1. Check Redis for already marked status (Fast Exit) ---
+    // If student was already marked in this session, we don't even need to run FaceNet
+    // Wait, we don't know the studentId yet. We only know image.
+    // However, we can check if the IMAGE hash exists and is a success.
+    
+    // --- 🧩 5. Face Recognition Cache ---
+    const imageHash = crypto.createHash('md5').update(faceImageBase64).digest('hex');
+    const cacheKey = `face:cache:${imageHash}`;
+    let cachedMatch = await redisClient.get(cacheKey);
+    let match: any = null;
 
-    try {
-      faceEmbedding = await getFaceEmbedding(faceImageBase64);
-      console.log('✅ FaceNet embedding generated, length:', faceEmbedding.length);
-    } catch (error: any) {
-      console.error('❌ FaceNet processing error:', error);
-      res.status(400).json({
-        message: error.message || 'Failed to process face image',
-        hint: 'Please ensure the image contains a clear face and try again'
-      });
-      return;
+    if (cachedMatch) {
+      console.log('🚀 Cache hit! Using cached recognition result');
+      match = JSON.parse(cachedMatch);
+    } else {
+      // Generate FaceNet embedding from the image
+      console.log('🔄 Processing face image with FaceNet...');
+      let faceEmbedding: number[];
+
+      try {
+        faceEmbedding = await getFaceEmbedding(faceImageBase64);
+        console.log('✅ FaceNet embedding generated, length:', faceEmbedding.length);
+      } catch (error: any) {
+        console.error('❌ FaceNet processing error:', error);
+        res.status(400).json({
+          message: error.message || 'Failed to process face image',
+          hint: 'Please ensure the image contains a clear face and try again'
+        });
+        return;
+      }
+
+      // Get enrolled students for matching
+      const enrolledStudents = await Student.find({
+        'enrollments.subject': session.subject,
+        'enrollments.section': session.section,
+        'enrollments.facultyId': session.facultyId
+      }).select('_id name rollNumber faceDescriptor embeddings');
+
+      // Find matching student
+      match = await findMatchingStudent(faceEmbedding, enrolledStudents);
+
+      if (match) {
+        // Cache the result for 10 seconds (exact frame matches)
+        await redisClient.setEx(cacheKey, 10, JSON.stringify(match));
+      }
     }
-
-    // Get enrolled students for matching
-    const enrolledStudents = await Student.find({
-      'enrollments.subject': session.subject,
-      'enrollments.section': session.section,
-      'enrollments.facultyId': session.facultyId
-    }).select('_id name rollNumber faceDescriptor embeddings');
-
-    // Find matching student
-    const match = await findMatchingStudent(faceEmbedding, enrolledStudents);
 
     if (!match) {
       res.status(404).json({
         message: 'No matching student found',
-        hint: 'Face does not match any enrolled student. Please ensure the student is registered for this subject/section.'
+        hint: 'Face does not match any enrolled student.'
       });
       return;
     }
 
-    // Update attendance record
+    const studentId = String(match.student._id);
+
+    // --- 🧩 1. Check Redis for already marked status (Fast Exit) ---
+    const liveSetKey = `attendance:live:${sessionId}`;
+    const isAlreadyMarkedInRedis = await redisClient.sIsMember(liveSetKey, studentId);
+    
+    if (isAlreadyMarkedInRedis) {
+      console.log(`⏩ Student ${match.student.name} already marked in Redis. Skipping processing.`);
+      res.json({
+        message: 'Student already marked present',
+        student: { id: match.student._id, name: match.student.name, rollNumber: match.student.rollNumber },
+        attendance: { present: session.presentStudents, absent: session.absentStudents, total: session.totalStudents }
+      });
+      return;
+    }
+
+    // --- 🧩 6. Confidence Window Counter ---
+    const detectKey = `detect:${sessionId}:${studentId}`;
+    const detectionCount = await redisClient.incr(detectKey);
+    
+    // Set 5-second window on first detection
+    if (detectionCount === 1) {
+      await redisClient.expire(detectKey, 5);
+    }
+
+    const DETECTION_THRESHOLD = 3;
+    if (detectionCount < DETECTION_THRESHOLD) {
+      console.log(`⏳ Confidence building: ${detectionCount}/${DETECTION_THRESHOLD} for ${match.student.name}`);
+      res.json({
+        message: 'Detection acknowledged, verifying identity...',
+        confidence: match.confidence,
+        count: detectionCount,
+        threshold: DETECTION_THRESHOLD,
+        student: { name: match.student.name }
+      });
+      return;
+    }
+
+    // If we reach here, confidence is satisfied (>= threshold)
+    console.log(`✅ Confidence satisfied for ${match.student.name}! Proceeding to mark attendance.`);
+
+    // Add to Redis Live Set (Solution #1)
+    await redisClient.sAdd(liveSetKey, studentId);
+
+    // Update attendance record in MongoDB (to be batched later, but for now we keep it atomic or semi-atomic)
     console.log('🔍 Looking for student in session records...');
     console.log('Match student ID:', match.student._id);
     console.log('Session records count:', session.records.length);
@@ -410,6 +478,157 @@ export async function markAttendance(req: Request, res: Response): Promise<void>
   }
 }
 
+// Mark attendance using a batch of frames (Solution #7)
+export async function markAttendanceBatch(req: Request, res: Response): Promise<void> {
+  try {
+    const facultyId = req.userId;
+    const { sessionId, frames } = req.body as { sessionId: string; frames: string[] };
+
+    if (!facultyId || !mongoose.isValidObjectId(facultyId) || !sessionId || !mongoose.isValidObjectId(sessionId)) {
+      res.status(401).json({ message: 'Unauthorized or invalid session ID' });
+      return;
+    }
+
+    if (!frames || !Array.isArray(frames) || frames.length === 0) {
+      res.status(400).json({ message: 'An array of frames is required' });
+      return;
+    }
+
+    const session = await AttendanceSession.findById(sessionId);
+    if (!session) {
+      res.status(404).json({ message: 'Attendance session not found' });
+      return;
+    }
+
+    const results: any[] = [];
+    const enrolledStudents = await Student.find({
+      'enrollments.subject': session.subject,
+      'enrollments.section': session.section,
+      'enrollments.facultyId': session.facultyId
+    }).select('_id name rollNumber faceDescriptor embeddings');
+
+    for (const base64 of frames) {
+      try {
+        const imageHash = crypto.createHash('md5').update(base64).digest('hex');
+        const cacheKey = `face:cache:${imageHash}`;
+        let cachedMatch = await redisClient.get(cacheKey);
+        let match: any = null;
+
+        if (cachedMatch) {
+          match = JSON.parse(cachedMatch);
+        } else {
+          const faceEmbedding = await getFaceEmbedding(base64);
+          match = await findMatchingStudent(faceEmbedding, enrolledStudents);
+          if (match) await redisClient.setEx(cacheKey, 10, JSON.stringify(match));
+        }
+
+        if (!match) {
+          results.push({ status: 'not_found' });
+          continue;
+        }
+
+        const studentId = String(match.student._id);
+        const liveSetKey = `attendance:live:${sessionId}`;
+        
+        // 1. Fast check Redis live set
+        const alreadyMarked = await redisClient.sIsMember(liveSetKey, studentId);
+        if (alreadyMarked) {
+          results.push({ status: 'already_marked', student: match.student.name, studentId });
+          continue;
+        }
+
+        // 2. Confidence window
+        const detectKey = `detect:${sessionId}:${studentId}`;
+        const count = await redisClient.incr(detectKey);
+        if (count === 1) await redisClient.expire(detectKey, 5);
+
+        if (count < 3) {
+          results.push({ status: 'recognizing', student: match.student.name, count });
+          continue;
+        }
+
+        // 3. Mark in Redis
+        await redisClient.sAdd(liveSetKey, studentId);
+        
+        // 4. Update MongoDB (or leave for sync job)
+        const recordIndex = session.records.findIndex(r => String(r.studentId) === studentId);
+        if (recordIndex !== -1 && !session.records[recordIndex].isPresent) {
+          session.records[recordIndex].isPresent = true;
+          session.records[recordIndex].markedAt = new Date();
+          session.presentStudents += 1;
+          session.absentStudents -= 1;
+          await session.save();
+          
+          try {
+            getIO().to(`faculty_${facultyId}`).emit('attendance_updated', {
+              type: 'attendance_marked',
+              studentName: match.student.name
+            });
+          } catch (e) {}
+        }
+
+        results.push({ status: 'success', student: match.student.name, studentId });
+
+      } catch (err) {
+        console.error('Batch frame processing error:', err);
+        results.push({ status: 'error' });
+      }
+    }
+
+    res.json({
+      message: 'Batch processed',
+      results,
+      attendance: {
+        present: session.presentStudents,
+        absent: session.absentStudents,
+        total: session.totalStudents
+      }
+    });
+
+  } catch (error) {
+    console.error('Mark attendance batch error:', error);
+    res.status(500).json({ message: 'Failed to process batch' });
+  }
+}
+
+// Mark attendance asynchronously using BullMQ (Solution #2)
+export async function markAttendanceAsync(req: Request, res: Response): Promise<void> {
+  try {
+    const facultyId = req.userId;
+    const { sessionId, faceImageBase64 } = req.body;
+
+    if (!sessionId || !faceImageBase64) {
+      res.status(400).json({ message: 'sessionId and faceImageBase64 are required' });
+      return;
+    }
+
+    // Drop or debounce incoming jobs when queue exceeds threshold (Queue Optimization)
+    const waitingCount = await attendanceQueue.getWaitingCount();
+    if (waitingCount > 50) {
+      console.warn(`⚠️ BullMQ Queue overloaded (${waitingCount} waiting). Dropping request.`);
+      res.status(429).json({ message: 'Server overloaded, request dropped.' });
+      return;
+    }
+
+    // Push job to queue
+    const job = await attendanceQueue.add('process-face', {
+      sessionId,
+      faceImageBase64,
+      facultyId
+    });
+
+    // Return instant success acknowledgment
+    res.status(202).json({
+      message: 'Processing started',
+      jobId: job.id
+    });
+
+  } catch (error) {
+    console.error('Mark attendance async error:', error);
+    res.status(500).json({ message: 'Failed to queue attendance task' });
+  }
+}
+
 // Check if attendance has been taken for today's session
 export async function checkAttendanceStatus(req: Request, res: Response): Promise<void> {
   try {
@@ -529,12 +748,17 @@ export async function getAttendanceSession(req: Request, res: Response): Promise
       'enrollments.facultyId': session.facultyId
     }).select('_id name rollNumber');
 
+    // --- 🧩 1. Reconcile with Redis Live Data ---
+    // Merge students marked in Redis (not yet synced to MongoDB)
+    const redisLiveStudents = await redisClient.sMembers(`attendance:live:${sessionId}`);
+    
     // Create a map of present student IDs from records
-    const presentStudentIds = new Set(
-      session.records
+    const presentStudentIds = new Set([
+      ...session.records
         .filter(record => record.isPresent)
-        .map(record => String(record.studentId))
-    );
+        .map(record => String(record.studentId)),
+      ...redisLiveStudents
+    ]);
 
     // Separate present and absent students
     const presentStudents = session.records

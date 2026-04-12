@@ -1,5 +1,30 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { setUnauthHandler } from '../api/http';
+
+const isTokenExpired = (token: string): boolean => {
+    try {
+        const payloadBase64 = token.split('.')[1];
+        if (!payloadBase64) return true;
+        
+        let decodedJson;
+        if (typeof atob === 'function') {
+            decodedJson = atob(payloadBase64);
+        } else {
+            const Buffer = require('buffer').Buffer;
+            decodedJson = Buffer.from(payloadBase64, 'base64').toString('ascii');
+        }
+        
+        const payload = JSON.parse(decodedJson);
+        if (payload.exp) {
+            const currentTime = Math.floor(Date.now() / 1000);
+            return payload.exp < currentTime;
+        }
+        return false;
+    } catch (e) {
+        return true;
+    }
+};
 
 interface User {
     id: string;
@@ -28,8 +53,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 const savedUser = await AsyncStorage.getItem('user');
                 const savedToken = await AsyncStorage.getItem('token');
                 if (savedUser && savedToken) {
-                    setUser(JSON.parse(savedUser));
-                    setIsLoggedIn(true);
+                    if (isTokenExpired(savedToken)) {
+                        await AsyncStorage.removeItem('user');
+                        await AsyncStorage.removeItem('token');
+                        await AsyncStorage.removeItem('isTrusted');
+                    } else {
+                        setUser(JSON.parse(savedUser));
+                        setIsLoggedIn(true);
+                    }
                 }
             } catch (e) {
                 console.error('Failed to load auth state', e);
@@ -37,6 +68,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 setIsLoading(false);
             }
         };
+        
+        setUnauthHandler(() => {
+            logout();
+        });
+        
         loadAuthState();
     }, []);
 
