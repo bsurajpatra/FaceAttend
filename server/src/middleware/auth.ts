@@ -32,17 +32,35 @@ export async function verifyFacultyToken(req: Request, res: Response, next: Next
 
     // 2. Check Redis for active session
     // This allows for immediate logout/invalidation without DB hit
-    const activeToken = await redisClient.get(`session:${userId}`);
-    
-    if (!activeToken) {
-      console.log(`❌ Session not found in Redis for user: ${userId}`);
-      res.status(401).json({ message: 'Session expired or logged out' });
-      return;
+    let isMember = false;
+    try {
+      const isMemberResult = await redisClient.sIsMember(`session:${userId}`, token);
+      isMember = Boolean(isMemberResult);
+    } catch (e: any) {
+      if (e.message && e.message.includes('WRONGTYPE')) {
+        // Fallback for legacy string session
+        const legacyToken = await redisClient.get(`session:${userId}`);
+        if (legacyToken) {
+          if (legacyToken === token) {
+            isMember = true;
+            // Migrate string to set
+            await redisClient.del(`session:${userId}`);
+            await redisClient.sAdd(`session:${userId}`, token);
+            await redisClient.expire(`session:${userId}`, 604800);
+            console.log(`🔄 Seamlessly migrated legacy string session to set for user: ${userId}`);
+          } else {
+             // Mismatched token
+             console.log(`❌ Legacy session token mismatch for user: ${userId}`);
+          }
+        }
+      } else {
+        throw e;
+      }
     }
-
-    if (activeToken !== token) {
-      console.log(`❌ Token mismatch in Redis for user: ${userId}`);
-      res.status(401).json({ message: 'Another session is active. Please login again.' });
+    
+    if (!isMember) {
+      console.log(`❌ Session not found or token mismatch in Redis for user: ${userId}`);
+      res.status(401).json({ message: 'Session expired or logged out. Please login again.' });
       return;
     }
 

@@ -84,7 +84,24 @@ export async function logout(req: Request, res: Response): Promise<void> {
     });
 
     // Clear Redis session
-    await redisClient.del(`session:${userId}`);
+    const authHeader = req.header('Authorization');
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring('Bearer '.length).trim();
+      try {
+        await redisClient.sRem(`session:${userId}`, token);
+      } catch (e: any) {
+        if (e.message && e.message.includes('WRONGTYPE')) {
+          const legacyToken = await redisClient.get(`session:${userId}`);
+          if (legacyToken === token) {
+            await redisClient.del(`session:${userId}`);
+          }
+        } else {
+          throw e;
+        }
+      }
+    } else {
+      await redisClient.del(`session:${userId}`);
+    }
 
     res.json({ message: 'Logged out successfully' });
   } catch (error) {
@@ -192,8 +209,18 @@ export async function login(req: Request, res: Response): Promise<void> {
     }
 
     const token = signToken(faculty.id);
-    // Store session in Redis (7 days TTL to match JWT)
-    await redisClient.setEx(`session:${faculty.id}`, 604800, token);
+    // Store session in Redis (Set structure to allow multiple devices, 7 days TTL)
+    try {
+      await redisClient.sAdd(`session:${faculty.id}`, token);
+    } catch (e: any) {
+      if (e.message && e.message.includes('WRONGTYPE')) {
+        await redisClient.del(`session:${faculty.id}`);
+        await redisClient.sAdd(`session:${faculty.id}`, token);
+      } else {
+        throw e;
+      }
+    }
+    await redisClient.expire(`session:${faculty.id}`, 604800);
 
     const isFirstLogin = faculty.isFirstLogin;
 
@@ -700,7 +727,17 @@ export async function verifyOTP(req: Request, res: Response): Promise<void> {
 
     const token = signToken(faculty.id);
     // Store session in Redis
-    await redisClient.setEx(`session:${faculty.id}`, 604800, token);
+    try {
+      await redisClient.sAdd(`session:${faculty.id}`, token);
+    } catch (e: any) {
+      if (e.message && e.message.includes('WRONGTYPE')) {
+        await redisClient.del(`session:${faculty.id}`);
+        await redisClient.sAdd(`session:${faculty.id}`, token);
+      } else {
+        throw e;
+      }
+    }
+    await redisClient.expire(`session:${faculty.id}`, 604800);
 
     const isFirstLogin = faculty.isFirstLogin;
 
@@ -796,7 +833,17 @@ export async function verify2FA(req: Request, res: Response): Promise<void> {
 
     const token = signToken(faculty.id);
     // Store session in Redis
-    await redisClient.setEx(`session:${faculty.id}`, 604800, token);
+    try {
+      await redisClient.sAdd(`session:${faculty.id}`, token);
+    } catch (e: any) {
+      if (e.message && e.message.includes('WRONGTYPE')) {
+        await redisClient.del(`session:${faculty.id}`);
+        await redisClient.sAdd(`session:${faculty.id}`, token);
+      } else {
+        throw e;
+      }
+    }
+    await redisClient.expire(`session:${faculty.id}`, 604800);
 
     // Audit Log
     createAuditLog({
