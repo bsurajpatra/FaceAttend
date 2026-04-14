@@ -7,6 +7,8 @@ export type LoginResponse = {
   token: string;
   user: { id: string; name: string; username: string };
   isTrusted?: boolean;
+  twoFactorRequired?: boolean;
+  email?: string;
 };
 
 export async function loginApi(data: LoginInput): Promise<LoginResponse> {
@@ -18,6 +20,22 @@ export async function loginApi(data: LoginInput): Promise<LoginResponse> {
     deviceName
   });
   // Map server response 'currentDeviceTrusted' to 'isTrusted'
+  const responseData: any = res.data;
+  if (responseData.currentDeviceTrusted !== undefined) {
+    responseData.isTrusted = responseData.currentDeviceTrusted;
+  }
+  return responseData;
+}
+
+export type Verify2FAInput = { email: string; otp: string };
+export async function verify2faApi(data: Verify2FAInput): Promise<LoginResponse> {
+  const deviceId = await getDeviceId();
+  const deviceName = getDeviceName();
+  const res = await http.post<LoginResponse>('/api/auth/verify-2fa', {
+    ...data,
+    deviceId,
+    deviceName
+  });
   const responseData: any = res.data;
   if (responseData.currentDeviceTrusted !== undefined) {
     responseData.isTrusted = responseData.currentDeviceTrusted;

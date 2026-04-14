@@ -1,13 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Image } from 'expo-image';
-import { View, Text, Animated, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, Animated, KeyboardAvoidingView, Platform, ScrollView, TextInput, Pressable, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { styles } from '@/components/styles/welcome-styles';
+import { styles as loginStyles } from '@/components/styles/login-styles';
 import Login from '@/components/login';
 import Dashboard from '@/components/dashboard';
-import { loginApi, logoutApi } from '@/api/auth';
+import { loginApi, logoutApi, verify2faApi } from '@/api/auth';
 import { getTimetableApi, TimetableDay } from '@/api/timetable';
 import { useKiosk } from '@/contexts/KioskContext';
 import { useSocket } from '@/contexts/SocketContext';
@@ -18,6 +19,8 @@ export default function WelcomeScreen() {
   const { isLoggedIn, user, login, logout, isLoading: isAuthLoading } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [twoFactorEmail, setTwoFactorEmail] = useState<string | null>(null);
+  const [otpCode, setOtpCode] = useState('');
   const { setStoredPassword } = useKiosk();
   // Initialize with proper empty timetable structure
   const getEmptyTimetable = (): TimetableDay[] => [
@@ -170,26 +173,92 @@ export default function WelcomeScreen() {
             </Animated.View>
 
             <Animated.View style={[styles.loginContainer, { opacity: loginOpacity, transform: [{ translateY: loginTranslateY }] }]}>
-              <Login
-                onSubmit={async ({ username, password }) => {
-                  setErrorMessage(null);
-                  setIsSubmitting(true);
-                  try {
-                    const { token, user, isTrusted: trusted } = await loginApi({ username, password });
-                    await login(user, token, trusted ?? false);
-                    // Store password for kiosk mode
-                    await setStoredPassword(password);
-                    setIsTrusted(trusted ?? false);
-                  } catch (err: any) {
-                    const msg = err?.response?.data?.message || 'Login failed';
-                    setErrorMessage(msg);
-                  } finally {
-                    setIsSubmitting(false);
-                  }
-                }}
-                isSubmitting={isSubmitting}
-                errorMessage={errorMessage}
-              />
+              {!twoFactorEmail ? (
+                <Login
+                  onSubmit={async ({ username, password }) => {
+                    setErrorMessage(null);
+                    setIsSubmitting(true);
+                    try {
+                      const response = await loginApi({ username, password });
+                      if (response.twoFactorRequired) {
+                         setTwoFactorEmail(response.email!);
+                         setErrorMessage(null);
+                      } else {
+                         await login(response.user, response.token, response.isTrusted ?? false);
+                         await setStoredPassword(password);
+                         setIsTrusted(response.isTrusted ?? false);
+                      }
+                    } catch (err: any) {
+                      const msg = err?.response?.data?.message || 'Login failed';
+                      setErrorMessage(msg);
+                    } finally {
+                      setIsSubmitting(false);
+                    }
+                  }}
+                  isSubmitting={isSubmitting}
+                  errorMessage={errorMessage}
+                />
+              ) : (
+                <View style={loginStyles.container}>
+                  <Text style={loginStyles.title}>Two-Factor Auth</Text>
+                  <Text style={loginStyles.subtitle}>Enter the 6-digit code sent to {twoFactorEmail}</Text>
+
+                  <View style={loginStyles.fieldGroup}>
+                    <Text style={loginStyles.label}>Verification Code</Text>
+                    <TextInput
+                      value={otpCode}
+                      onChangeText={setOtpCode}
+                      placeholder="123456"
+                      keyboardType="number-pad"
+                      maxLength={6}
+                      style={loginStyles.input}
+                      editable={!isSubmitting}
+                    />
+                  </View>
+
+                  {errorMessage ? <Text style={loginStyles.error}>{errorMessage}</Text> : null}
+
+                  <Pressable
+                    onPress={async () => {
+                      if (!otpCode || otpCode.length !== 6) {
+                        setErrorMessage('Please enter a valid 6-digit code.');
+                        return;
+                      }
+                      setErrorMessage(null);
+                      setIsSubmitting(true);
+                      try {
+                        const response = await verify2faApi({ email: twoFactorEmail, otp: otpCode });
+                        await login(response.user, response.token, response.isTrusted ?? false);
+                        setIsTrusted(response.isTrusted ?? false);
+                      } catch (err: any) {
+                        const msg = err?.response?.data?.message || 'Verification failed';
+                        setErrorMessage(msg);
+                      } finally {
+                        setIsSubmitting(false);
+                      }
+                    }}
+                    style={({ pressed }) => [loginStyles.button, pressed && loginStyles.buttonPressed]}
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? (
+                      <ActivityIndicator color="#ffffff" />
+                    ) : (
+                      <Text style={loginStyles.buttonText}>Verify</Text>
+                    )}
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() => {
+                       setTwoFactorEmail(null);
+                       setOtpCode('');
+                       setErrorMessage(null);
+                    }}
+                    style={{ marginTop: 24, alignItems: 'center' }}
+                  >
+                    <Text style={{ color: '#6366F1', fontWeight: '500' }}>Cancel</Text>
+                  </Pressable>
+                </View>
+              )}
             </Animated.View>
           </View>
         </ScrollView>

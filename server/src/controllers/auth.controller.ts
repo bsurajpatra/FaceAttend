@@ -155,8 +155,17 @@ export async function login(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    // Skip 2FA for mobile app (identified by deviceId)
-    if (faculty.twoFactorEnabled && !deviceId) {
+    let isDeviceTrusted = false;
+    if (deviceId) {
+      const existingDevice = faculty.devices.find(d => d.deviceId === deviceId);
+      if (existingDevice) {
+        isDeviceTrusted = existingDevice.isTrusted;
+      } else if (faculty.devices.length === 0) {
+        isDeviceTrusted = true;
+      }
+    }
+
+    if (faculty.twoFactorEnabled && !isDeviceTrusted) {
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
       const otpExpires = new Date(Date.now() + 5 * 60 * 1000); // 5 mins for 2FA
 
@@ -220,7 +229,9 @@ export async function login(req: Request, res: Response): Promise<void> {
         throw e;
       }
     }
-    await redisClient.expire(`session:${faculty.id}`, 604800);
+    // 30 days for mobile devices, 7 days for web
+    const ttl = deviceId ? 2592000 : 604800;
+    await redisClient.expire(`session:${faculty.id}`, ttl);
 
     const isFirstLogin = faculty.isFirstLogin;
 
@@ -808,7 +819,12 @@ export async function resendOTP(req: Request, res: Response): Promise<void> {
 
 export async function verify2FA(req: Request, res: Response): Promise<void> {
   try {
-    const { email, otp } = req.body;
+    const { email, otp, deviceId, deviceName } = req.body as {
+      email: string;
+      otp: string;
+      deviceId?: string;
+      deviceName?: string;
+    };
     if (!email || !otp) {
       res.status(400).json({ message: 'Email and code are required' });
       return;
@@ -829,6 +845,38 @@ export async function verify2FA(req: Request, res: Response): Promise<void> {
     // Clear OTP
     faculty.otp = undefined;
     faculty.otpExpires = undefined;
+
+    // Handle device trust after successful 2FA
+    let currentDeviceTrusted = false;
+    if (deviceId && deviceName) {
+      const deviceIndex = faculty.devices.findIndex(d => d.deviceId === deviceId);
+
+      if (deviceIndex === -1) {
+        // New device validated via 2FA is now trusted
+        faculty.devices.push({
+          deviceId,
+          deviceName,
+          lastLogin: new Date(),
+          isTrusted: true
+        });
+        currentDeviceTrusted = true;
+      } else {
+        faculty.devices[deviceIndex].lastLogin = new Date();
+        faculty.devices[deviceIndex].deviceName = deviceName;
+        faculty.devices[deviceIndex].isTrusted = true; // Trust verified
+        currentDeviceTrusted = true;
+      }
+      
+      try {
+        const io = getIO();
+        io.to(`faculty_${faculty.id}`).emit('devices_updated', {
+          devices: faculty.devices
+        });
+      } catch (socketErr) {
+        console.warn('Socket emission failed for 2FA device update:', socketErr);
+      }
+    }
+
     await faculty.save();
 
     const token = signToken(faculty.id);
@@ -843,7 +891,9 @@ export async function verify2FA(req: Request, res: Response): Promise<void> {
         throw e;
       }
     }
-    await redisClient.expire(`session:${faculty.id}`, 604800);
+    // 30 days for mobile devices, 7 days for web
+    const ttl = deviceId ? 2592000 : 604800;
+    await redisClient.expire(`session:${faculty.id}`, ttl);
 
     // Audit Log
     createAuditLog({
@@ -855,7 +905,8 @@ export async function verify2FA(req: Request, res: Response): Promise<void> {
 
     res.json({
       token,
-      user: { id: faculty.id, name: faculty.name, username: faculty.username, email: faculty.email }
+      user: { id: faculty.id, name: faculty.name, username: faculty.username, email: faculty.email, devices: faculty.devices },
+      currentDeviceTrusted
     });
   } catch (error) {
     console.error('2FA verification error:', error);
