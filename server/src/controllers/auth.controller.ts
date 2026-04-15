@@ -160,8 +160,6 @@ export async function login(req: Request, res: Response): Promise<void> {
       const existingDevice = faculty.devices.find(d => d.deviceId === deviceId);
       if (existingDevice) {
         isDeviceTrusted = existingDevice.isTrusted;
-      } else if (faculty.devices.length === 0) {
-        isDeviceTrusted = true;
       }
     }
 

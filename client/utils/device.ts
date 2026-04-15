@@ -1,11 +1,11 @@
 import * as Device from 'expo-device';
 import * as Application from 'expo-application';
 import { Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getSecureItem, setSecureItem } from '@/utils/secure-storage';
 import * as Crypto from 'expo-crypto';
 
 export async function getDeviceId(): Promise<string> {
-    let deviceId = await AsyncStorage.getItem('deviceId');
+    let deviceId = await getSecureItem('deviceId');
 
     if (!deviceId) {
         if (Platform.OS === 'android') {
@@ -19,7 +19,7 @@ export async function getDeviceId(): Promise<string> {
             deviceId = Crypto.randomUUID();
         }
 
-        await AsyncStorage.setItem('deviceId', deviceId);
+        await setSecureItem('deviceId', deviceId);
     }
 
     return deviceId;

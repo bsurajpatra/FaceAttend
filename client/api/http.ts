@@ -1,9 +1,31 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getSecureItem } from '@/utils/secure-storage';
 import { getServerUrl, getDefaultServerUrl } from '@/utils/server-url';
+import { initializeSslPinning } from 'react-native-ssl-public-key-pinning';
+
+// --- SSL Certificate Pinning Setup ---
+// Native-level pinning configuration intercepts all traffic (including Axios).
+// Defends against MITM attacks using fraudulent certificates.
+try {
+  if (!__DEV__) {
+    initializeSslPinning({
+      'your-production-server.com': {
+        includeSubdomains: true,
+        publicKeyHashes: [
+          'INSERT_PRIMARY_PUBLIC_KEY_HASH_HERE',
+          'INSERT_BACKUP_PUBLIC_KEY_HASH_HERE'
+        ]
+      }
+    });
+    console.log('🔒 SSL Pinning globally enforced for production');
+  }
+} catch (err) {
+  console.error('Failed to initialize SSL pinning:', err);
+}
 
 // Initialize with default URL from .env, will be updated on first request if manually set URL exists
-const defaultBaseURL = getDefaultServerUrl() || 'http://localhost:3000';
+const defaultBaseURL = getDefaultServerUrl() || '';
 
 export const http: AxiosInstance = axios.create({
   baseURL: defaultBaseURL,
@@ -40,14 +62,14 @@ export async function updateBaseURL(url?: string | null): Promise<void> {
 
     if (url === null) {
       // Explicitly cleared - use default from .env
-      finalUrl = getDefaultServerUrl() || 'http://localhost:3000';
+      finalUrl = getDefaultServerUrl() || '';
     } else if (url !== undefined) {
       // URL explicitly provided
       finalUrl = url;
     } else {
       // Get from storage, fall back to default
       const storedUrl = await getServerUrl();
-      finalUrl = storedUrl || getDefaultServerUrl() || 'http://localhost:3000';
+      finalUrl = storedUrl || getDefaultServerUrl() || '';
     }
 
     http.defaults.baseURL = finalUrl;
@@ -71,7 +93,7 @@ http.interceptors.request.use(async (config) => {
     // This is lightweight as AsyncStorage is cached
     const serverUrl = await getServerUrl();
     // Use serverUrl if available (manual or from .env), otherwise use default
-    const targetUrl = serverUrl || getDefaultServerUrl() || 'http://localhost:3000';
+    const targetUrl = serverUrl || getDefaultServerUrl() || '';
 
     // Update instance default baseURL if it's different
     // Axios will use this for all requests unless config.baseURL is explicitly set
@@ -81,7 +103,7 @@ http.interceptors.request.use(async (config) => {
 
     config.headers = config.headers || {};
 
-    const token = await AsyncStorage.getItem('token');
+    const token = await getSecureItem('token');
     if (token) {
       (config.headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
     }

@@ -3,6 +3,8 @@ import { io, Socket } from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getDeviceId } from '@/utils/device';
 import { useAuth } from './AuthContext';
+import { getServerUrl, getDefaultServerUrl } from '@/utils/server-url';
+import { getSecureItem, setSecureItem } from '@/utils/secure-storage';
 
 interface SocketContextType {
     socket: Socket | null;
@@ -23,7 +25,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     // Initial load from storage for isTrusted
     useEffect(() => {
-        AsyncStorage.getItem('isTrusted').then(val => {
+        getSecureItem('isTrusted').then(val => {
             if (val !== null) setIsTrusted(val === 'true');
         });
     }, []);
@@ -41,10 +43,11 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 return;
             }
 
-            const token = await AsyncStorage.getItem('token');
+            const token = await getSecureItem('token');
             if (!token) return;
 
-            const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.5:3000'; // Fallback
+            const storedUrl = await getServerUrl();
+            const apiUrl = storedUrl || getDefaultServerUrl() || '';
             const socketUrl = apiUrl.split(',')[0].trim();
             const deviceId = await getDeviceId();
 
@@ -79,7 +82,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
                 const newStatus = currentDevice ? currentDevice.isTrusted : false;
                 setIsTrusted(newStatus);
-                await AsyncStorage.setItem('isTrusted', String(newStatus));
+                await setSecureItem('isTrusted', String(newStatus));
             });
 
             newSocket.on('force_logout', async (data: { deviceId: string }) => {

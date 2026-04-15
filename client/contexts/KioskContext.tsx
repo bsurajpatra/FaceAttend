@@ -1,8 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Platform, BackHandler, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getSecureItem, setSecureItem } from '@/utils/secure-storage';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { StatusBar } from 'expo-status-bar';
+import * as Crypto from 'expo-crypto';
 
 import Kiosk from '../utils/kiosk';
 
@@ -95,11 +97,54 @@ export const KioskProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [hasOverlayPermission, setHasOverlayPermission] = useState(false);
   const [isKioskAvailable, setIsKioskAvailable] = useState(Kiosk.isAvailable());
 
+  // Rate limiting state
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
+
   // Load stored password and check status on mount
   useEffect(() => {
     loadStoredPassword();
     checkKioskStatus();
+    loadLockoutState();
   }, []);
+
+  const loadLockoutState = async () => {
+    try {
+      const attemptsStr = await AsyncStorage.getItem('kioskFailedAttempts');
+      const lockoutStr = await AsyncStorage.getItem('kioskLockoutUntil');
+      
+      const parsedAttempts = attemptsStr ? parseInt(attemptsStr, 10) : 0;
+      const parsedLockout = lockoutStr ? parseInt(lockoutStr, 10) : null;
+      
+      setFailedAttempts(parsedAttempts);
+      setLockoutUntil(parsedLockout);
+      
+      if (parsedLockout && Date.now() > parsedLockout) {
+        await resetLockout();
+      }
+    } catch (error) {
+      console.error('Error loading lockout state:', error);
+    }
+  };
+
+  const resetLockout = async () => {
+    setFailedAttempts(0);
+    setLockoutUntil(null);
+    await AsyncStorage.removeItem('kioskFailedAttempts');
+    await AsyncStorage.removeItem('kioskLockoutUntil');
+  };
+
+  const incrementFailedAttempts = async () => {
+    const newAttempts = failedAttempts + 1;
+    setFailedAttempts(newAttempts);
+    await AsyncStorage.setItem('kioskFailedAttempts', newAttempts.toString());
+    
+    if (newAttempts >= 5) {
+      const unlockTime = Date.now() + 5 * 60 * 1000; // 5 minutes
+      setLockoutUntil(unlockTime);
+      await AsyncStorage.setItem('kioskLockoutUntil', unlockTime.toString());
+    }
+  };
 
   // Check kiosk status periodically or when app returns to foreground
   const checkKioskStatus = async () => {
@@ -147,7 +192,7 @@ export const KioskProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   // Load password from AsyncStorage
   const loadStoredPassword = async () => {
     try {
-      const password = await AsyncStorage.getItem('userPassword');
+      const password = await getSecureItem('userPassword');
       setStoredPassword(password);
     } catch (error) {
       console.error('Error loading stored password:', error);
@@ -157,8 +202,12 @@ export const KioskProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   // Save password to AsyncStorage
   const savePassword = async (password: string) => {
     try {
-      await AsyncStorage.setItem('userPassword', password);
-      setStoredPassword(password);
+      const hashedPassword = await Crypto.digestStringAsync(
+        Crypto.CryptoDigestAlgorithm.SHA256,
+        password
+      );
+      await setSecureItem('userPassword', hashedPassword);
+      setStoredPassword(hashedPassword);
     } catch (error) {
       console.error('Error saving password:', error);
     }
@@ -223,8 +272,30 @@ export const KioskProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   // Disable kiosk mode with password verification
   const disableKioskMode = async (password: string): Promise<boolean> => {
     try {
-      // Verify password against stored password
-      if (storedPassword && password === storedPassword) {
+      if (lockoutUntil && Date.now() < lockoutUntil) {
+        const remainingMinutes = Math.ceil((lockoutUntil - Date.now()) / 60000);
+        Alert.alert('Too Many Attempts', `Please try again in ${remainingMinutes} minute(s).`);
+        return false;
+      }
+
+      if (lockoutUntil && Date.now() >= lockoutUntil) {
+        await resetLockout();
+      }
+
+      const hashedInput = await Crypto.digestStringAsync(
+        Crypto.CryptoDigestAlgorithm.SHA256,
+        password
+      );
+
+      // Verify password against stored password (gracefully handle old plain-text passwords for easy migration)
+      if (storedPassword && (hashedInput === storedPassword || password === storedPassword)) {
+        await resetLockout();
+
+        // Upgrade legacy plain-text password to hashed format seamlessly
+        if (password === storedPassword && hashedInput !== storedPassword) {
+          await savePassword(password);
+        }
+
         if (Platform.OS === 'android') {
           // Disable Expo kiosk mode
           await ExpoKiosk.disableKioskMode();
@@ -239,7 +310,13 @@ export const KioskProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         setShowPasswordModal(false);
         return true;
       } else {
-        Alert.alert('Invalid Password', 'The password you entered is incorrect.');
+        const newAttempts = failedAttempts + 1;
+        await incrementFailedAttempts();
+        if (newAttempts >= 5) {
+          Alert.alert('Too Many Attempts', 'Please try again in 5 minute(s).');
+        } else {
+          Alert.alert('Invalid Password', `The password you entered is incorrect. ${5 - newAttempts} attempt(s) remaining.`);
+        }
         return false;
       }
     } catch (error) {
