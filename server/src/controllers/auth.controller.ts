@@ -932,17 +932,15 @@ export async function toggle2FA(req: Request, res: Response): Promise<void> {
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-    // 2. Perform Atomic Update
-    faculty.twoFactorEnabled = !!enabled;
+    // 2. Store OTP - Do NOT change twoFactorEnabled yet
     faculty.otp = otp;
     faculty.otpExpires = otpExpires;
-    
     await faculty.save();
 
-    // 3. Log the security event
+    // 3. Log the initial request
     await createAuditLog({
-      action: '2FA Setting Changed',
-      details: `Two-factor authentication ${enabled ? 'enabled' : 'disabled'}`,
+      action: '2FA Change Requested',
+      details: `Request to ${enabled ? 'enable' : 'disable'} two-factor authentication`,
       req,
       facultyId: faculty.id
     });
@@ -952,20 +950,64 @@ export async function toggle2FA(req: Request, res: Response): Promise<void> {
       await send2FAToggleOTPEmail(faculty.email, otp, !!enabled);
     } catch (emailErr) {
       console.error('Failed to send 2FA toggle email:', emailErr);
-      // We don't return 500 here because the DB update was successful. 
-      // User can resend the OTP if needed.
     }
 
     res.json({
-      message: `Two-factor authentication ${enabled ? 'enabled' : 'disabled'} successfully. A verification code has been sent to your email.`,
-      twoFactorEnabled: faculty.twoFactorEnabled
+      message: `A verification code has been sent to your email to confirm ${enabled ? 'enabling' : 'disabling'} MFA.`
     });
   } catch (error) {
     console.error('CRITICAL Toggle 2FA error:', error);
     res.status(500).json({ 
-      message: 'Internal server error while updating 2FA settings',
-      error: process.env.NODE_ENV === 'development' ? String(error) : undefined
+      message: 'Internal server error while initiating 2FA change'
     });
+  }
+}
+
+export async function verify2FAToggle(req: Request, res: Response): Promise<void> {
+  try {
+    const userId = req.userId;
+    const { otp } = req.body;
+
+    if (!userId) {
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+
+    const faculty = await Faculty.findById(userId);
+    if (!faculty) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
+
+    if (!faculty.otp || !faculty.otpExpires || faculty.otp !== otp || faculty.otpExpires < new Date()) {
+      res.status(400).json({ message: 'Invalid or expired security code' });
+      return;
+    }
+
+    // 1. VERIFIED: Now flip the actual security setting
+    const previousState = faculty.twoFactorEnabled;
+    faculty.twoFactorEnabled = !previousState;
+    faculty.otp = undefined;
+    faculty.otpExpires = undefined;
+    
+    await faculty.save();
+
+    // 2. Audit Log the commitment
+    await createAuditLog({
+      action: '2FA Setting Committed',
+      details: `Two-factor authentication successfully ${faculty.twoFactorEnabled ? 'enabled' : 'disabled'}`,
+      req,
+      facultyId: faculty.id
+    });
+
+    res.json({
+      message: `Two-factor authentication ${faculty.twoFactorEnabled ? 'enabled' : 'disabled'} successfully`,
+      twoFactorEnabled: faculty.twoFactorEnabled
+    });
+
+  } catch (error) {
+    console.error('CRITICAL Verify 2FA Toggle error:', error);
+    res.status(500).json({ message: 'Internal server error during 2FA confirmation' });
   }
 }
 

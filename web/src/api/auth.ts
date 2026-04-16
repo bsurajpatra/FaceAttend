@@ -91,6 +91,11 @@ export async function toggle2faApi(enabled: boolean): Promise<void> {
     await http.post('/api/auth/toggle-2fa', { enabled });
 }
 
+export async function verify2faToggleApi(otp: string): Promise<{ twoFactorEnabled: boolean }> {
+    const res = await http.post<{ twoFactorEnabled: boolean }>('/api/auth/verify-2fa-toggle', { otp });
+    return res.data;
+}
+
 export async function resend2faApi(email: string): Promise<void> {
     await http.post('/api/auth/resend-2fa', { email });
 }

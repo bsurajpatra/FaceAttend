@@ -17,6 +17,7 @@ import {
     resendOTP,
     verify2FA,
     toggle2FA,
+    verify2FAToggle,
     resend2FA,
     verifyEmailChangeOTP,
     resendEmailChangeOTP
@@ -57,6 +58,7 @@ authRouter.post('/verify-otp', authLimiter, verifyOTP);
 authRouter.post('/resend-otp', authLimiter, resendOTP);
 authRouter.post('/verify-2fa', authLimiter, verify2FA);
 authRouter.post('/toggle-2fa', verifyFacultyToken, toggle2FA);
+authRouter.post('/verify-2fa-toggle', verifyFacultyToken, verify2FAToggle);
 authRouter.post('/resend-2fa', authLimiter, resend2FA);
 authRouter.post('/verify-email-change', verifyFacultyToken, verifyEmailChangeOTP);
 authRouter.post('/resend-email-change', verifyFacultyToken, resendEmailChangeOTP);
