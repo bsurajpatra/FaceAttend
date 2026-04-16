@@ -20,14 +20,16 @@ The system uses a **triple-tier architecture** separated into a robust Node.js b
 
 ### 🌐 Web ERP Portal (The Command Center)
 *   **Centralized Management:** The only place for adding/editing students and managing faculty profiles.
-*   **Remote Capture:** Initiate a photo capture request from the Web Portal that instantly triggers the camera on your logged-in mobile device.
+*   **Remote Capture:** Initiate a photo capture request from the Web Portal that instantly triggers the camera on your logged-in mobile device for wireless registration.
 *   **Timetable Manager:** Interactive drag-and-drop style interface to configure weekly schedules.
+*   **Attendance Reconciliation:** Automated background sync that verifies session counts against the latest student enrollments to ensure 100% data integrity.
 *   **Security Console:** (My Devices) Monitor active sessions, trust/untrust specific mobile devices, and force-logout suspicious connections.
 *   **Audit Logs:** Real-time surveillance tracking every login, data change, and attendance event.
 *   **Reports & Analytics:** Export professional PDF/CSV reports and view live attendance metrics.
 
 ### 📱 Mobile App (The Operational Tool)
 *   **Focused UI:** Clutter-free interface designed purely for speed and efficiency in the classroom.
+*   **Secure Kiosk Mode:** Dedicated Lock-Task/Kiosk implementation with **biometric authentication (Fingerprint/FaceID)** for exit, including a robust admin password fallback.
 *   **High-Speed Frame Processing:** Accelerated continuous throttled background scanning combined with dynamic JPEG payload compression.
 *   **Smart Dashboard:** Shows ongoing and upcoming classes with "One-Tap" attendance start.
 *   **Zero-Lag Asynchrony:** Pushes face buffers to an async queue (BullMQ), yielding 4ms node-response times, updating UI fully offline using realtime WebSocket broadcasts.
@@ -35,6 +37,9 @@ The system uses a **triple-tier architecture** separated into a robust Node.js b
 
 ### 🤖 Intelligent Queueing & AI
 *   **Event-Driven Inference:** Mobile uploads trigger BullMQ parallel workers (running 20+ concurrent threads) to communicate seamlessly with Python models.
+*   **Multi-Embedding Profiles:** Tracks a rolling set of **5+ unique face embeddings** per student to handle variations in lighting, angles, and appearance changes.
+*   **Anti-Proxy Shield:** Real-time cross-verification during registration prevents duplicate or proxy student enrollments using cosine similarity benchmarks (>0.8).
+*   **Redis Acceleration:** Implements a **Read-through Cache** for high-frequency data (like Timetables) with automatic invalidation on updates.
 *   **Redis Real-Time State:** Buffers tracking "live attendance state", detection window cooldowns, and cryptographic hash deduplication caching directly in fast memory.
 *   **Socket.IO Real-time Loop:** AI output, UI updates, and remote trust management reflect on the mobile app within milliseconds.
 *   **FaceNet Embeddings:** State-of-the-art deep learning model for high-accuracy face verification.
@@ -76,7 +81,7 @@ client/
 ### Backend Services
 *   **`server/` (Node.js):** REST API, BullMQ worker configuration, WebSocket emitters, and Background Sync services.
 *   **`facenet_service/` (Python):** Flask API exposing `/recognize` and `/train` endpoints.
-*   **`redis` (In-Memory Datastore):** Holds JWT sessions, blazing state records, message brokerage queues, and ML face-caching hashes.
+*   **`redis` (In-Memory Datastore):** Holds JWT session sets, Read-through caches for timetables, message brokerage queues, and ML face-caching hashes.
 
 ---
 
@@ -124,10 +129,13 @@ npx expo start
 
 ## 🔒 Security Highlights
 
-1.  **Device Fingerprinting:** Every mobile login captures device ID, model, and OS version.
-2.  **Trust Policy:** Admin/Faculty must explicitly "Trust" a mobile device from the Web Portal before it can be used for taking attendance.
-3.  **Audit Trails:** Immutable logs for all critical actions (Login, Logout, Data Modification).
-4.  **JWT + Refresh Tokens:** Secure session management with automatic expiration.
+1.  **Biometric Kiosk Authorization:** Hardware-level biometric escape from Kiosk/Lock-Task mode with mandatory cross-verification during setup.
+2.  **Context-Aware 2FA:** Dynamic two-factor email authentication triggered only for untrusted devices or suspicious login attempts.
+3.  **Multi-Device Session Management:** Set-based Redis architecture allowing concurrent active sessions on web and mobile simultaneously.
+4.  **Device Fingerprinting:** Every mobile login captures device ID, model, and OS version.
+5.  **Trust Policy:** Admin/Faculty must explicitly "Trust" a mobile device from the Web Portal before it can be used for taking attendance.
+6.  **Audit Trails:** Real-time surjective tracking for every login, data change, and attendance event.
+7.  **JWT + Refresh Tokens:** Secure session management with automatic expiration and Redis-backed invalidation.
 
 ---
 
