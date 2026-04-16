@@ -307,7 +307,7 @@ export default function Dashboard() {
                     <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center p-1 flex-shrink-0">
                         <img src={logoImg} alt="Logo" className="w-full h-full object-contain" />
                     </div>
-                    {isSidebarOpen && <span className="text-xl font-bold tracking-tight italic">FaceAttend</span>}
+                    {isSidebarOpen && <span className="text-xl font-bold tracking-tight">FaceAttend</span>}
                 </div>
 
                 {/* Sidebar Content */}
@@ -547,9 +547,9 @@ export default function Dashboard() {
                                     )}
                                 </div>
                                 <div className="h-10 w-[1px] bg-slate-200" />
-                                <div className="flex items-center gap-3 bg-slate-50 p-1 pr-4 rounded-full border border-slate-100">
-                                    <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-blue-200">
-                                        {user.name?.charAt(0).toUpperCase()}
+                                <div className="flex items-center gap-3 bg-transparent p-1 pr-4 rounded-full">
+                                    <div className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 shadow-sm overflow-hidden border border-slate-200">
+                                        <User size={18} className="mt-1 opacity-80" />
                                     </div>
                                     <span className="text-sm font-bold text-slate-700 hidden sm:block">{user.name}</span>
                                 </div>
@@ -584,7 +584,7 @@ export default function Dashboard() {
                             <div className="w-20 h-20 bg-orange-50 rounded-full flex items-center justify-center mx-auto mb-6 text-orange-500 shadow-sm border border-orange-100">
                                 <ShieldAlert size={40} />
                             </div>
-                            <h3 className="text-2xl font-black text-slate-900 uppercase italic tracking-tight">Security Alert</h3>
+                            <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Security Alert</h3>
                             <p className="text-slate-500 font-medium text-sm mt-3 leading-relaxed">
                                 Your account is currently at risk. <br />
                                 <strong className="text-slate-700">Multi-Factor Authentication (MFA)</strong> is disabled.
@@ -764,7 +764,7 @@ function OverviewSection({ user, timetable, setNotifications }: any) {
             <div className="space-y-2">
                 <h1 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tight">
                     {isFirstLogin ? 'Welcome, ' : 'Welcome back, '}
-                    <span className="text-blue-600 italic">{user.name}</span> !
+                    <span className="text-blue-600">{user.name}</span> !
                 </h1>
                 <p className="text-slate-500 text-lg font-medium max-w-2xl mx-auto leading-relaxed">
                     Manage your attendance records and profile from the ERP console.
@@ -779,21 +779,21 @@ function OverviewSection({ user, timetable, setNotifications }: any) {
                             <Clock size={24} />
                         </div>
                         <span className="text-blue-400 font-black uppercase tracking-[0.2em] text-[10px] mb-1 relative z-10">Current Session</span>
-                        <h4 className="text-2xl font-black italic tracking-tighter relative z-10">{currentSession.timeSlot}</h4>
+                        <h4 className="text-2xl font-black tracking-tighter relative z-10">{currentSession.timeSlot}</h4>
                     </div>
                     <div className="flex-1 p-6 md:p-8 text-left flex flex-col justify-center relative">
                         <div className="absolute top-0 right-0 p-6 opacity-[0.03] group-hover:opacity-[0.07] transition-opacity">
                             <BookOpen size={100} />
                         </div>
                         <div className="flex items-center gap-2 mb-4">
-                            <span className="px-4 py-1 bg-blue-50 text-blue-600 text-[9px] font-black rounded-full uppercase tracking-widest border border-blue-100 italic">
+                            <span className="px-4 py-1 bg-blue-50 text-blue-600 text-[9px] font-black rounded-full uppercase tracking-widest border border-blue-100">
                                 {currentSession.sessionType}
                             </span>
-                            <span className="px-4 py-1 bg-emerald-50 text-emerald-600 text-[9px] font-black rounded-full uppercase tracking-widest border border-emerald-100 italic">
+                            <span className="px-4 py-1 bg-emerald-50 text-emerald-600 text-[9px] font-black rounded-full uppercase tracking-widest border border-emerald-100">
                                 SEC: {currentSession.section}
                             </span>
                         </div>
-                        <h3 className="text-3xl font-black text-slate-900 mb-4 tracking-tighter group-hover:text-blue-600 transition-colors uppercase italic">{currentSession.subject}</h3>
+                        <h3 className="text-3xl font-black text-slate-900 mb-4 tracking-tighter group-hover:text-blue-600 transition-colors uppercase">{currentSession.subject}</h3>
                         <div className="flex items-center gap-4 text-slate-500 font-bold">
                             <div className="flex items-center gap-2">
                                 <MapPinIcon size={18} className="text-blue-500" />
@@ -823,7 +823,7 @@ function OverviewSection({ user, timetable, setNotifications }: any) {
                     <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm border border-slate-100 group-hover:scale-110 transition-transform">
                         <Clock size={28} className="text-slate-300" />
                     </div>
-                    <h3 className="text-xl font-black text-slate-400 tracking-tight italic uppercase">No Ongoing Session</h3>
+                    <h3 className="text-xl font-black text-slate-400 tracking-tight uppercase">No Ongoing Session</h3>
                     <p className="text-slate-400 text-sm font-medium mt-1">Check your timetable for upcoming classes.</p>
                 </div>
             )}
@@ -831,7 +831,7 @@ function OverviewSection({ user, timetable, setNotifications }: any) {
             {missedSessions.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start animate-in fade-in slide-in-from-bottom-4 duration-700 delay-200">
                     <div className="col-span-full text-left">
-                        <h3 className="text-xl font-black text-slate-900 uppercase italic tracking-tight mb-4 flex items-center gap-2">
+                        <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight mb-4 flex items-center gap-2">
                             <ShieldAlert className="text-red-500" /> Pending Actions
                         </h3>
                     </div>
@@ -841,7 +841,7 @@ function OverviewSection({ user, timetable, setNotifications }: any) {
                                 <ShieldAlert size={120} className="text-red-500" />
                             </div>
                             <div className="p-6 md:p-8 text-left">
-                                <span className="px-4 py-1 bg-red-50 text-red-600 text-[10px] font-black rounded-full uppercase tracking-widest border border-red-100 italic mb-4 inline-block">
+                                <span className="px-4 py-1 bg-red-50 text-red-600 text-[10px] font-black rounded-full uppercase tracking-widest border border-red-100 mb-4 inline-block">
                                     Missed Attendance
                                 </span>
                                 <h4 className="text-2xl font-black text-slate-900 tracking-tighter mb-1">{ms.subject}</h4>

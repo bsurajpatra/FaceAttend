@@ -6,6 +6,7 @@ import { startAttendanceSessionApi } from '@/api/attendance';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { getDeviceName } from '@/utils/device';
+import { logEvent } from '@/utils/audit-logger';
 
 export default function TakeAttendancePage() {
   const params = useLocalSearchParams<{ subject: string; hours: string; section: string; sessionType: string }>();
@@ -91,6 +92,7 @@ export default function TakeAttendancePage() {
         });
 
         setSessionId(result.sessionId);
+        await logEvent('Attendance', `Session started: ${params.subject} for hours ${hours.join(', ')}`);
 
         // Check if this is an existing session with attendance data
         if (result.presentStudents !== undefined && result.absentStudents !== undefined) {
@@ -112,6 +114,7 @@ export default function TakeAttendancePage() {
         console.error('Failed to start attendance session:', err);
         const serverError = err?.response?.data;
         if (serverError?.code === 'DEVICE_NOT_TRUSTED') {
+          await logEvent('Security Alert', `Blocked attendance session: Device not trusted`);
           setError('DEVICE_NOT_TRUSTED');
         } else {
           setError(serverError?.message || 'Failed to start attendance session');

@@ -73,7 +73,7 @@ export function AuditLog() {
             {/* Header section */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mt-2">
                 <div>
-                    <h2 className="text-2xl font-black text-slate-900 tracking-tight uppercase italic flex items-center gap-3">
+                    <h2 className="text-2xl font-black text-slate-900 tracking-tight uppercase flex items-center gap-3">
                         <Activity size={28} className="text-blue-600" />
                         Global Audit Log
                     </h2>
@@ -148,7 +148,7 @@ export function AuditLog() {
                                                 {log.action.includes('Login') ? <Shield size={18} /> : <Activity size={18} />}
                                             </div>
                                             <div>
-                                                <p className="text-sm font-black text-slate-900 uppercase tracking-tight italic">{log.action}</p>
+                                                <p className="text-sm font-black text-slate-900 uppercase tracking-tight">{log.action}</p>
                                                 <div className="flex items-center gap-1.5 mt-0.5">
                                                     {log.platform === 'Web' ? <Globe size={11} className="text-slate-400" /> : <Smartphone size={11} className="text-slate-400" />}
                                                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{log.platform}</span>
@@ -188,7 +188,7 @@ export function AuditLog() {
                                         <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-50 text-slate-300 mb-4">
                                             <Search size={32} />
                                         </div>
-                                        <p className="text-slate-500 font-black uppercase tracking-widest text-sm italic">No security logs found</p>
+                                        <p className="text-slate-500 font-black uppercase tracking-widest text-sm">No security logs found</p>
                                         <p className="text-slate-400 text-xs font-bold uppercase mt-2">Try adjusting your filters or search query</p>
                                     </td>
                                 </tr>

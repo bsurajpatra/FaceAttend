@@ -178,17 +178,17 @@ function SummaryCard({ title, value, subtitle, icon, color, loading }: SummaryCa
                     {loading ? <RefreshCw className="animate-spin" size={18} /> : React.cloneElement(icon as React.ReactElement<any>, { size: 20 })}
                 </div>
                 <div className="text-right">
-                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 italic">This Week</span>
+                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">This Week</span>
                 </div>
             </div>
 
             <div className="space-y-0.5">
-                <h3 className="text-[11px] font-black text-slate-500 uppercase tracking-tighter italic">{title}</h3>
+                <h3 className="text-[11px] font-black text-slate-500 uppercase tracking-tighter">{title}</h3>
                 <div className="flex items-baseline gap-1.5">
                     <span className="text-3xl md:text-4xl font-black text-slate-900 tracking-tighter">
                         {loading ? '--' : value}
                     </span>
-                    {!loading && <span className="text-slate-400 font-bold text-sm italic">/ sessions</span>}
+                    {!loading && <span className="text-slate-400 font-bold text-sm">/ sessions</span>}
                 </div>
                 <p className="text-[11px] text-slate-400 font-medium truncate">{subtitle}</p>
             </div>

@@ -168,7 +168,7 @@ export function Profile({ user }: ProfileProps) {
 
     return (
         <div className="h-full flex flex-col animate-in fade-in slide-in-from-right-4 duration-500 overflow-hidden scrollbar-hide relative">
-            <h2 className="text-2xl font-black text-slate-900 mb-4 mt-1 tracking-tight uppercase italic flex items-center gap-3 flex-shrink-0">
+            <h2 className="text-2xl font-black text-slate-900 mb-4 mt-1 tracking-tight uppercase flex items-center gap-3 flex-shrink-0">
                 <User size={28} className="text-blue-600" />
                 Profile
             </h2>
@@ -181,12 +181,12 @@ export function Profile({ user }: ProfileProps) {
                         <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm text-center relative overflow-hidden group">
                             <div className="absolute top-0 inset-x-0 h-24 bg-slate-900 group-hover:h-28 transition-all duration-500" />
                             <div className="relative mt-4 mb-4">
-                                <div className="w-24 h-24 bg-blue-600 rounded-2xl border-4 border-white mx-auto flex items-center justify-center text-white text-3xl font-black shadow-xl relative overflow-hidden">
-                                    {user?.name?.charAt(0).toUpperCase()}
+                                <div className="w-24 h-24 bg-slate-100 rounded-[2rem] border-4 border-white mx-auto flex items-center justify-center text-slate-400 shadow-xl relative overflow-hidden ring-1 ring-slate-100">
+                                    <User size={48} className="mt-2 opacity-60" />
                                 </div>
                             </div>
                             <h3 className="text-xl font-black text-slate-900 px-2 leading-tight">{user?.name}</h3>
-                            <p className="text-blue-600 font-bold italic mb-4 text-xs">FACULTY_ID: {user?.username?.toUpperCase() || 'N/A'}</p>
+                            <p className="text-blue-600 font-bold mb-4 text-xs">FACULTY_USERNAME: {user?.username?.toUpperCase() || 'N/A'}</p>
                             <div className="flex justify-center gap-2">
                                 <span className="px-3 py-1 bg-emerald-50 text-emerald-600 text-[9px] font-black rounded-full uppercase tracking-tighter border border-emerald-100">Verified</span>
                                 <span className="px-3 py-1 bg-blue-50 text-blue-600 text-[9px] font-black rounded-full uppercase tracking-tighter border border-blue-100">Faculty</span>
@@ -197,7 +197,7 @@ export function Profile({ user }: ProfileProps) {
                         <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden group">
                             <div className="absolute top-0 right-0 w-24 h-24 bg-blue-50 rounded-full blur-3xl -mt-12 -mr-12 opacity-50 group-hover:bg-indigo-50 transition-colors" />
 
-                            <h3 className="text-xs font-black text-slate-900 mb-4 flex items-center gap-2 uppercase tracking-widest italic">
+                            <h3 className="text-xs font-black text-slate-900 mb-4 flex items-center gap-2 uppercase tracking-widest">
                                 <ShieldAlert className="text-blue-600" size={16} />
                                 MFA Protection
                             </h3>
@@ -226,7 +226,7 @@ export function Profile({ user }: ProfileProps) {
                                         />
                                     </button>
                                 </div>
-                                <p className="text-[10px] text-slate-500 font-medium leading-relaxed italic border-t border-slate-50 pt-3">
+                                <p className="text-[10px] text-slate-500 font-medium leading-relaxed border-t border-slate-50 pt-3">
                                     Multi-factor authentication adds an extra layer of security. Verified access required via email code on every new session login.
                                 </p>
                             </div>
@@ -316,7 +316,7 @@ export function Profile({ user }: ProfileProps) {
                             <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4 text-blue-600">
                                 <ShieldCheck size={32} />
                             </div>
-                            <h3 className="text-2xl font-black text-slate-900 uppercase italic tracking-tight">Verify Identity</h3>
+                            <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Verify Identity</h3>
                             <p className="text-slate-500 font-medium text-sm mt-2">
                                 Please enter the verification code sent to <br />
                                 <span className="text-slate-900 font-bold">{verificationType === 'email-change' ? 'new email address' : user.email}</span>

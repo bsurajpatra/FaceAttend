@@ -178,7 +178,7 @@ export default function LoginPage() {
                             <div className="w-14 h-14 bg-white rounded-xl flex items-center justify-center shadow-2xl p-2">
                                 <img src={logoImg} alt="FaceAttend" className="w-full h-full object-contain" />
                             </div>
-                            <span className="text-3xl font-black tracking-tight italic">FaceAttend</span>
+                            <span className="text-3xl font-black tracking-tight">FaceAttend</span>
                         </div>
                         <h2 className="text-4xl font-extrabold leading-tight mb-6">
                             Intelligent
@@ -218,7 +218,7 @@ export default function LoginPage() {
                         <div className="mb-10 block md:hidden text-center">
                             <div className="flex items-center justify-center gap-4 mb-4">
                                 <img src={logoImg} alt="FaceAttend" className="w-16 h-16 object-contain" />
-                                <span className="text-4xl font-black tracking-tight text-slate-800 italic">FaceAttend</span>
+                                <span className="text-4xl font-black tracking-tight text-slate-800">FaceAttend</span>
                             </div>
                         </div>
 
@@ -263,7 +263,7 @@ export default function LoginPage() {
                                             />
                                         </div>
                                         <div className="flex justify-end pr-2">
-                                            <a href="/forgot-password" className="text-xs font-black text-blue-600 hover:text-blue-800 uppercase tracking-widest transition-colors italic">
+                                            <a href="/forgot-password" className="text-xs font-black text-blue-600 hover:text-blue-800 uppercase tracking-widest transition-colors">
                                                 Forgot Password?
                                             </a>
                                         </div>
@@ -278,14 +278,14 @@ export default function LoginPage() {
                                                     required
                                                     value={captchaInput}
                                                     onChange={(e) => setCaptchaInput(e.target.value)}
-                                                    className="block w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 transition-all font-bold tracking-[0.5em] text-center italic"
+                                                    className="block w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 transition-all font-bold tracking-[0.5em] text-center"
                                                     placeholder="CODE"
                                                     maxLength={6}
                                                 />
                                             </div>
                                             <div className="flex flex-col items-center gap-2">
                                                 <div
-                                                    className="h-12 w-32 bg-slate-900 rounded-xl flex items-center justify-center font-black text-xl italic tracking-widest text-white select-none relative overflow-hidden shadow-inner border-2 border-slate-800 cursor-not-allowed group"
+                                                    className="h-12 w-32 bg-slate-900 rounded-xl flex items-center justify-center font-black text-xl tracking-widest text-white select-none relative overflow-hidden shadow-inner border-2 border-slate-800 cursor-not-allowed group"
                                                     style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.5)' }}
                                                 >
                                                     <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'repeating-linear-gradient(45deg, #000 0px, #000 2px, transparent 2px, transparent 4px)' }} />
@@ -351,7 +351,7 @@ export default function LoginPage() {
                                     <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-xl border border-blue-100">
                                         <ShieldCheck size={40} className="animate-pulse" />
                                     </div>
-                                    <h3 className="text-3xl font-black text-slate-900 mb-3 tracking-tight uppercase italic">2FA Security</h3>
+                                    <h3 className="text-3xl font-black text-slate-900 mb-3 tracking-tight uppercase">2FA Security</h3>
                                     <p className="text-slate-500 font-medium leading-relaxed text-center">
                                         Enter the security code sent to:<br />
                                         <span className="text-slate-900 font-bold">{emailForOtp}</span>
@@ -438,7 +438,7 @@ export default function LoginPage() {
                                     <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-xl border border-blue-100">
                                         <ShieldAlert size={40} className="animate-pulse" />
                                     </div>
-                                    <h3 className="text-3xl font-black text-slate-900 mb-3 tracking-tight uppercase italic">Finalize Verification</h3>
+                                    <h3 className="text-3xl font-black text-slate-900 mb-3 tracking-tight uppercase">Finalize Verification</h3>
                                     <p className="text-slate-500 font-medium leading-relaxed text-center">
                                         Your account is not verified. Please enter the code sent to:<br />
                                         <span className="text-slate-900 font-bold">{emailForOtp}</span>

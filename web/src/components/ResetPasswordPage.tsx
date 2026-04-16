@@ -77,7 +77,7 @@ export default function ResetPasswordPage() {
                         <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-2xl p-2 border border-slate-100">
                             <img src={logoImg} alt="FaceAttend" className="w-full h-full object-contain" />
                         </div>
-                        <span className="text-2xl font-black tracking-tight text-slate-800 italic">FaceAttend</span>
+                        <span className="text-2xl font-black tracking-tight text-slate-800">FaceAttend</span>
                     </div>
 
                     <div className="bg-white border border-slate-100 shadow-2xl shadow-slate-200/50 rounded-[2.5rem] p-8 md:p-12 relative overflow-hidden">
@@ -98,7 +98,7 @@ export default function ResetPasswordPage() {
                                     <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-blue-100">
                                         <ShieldCheck size={32} />
                                     </div>
-                                    <h3 className="text-3xl font-black text-slate-900 mb-2 uppercase italic tracking-tight">Set New Password</h3>
+                                    <h3 className="text-3xl font-black text-slate-900 mb-2 uppercase tracking-tight">Set New Password</h3>
                                     <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Ensure your new credentials meet security requirements</p>
                                 </div>
 
@@ -154,7 +154,7 @@ export default function ResetPasswordPage() {
                                     <button
                                         type="submit"
                                         disabled={isLoading || !token}
-                                        className="w-full flex items-center justify-center gap-3 py-4 px-8 bg-slate-900 hover:bg-black text-white rounded-2xl font-black text-sm uppercase tracking-[0.2em] shadow-2xl shadow-slate-200 transition-all active:scale-95 italic mt-4"
+                                        className="w-full flex items-center justify-center gap-3 py-4 px-8 bg-slate-900 hover:bg-black text-white rounded-2xl font-black text-sm uppercase tracking-[0.2em] shadow-2xl shadow-slate-200 transition-all active:scale-95 mt-4"
                                     >
                                         {isLoading ? (
                                             <Loader2 className="w-6 h-6 animate-spin" />

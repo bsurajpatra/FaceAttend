@@ -58,8 +58,8 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 auth: { token },
                 query: { deviceId },
                 reconnection: true,
-                reconnectionAttempts: 5,
-                timeout: 10000,
+                reconnectionAttempts: 10,
+                timeout: 20000, // Increased to 20s for better mobile network stability
             });
 
             newSocket.on('connect', () => {

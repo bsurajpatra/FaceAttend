@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { getSecureItem, setSecureItem, removeSecureItem } from '@/utils/secure-storage';
 import { setUnauthHandler } from '../api/http';
+import { logEvent } from '../utils/audit-logger';
 
 
 interface User {
@@ -53,6 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await setSecureItem('user', JSON.stringify(user));
         await setSecureItem('token', token);
         await setSecureItem('isTrusted', String(isTrusted));
+        await logEvent('Auth', `User logged in: ${user.username}`);
         setUser(user);
         setIsLoggedIn(true);
     };
@@ -61,6 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await removeSecureItem('user');
         await removeSecureItem('token');
         await removeSecureItem('isTrusted');
+        await logEvent('Auth', `User logged out`);
         setUser(null);
         setIsLoggedIn(false);
     };

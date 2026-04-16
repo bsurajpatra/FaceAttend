@@ -122,7 +122,7 @@ export default function MyDevices({ user }: MyDevicesProps) {
             {/* Header section */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mt-2">
                 <div>
-                    <h2 className="text-2xl font-black text-slate-900 tracking-tight uppercase italic flex items-center gap-3">
+                    <h2 className="text-2xl font-black text-slate-900 tracking-tight uppercase flex items-center gap-3">
                         <ShieldCheck size={28} className="text-blue-600" />
                         My Devices
                     </h2>
@@ -153,9 +153,9 @@ export default function MyDevices({ user }: MyDevicesProps) {
                         <Shield size={24} />
                     </div>
                     <div className="flex-1 text-center md:text-left">
-                        <h3 className="text-lg font-black italic uppercase tracking-tighter text-blue-400 mb-1">Device Trust Policy</h3>
+                        <h3 className="text-lg font-black uppercase tracking-tighter text-blue-400 mb-1">Device Trust Policy</h3>
                         <p className="text-slate-300 font-medium leading-normal text-xs md:text-sm max-w-3xl">
-                            Attendance operations are restricted to a <span className="text-white font-black underline italic">single trusted device</span>.
+                            Attendance operations are restricted to a <span className="text-white font-black underline">single trusted device</span>.
                             New logins are marked untrusted by default. Trusting a new device will automatically revoke trust from all other hardware.
                         </p>
                     </div>
@@ -167,7 +167,7 @@ export default function MyDevices({ user }: MyDevicesProps) {
                 {devices.length === 0 ? (
                     <div className="col-span-full bg-white rounded-[3rem] border-2 border-dashed border-slate-200 p-20 text-center">
                         <Smartphone size={60} className="text-slate-200 mx-auto mb-6" />
-                        <h3 className="text-2xl font-black text-slate-400 tracking-tight italic uppercase">No devices found</h3>
+                        <h3 className="text-2xl font-black text-slate-400 tracking-tight uppercase">No devices found</h3>
                         <p className="text-slate-400 font-medium mt-2">Log in from your mobile app to register a device.</p>
                     </div>
                 ) : (
@@ -194,17 +194,17 @@ export default function MyDevices({ user }: MyDevicesProps) {
                                         <Smartphone size={24} />
                                     </div>
                                     {device.isTrusted ? (
-                                        <span className="px-4 py-1.5 bg-emerald-50 text-emerald-600 text-[10px] font-black rounded-full uppercase tracking-widest border border-emerald-100 italic">
+                                        <span className="px-4 py-1.5 bg-emerald-50 text-emerald-600 text-[10px] font-black rounded-full uppercase tracking-widest border border-emerald-100">
                                             Trusted
                                         </span>
                                     ) : (
-                                        <span className="px-4 py-1.5 bg-slate-50 text-slate-400 text-[10px] font-black rounded-full uppercase tracking-widest border border-slate-200 italic">
+                                        <span className="px-4 py-1.5 bg-slate-50 text-slate-400 text-[10px] font-black rounded-full uppercase tracking-widest border border-slate-200">
                                             Untrusted
                                         </span>
                                     )}
                                 </div>
 
-                                <h3 className="text-xl font-black text-slate-900 mb-1 leading-tight uppercase italic truncate">
+                                <h3 className="text-xl font-black text-slate-900 mb-1 leading-tight uppercase truncate">
                                     {device.deviceName}
                                 </h3>
 
@@ -231,7 +231,7 @@ export default function MyDevices({ user }: MyDevicesProps) {
                                         <button
                                             onClick={() => handleTrust(device.deviceId)}
                                             disabled={!!actionLoading}
-                                            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black uppercase text-[10px] tracking-widest italic transition-all shadow-lg shadow-blue-200 disabled:opacity-50 active:scale-95"
+                                            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black uppercase text-[10px] tracking-widest transition-all shadow-lg shadow-blue-200 disabled:opacity-50 active:scale-95"
                                         >
                                             {actionLoading === device.deviceId ? (
                                                 <RefreshCw className="w-4 h-4 animate-spin" />
@@ -299,13 +299,13 @@ export default function MyDevices({ user }: MyDevicesProps) {
                         </div>
 
                         <div className="space-y-2 mb-8">
-                            <h3 className="text-2xl font-black text-slate-900 uppercase italic tracking-tight">
+                            <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tight">
                                 {isDeleting ? 'Revoking Access...' : 'Revoke Device?'}
                             </h3>
                             <p className="text-slate-500 font-medium text-sm leading-relaxed px-4">
                                 {isDeleting
                                     ? 'We are securely revoking trust from this hardware. Please wait.'
-                                    : <span>Are you sure you want to revoke <span className="text-slate-900 font-black italic underline">{deviceToDelete.deviceName}</span>? You will be logged out immediately from this device.</span>
+                                    : <span>Are you sure you want to revoke <span className="text-slate-900 font-black underline">{deviceToDelete.deviceName}</span>? You will be logged out immediately from this device.</span>
                                 }
                             </p>
                         </div>
@@ -314,14 +314,14 @@ export default function MyDevices({ user }: MyDevicesProps) {
                             <button
                                 onClick={() => setDeviceToDelete(null)}
                                 disabled={isDeleting}
-                                className="flex-1 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] text-slate-500 bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-all active:scale-95 disabled:opacity-50 italic"
+                                className="flex-1 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] text-slate-500 bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-all active:scale-95 disabled:opacity-50"
                             >
                                 Cancel
                             </button>
                             <button
                                 onClick={confirmRevoke}
                                 disabled={isDeleting}
-                                className="flex-1 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] text-white bg-rose-500 hover:bg-rose-600 shadow-xl shadow-rose-200 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2 italic"
+                                className="flex-1 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] text-white bg-rose-500 hover:bg-rose-600 shadow-xl shadow-rose-200 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
                             >
                                 {isDeleting ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
                                 {isDeleting ? 'Revoking...' : 'Confirm Revoke'}

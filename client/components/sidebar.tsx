@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, usePathname } from 'expo-router';
 import { styles } from './styles/dashboard-styles'; // Reusing dashboard styles for consistency
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as LocalAuthentication from 'expo-local-authentication';
 
 type SidebarProps = {
     isOpen: boolean;
@@ -143,7 +144,17 @@ export function Sidebar({ isOpen, onClose, onLogout, onTimetablePress, activeRou
 
                     <Pressable
                         style={[styles.navItem, isActive('/settings') && styles.navItemActive]}
-                        onPress={() => navigateTo('/settings')}
+                        onPress={async () => {
+                            const hasHardware = await LocalAuthentication.hasHardwareAsync();
+                            const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+                            if (hasHardware && isEnrolled) {
+                                const result = await LocalAuthentication.authenticateAsync({
+                                    promptMessage: 'Authenticate to access Settings',
+                                });
+                                if (!result.success) return;
+                            }
+                            navigateTo('/settings');
+                        }}
                     >
                         <Ionicons
                             name="settings"

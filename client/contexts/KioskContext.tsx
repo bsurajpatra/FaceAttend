@@ -5,8 +5,10 @@ import { getSecureItem, setSecureItem } from '@/utils/secure-storage';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { StatusBar } from 'expo-status-bar';
 import * as Crypto from 'expo-crypto';
+import * as LocalAuthentication from 'expo-local-authentication';
 
 import Kiosk from '../utils/kiosk';
+import { logEvent } from '../utils/audit-logger';
 
 // Native-integrated kiosk mode implementation
 const ExpoKiosk = {
@@ -261,6 +263,7 @@ export const KioskProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         // 3. If fully enabled, update UI and hide system UI
         await ExpoKiosk.hideSystemUI();
         setIsKioskMode(true);
+        await logEvent('Kiosk Mode', 'Native kiosk mode enabled successfully');
         console.log('Kiosk mode fully enabled');
       }
     } catch (error) {
@@ -272,6 +275,7 @@ export const KioskProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   // Disable kiosk mode with password verification
   const disableKioskMode = async (password: string): Promise<boolean> => {
     try {
+      // 1. Check Rate Limiting
       if (lockoutUntil && Date.now() < lockoutUntil) {
         const remainingMinutes = Math.ceil((lockoutUntil - Date.now()) / 60000);
         Alert.alert('Too Many Attempts', `Please try again in ${remainingMinutes} minute(s).`);
@@ -282,6 +286,33 @@ export const KioskProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         await resetLockout();
       }
 
+      // 2. Primary Method: Try Biometric Authentication First
+      // (Bypasses password requirement if successful)
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+
+      if (hasHardware && isEnrolled) {
+        const biometricResult = await LocalAuthentication.authenticateAsync({
+          promptMessage: 'Authenticate to exit Kiosk Mode',
+          fallbackLabel: 'Use Password',
+          cancelLabel: 'Cancel'
+        });
+
+        if (biometricResult.success) {
+          await resetLockout();
+          await logEvent('Kiosk Mode', 'Native kiosk mode disabled via Biometrics');
+          
+          if (Platform.OS === 'android') {
+            await ExpoKiosk.disableKioskMode();
+            await ExpoKiosk.showSystemUI();
+          }
+          setIsKioskMode(false);
+          setShowPasswordModal(false);
+          return true;
+        }
+      }
+
+      // 3. Fallback Method: Password Verification
       const hashedInput = await Crypto.digestStringAsync(
         Crypto.CryptoDigestAlgorithm.SHA256,
         password
@@ -303,6 +334,7 @@ export const KioskProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           // Show system UI
           await ExpoKiosk.showSystemUI();
 
+          await logEvent('Kiosk Mode', 'Native kiosk mode disabled with correct password');
           console.log('Kiosk mode disabled');
         }
 
@@ -312,6 +344,7 @@ export const KioskProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       } else {
         const newAttempts = failedAttempts + 1;
         await incrementFailedAttempts();
+        await logEvent('Security Alert', `Failed kiosk exit attempt #${newAttempts}. Password incorrect.`);
         if (newAttempts >= 5) {
           Alert.alert('Too Many Attempts', 'Please try again in 5 minute(s).');
         } else {

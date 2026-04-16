@@ -189,7 +189,7 @@ export default function TimetableManager() {
     return (
         <div className="space-y-6 scrollbar-hide">
             <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-black text-slate-900 tracking-tight uppercase italic flex items-center gap-3">
+                <h2 className="text-2xl font-black text-slate-900 tracking-tight uppercase flex items-center gap-3">
                     <BookOpen size={28} className="text-blue-600" />
                     Timetable Manager
                 </h2>
@@ -252,7 +252,7 @@ export default function TimetableManager() {
                                                 </div>
                                                 <div>
                                                     <div className="font-bold text-slate-800">
-                                                        {session.subject || <span className="text-slate-400 italic">No Subject</span>}
+                                                        {session.subject || <span className="text-slate-400">No Subject</span>}
                                                     </div>
                                                     {!isExpanded && (
                                                         <div className="text-xs text-slate-500 font-medium mt-0.5">

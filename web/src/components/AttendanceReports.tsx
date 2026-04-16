@@ -99,7 +99,7 @@ export function AttendanceReports() {
                     <style>
                         body { font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 40px; color: #1e293b; }
                         .header { border-bottom: 2px solid #3b82f6; padding-bottom: 20px; margin-bottom: 30px; }
-                        h1 { margin: 0; color: #0f172a; font-size: 24px; font-weight: 800; text-transform: uppercase; font-style: italic; }
+                        h1 { margin: 0; color: #0f172a; font-size: 24px; font-weight: 800; text-transform: uppercase; }
                         .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
                         .meta-item { background: #f8fafc; padding: 15px; rounded: 12px; border: 1px solid #e2e8f0; }
                         .meta-item strong { display: block; font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
@@ -110,7 +110,7 @@ export function AttendanceReports() {
                         td { font-size: 13px; font-weight: 500; }
                         .status-present { color: #10b981; font-weight: 800; text-transform: uppercase; font-size: 10px; }
                         .status-absent { color: #ef4444; font-weight: 800; text-transform: uppercase; font-size: 10px; }
-                        .section-title { margin-top: 40px; font-size: 16px; font-weight: 800; text-transform: uppercase; font-style: italic; color: #334155; border-left: 4px solid #3b82f6; padding-left: 12px; }
+                        .section-title { margin-top: 40px; font-size: 16px; font-weight: 800; text-transform: uppercase; color: #334155; border-left: 4px solid #3b82f6; padding-left: 12px; }
                     </style>
                 </head>
                 <body>
@@ -240,14 +240,14 @@ export function AttendanceReports() {
                     <div className="flex items-center gap-3">
                         <button
                             onClick={() => exportToExcel(selectedSession)}
-                            className="bg-emerald-50 text-emerald-600 border border-emerald-100 px-4 py-2 rounded-xl font-black flex items-center gap-2 hover:bg-emerald-100 transition-all active:scale-[0.98] shadow-sm uppercase tracking-widest text-[10px] italic"
+                            className="bg-emerald-50 text-emerald-600 border border-emerald-100 px-4 py-2 rounded-xl font-black flex items-center gap-2 hover:bg-emerald-100 transition-all active:scale-[0.98] shadow-sm uppercase tracking-widest text-[10px]"
                         >
                             <FileSpreadsheet size={16} />
                             EXCEL
                         </button>
                         <button
                             onClick={() => exportToPDF(selectedSession)}
-                            className="bg-red-50 text-red-600 border border-red-100 px-4 py-2 rounded-xl font-black flex items-center gap-2 hover:bg-red-100 transition-all active:scale-[0.98] shadow-sm uppercase tracking-widest text-[10px] italic"
+                            className="bg-red-50 text-red-600 border border-red-100 px-4 py-2 rounded-xl font-black flex items-center gap-2 hover:bg-red-100 transition-all active:scale-[0.98] shadow-sm uppercase tracking-widest text-[10px]"
                         >
                             <FileText size={16} />
                             PDF
@@ -264,15 +264,15 @@ export function AttendanceReports() {
                             </div>
 
                             <div className="relative z-10">
-                                <span className="px-3 py-1 bg-blue-50 text-blue-600 text-[9px] font-black rounded-full uppercase tracking-widest border border-blue-100 italic mb-3 inline-block">
+                                <span className="px-3 py-1 bg-blue-50 text-blue-600 text-[9px] font-black rounded-full uppercase tracking-widest border border-blue-100 mb-3 inline-block">
                                     {selectedSession.sessionType}
                                 </span>
                                 {selectedSession.isMissed && (
-                                    <span className="ml-2 px-3 py-1 bg-red-50 text-red-600 text-[9px] font-black rounded-full uppercase tracking-widest border border-red-100 italic mb-3 inline-block">
+                                    <span className="ml-2 px-3 py-1 bg-red-50 text-red-600 text-[9px] font-black rounded-full uppercase tracking-widest border border-red-100 mb-3 inline-block">
                                         Missed
                                     </span>
                                 )}
-                                <h3 className="text-xl font-black text-slate-900 mb-1 leading-tight uppercase italic">{selectedSession.subject}</h3>
+                                <h3 className="text-xl font-black text-slate-900 mb-1 leading-tight uppercase">{selectedSession.subject}</h3>
                                 <p className="text-slate-500 font-bold mb-4 text-xs">SECTION: {selectedSession.section}</p>
 
                                 {selectedSession.isMissed ? (
@@ -327,16 +327,16 @@ export function AttendanceReports() {
                             <h4 className="text-[9px] font-black text-blue-400 uppercase tracking-[0.2em] mb-4">Attendance Metrics</h4>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <p className="text-2xl font-black italic">{selectedSession.presentStudents}</p>
+                                    <p className="text-2xl font-black">{selectedSession.presentStudents}</p>
                                     <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Present</p>
                                 </div>
                                 <div>
-                                    <p className="text-2xl font-black italic text-red-400">{selectedSession.absentStudents}</p>
+                                    <p className="text-2xl font-black text-red-400">{selectedSession.absentStudents}</p>
                                     <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Absent</p>
                                 </div>
                                 <div className="col-span-2 pt-3 border-t border-slate-800">
                                     <div className="flex justify-between items-end mb-1.5">
-                                        <p className="text-3xl font-black italic text-blue-500">{selectedSession.attendancePercentage}%</p>
+                                        <p className="text-3xl font-black text-blue-500">{selectedSession.attendancePercentage}%</p>
                                         <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Success Rate</p>
                                     </div>
                                     <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
@@ -352,7 +352,7 @@ export function AttendanceReports() {
                     </div>
 
                     <div className="lg:col-span-2 flex flex-col overflow-hidden">
-                        <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col h-full uppercase italic">
+                        <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col h-full uppercase">
                             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 flex-shrink-0">
                                 <h4 className="text-lg font-black text-slate-900">Detailed Records</h4>
                                 <div className="flex gap-2">
@@ -389,7 +389,7 @@ export function AttendanceReports() {
                                                 </td>
                                                 <td className="px-8 py-4 font-bold text-slate-500">{st.rollNumber}</td>
                                                 <td className="px-8 py-4">
-                                                    <span className="flex items-center gap-2 text-emerald-600 font-black text-[10px] uppercase italic">
+                                                    <span className="flex items-center gap-2 text-emerald-600 font-black text-[10px] uppercase">
                                                         <CheckCircle2 size={14} /> Present
                                                     </span>
                                                 </td>
@@ -404,7 +404,7 @@ export function AttendanceReports() {
                                                                 style={{ width: `${Math.round(st.confidence * 100)}%` }}
                                                             />
                                                         </div>
-                                                        <span className="text-xs font-black text-slate-400 italic">{Math.round(st.confidence * 100)}%</span>
+                                                        <span className="text-xs font-black text-slate-400">{Math.round(st.confidence * 100)}%</span>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -421,12 +421,12 @@ export function AttendanceReports() {
                                                 </td>
                                                 <td className="px-8 py-4 font-bold text-slate-400">{st.rollNumber}</td>
                                                 <td className="px-8 py-4">
-                                                    <span className="flex items-center gap-2 text-red-400 font-black text-[10px] uppercase italic">
+                                                    <span className="flex items-center gap-2 text-red-400 font-black text-[10px] uppercase">
                                                         <XCircle size={14} /> Absent
                                                     </span>
                                                 </td>
-                                                <td className="px-8 py-4 text-slate-300 font-black italic">--</td>
-                                                <td className="px-8 py-4 text-slate-300 font-black italic">--</td>
+                                                <td className="px-8 py-4 text-slate-300 font-black">--</td>
+                                                <td className="px-8 py-4 text-slate-300 font-black">--</td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -442,7 +442,7 @@ export function AttendanceReports() {
     return (
         <div className="animate-in fade-in slide-in-from-right-4 duration-500 scrollbar-hide">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8 mt-2">
-                <h2 className="text-2xl font-black text-slate-900 tracking-tight uppercase italic flex items-center gap-3">
+                <h2 className="text-2xl font-black text-slate-900 tracking-tight uppercase flex items-center gap-3">
                     <Clock size={28} className="text-blue-600" />
                     Attendance Reports
                 </h2>
@@ -487,7 +487,7 @@ export function AttendanceReports() {
 
                             <div className="relative z-10 flex flex-col h-full">
                                 <div className="flex justify-between items-start mb-4">
-                                    <span className="px-3 py-1 bg-blue-50 text-blue-600 text-[9px] font-black rounded-full uppercase tracking-widest border border-blue-100 italic">
+                                    <span className="px-3 py-1 bg-blue-50 text-blue-600 text-[9px] font-black rounded-full uppercase tracking-widest border border-blue-100">
                                         {report.sessionType}
                                     </span>
                                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">
@@ -495,7 +495,7 @@ export function AttendanceReports() {
                                     </p>
                                 </div>
 
-                                <h3 className="text-xl font-black text-slate-900 mb-1 leading-tight group-hover:text-blue-600 transition-colors uppercase italic truncate">
+                                <h3 className="text-xl font-black text-slate-900 mb-1 leading-tight group-hover:text-blue-600 transition-colors uppercase truncate">
                                     {report.subject}
                                 </h3>
                                 <div className="flex items-center justify-between gap-2 mb-4">
@@ -515,16 +515,16 @@ export function AttendanceReports() {
 
                                 <div className="mt-auto grid grid-cols-3 gap-2 border-t border-slate-50 pt-4">
                                     <div className="text-center">
-                                        <p className="text-lg font-black text-slate-900 italic">{report.presentStudents}</p>
+                                        <p className="text-lg font-black text-slate-900">{report.presentStudents}</p>
                                         <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">P</p>
                                     </div>
                                     <div className="text-center">
-                                        <p className="text-lg font-black text-slate-900 italic">{report.absentStudents}</p>
+                                        <p className="text-lg font-black text-slate-900">{report.absentStudents}</p>
                                         <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">A</p>
                                     </div>
                                     <div className="text-right flex flex-col items-end">
                                         <p className={cn(
-                                            "text-lg font-black italic",
+                                            "text-lg font-black",
                                             report.attendancePercentage >= 75 ? "text-emerald-600" : "text-red-500"
                                         )}>{report.attendancePercentage}%</p>
                                         <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">RATE</p>
@@ -539,7 +539,7 @@ export function AttendanceReports() {
                     <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-sm border border-slate-100">
                         <Users size={32} className="text-slate-300" />
                     </div>
-                    <h3 className="text-2xl font-black text-slate-400 tracking-tight italic uppercase">No reports found</h3>
+                    <h3 className="text-2xl font-black text-slate-400 tracking-tight uppercase">No reports found</h3>
                     <p className="text-slate-400 font-medium mt-2">Adjust your search or take your first attendance session.</p>
                 </div>
             )}

@@ -18,6 +18,18 @@ export async function getServerUrl(): Promise<string | null> {
       }
     }
     
+    // Robust private network detection (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, and localhost)
+    const isLocalOrPrivate = (hostname: string) => {
+      return (
+        hostname === 'localhost' ||
+        hostname === '127.0.0.1' ||
+        hostname === '10.0.2.2' || // Android emulator
+        /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+        /^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+        /^172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(hostname)
+      );
+    };
+
     if (!url) {
       // Fall back to .env
       const raw = process.env.EXPO_PUBLIC_API_URL;
@@ -27,9 +39,17 @@ export async function getServerUrl(): Promise<string | null> {
       }
     }
     
-    // Enforce HTTPS
+    // Enforce HTTPS only in Production AND for public non-local domains
     if (url && url.startsWith('http://')) {
-      return url.replace('http://', 'https://');
+        try {
+            const parsed = new URL(url);
+            if (!__DEV__ && !isLocalOrPrivate(parsed.hostname)) {
+                return url.replace('http://', 'https://');
+            }
+        } catch (e) {
+            // If URL parsing fails, stick to current behavior for safety or return as is
+            if (!__DEV__) return url.replace('http://', 'https://');
+        }
     }
     return url;
   } catch (error) {
@@ -39,8 +59,18 @@ export async function getServerUrl(): Promise<string | null> {
     if (raw) {
       const urls = raw.split(',').map((s) => s.trim()).filter(Boolean);
       const fallbackUrl = urls[0] || null;
+      
+      // Apply same logic to fallback
       if (fallbackUrl && fallbackUrl.startsWith('http://')) {
-        return fallbackUrl.replace('http://', 'https://');
+          try {
+              const parsed = new URL(fallbackUrl);
+              const isLocal = parsed.hostname === 'localhost' || /^10\.|^192\.168\.|^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(parsed.hostname);
+              if (!__DEV__ && !isLocal) {
+                  return fallbackUrl.replace('http://', 'https://');
+              }
+          } catch {
+              if (!__DEV__) return fallbackUrl.replace('http://', 'https://');
+          }
       }
       return fallbackUrl;
     }
@@ -70,9 +100,12 @@ export async function setServerUrl(url: string): Promise<void> {
       throw new Error('Invalid URL format');
     }
 
-    // Domain Whitelist Validation
+    // Domain Whitelist Validation (expanded)
     const allowedHostnames = ['localhost', '10.0.2.2', '127.0.0.1'];
-    const isLocalNetwork = /^192\.168\.\d{1,3}\.\d{1,3}$/.test(parsedUrl.hostname);
+    const isLocalNetwork = 
+        /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(parsedUrl.hostname) ||
+        /^192\.168\.\d{1,3}\.\d{1,3}$/.test(parsedUrl.hostname) ||
+        /^172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(parsedUrl.hostname);
     
     // If your infrastructure scales, you can add your staging domains here
     // const isStagingDomain = parsedUrl.hostname.endsWith('.your-company-staging.com');
@@ -113,12 +146,24 @@ export function getDefaultServerUrl(): string | null {
   if (raw) {
     const urls = raw.split(',').map((s) => s.trim()).filter(Boolean);
     const url = urls[0] || null;
+    
+    // Default URL from .env also follows the same security logic
     if (url && url.startsWith('http://')) {
-      return url.replace('http://', 'https://');
+        try {
+            const parsed = new URL(url);
+            const isLocal = parsed.hostname === 'localhost' || 
+                           parsed.hostname === '127.0.0.1' ||
+                           /^10\.|^192\.168\.|^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(parsed.hostname);
+            if (!__DEV__ && !isLocal) {
+                return url.replace('http://', 'https://');
+            }
+        } catch {
+            if (!__DEV__) return url.replace('http://', 'https://');
+        }
     }
     return url;
   }
-  return 'https://localhost:3000';
+  return 'http://localhost:3000';
 }
 
 /**
