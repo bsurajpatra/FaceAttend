@@ -24,13 +24,25 @@ export async function createAuditLog(options: LogOptions) {
             (req?.body?.deviceId || req?.headers['x-device-id'] ? 'Mobile' : 'Web');
         const remoteIp = req?.ip || req?.socket?.remoteAddress;
 
+        let finalDeviceName = deviceName || req?.body?.deviceName || req?.headers['x-device-name'];
+        
+        // If it's a Web session and no device name, try to extract browser from User-Agent
+        if (!finalDeviceName && userPlatform === 'Web' && req?.headers['user-agent']) {
+            const ua = req.headers['user-agent'];
+            if (ua.includes('Edg/')) finalDeviceName = 'Edge Browser';
+            else if (ua.includes('Chrome/')) finalDeviceName = 'Chrome Browser';
+            else if (ua.includes('Firefox/')) finalDeviceName = 'Firefox Browser';
+            else if (ua.includes('Safari/') && !ua.includes('Chrome/')) finalDeviceName = 'Safari Browser';
+            else finalDeviceName = 'Web Browser';
+        }
+
         const newLog = await AuditLog.create({
             facultyId: fId,
             action,
             details,
             platform: userPlatform,
             deviceId: deviceId || req?.body?.deviceId || req?.headers['x-device-id'],
-            deviceName: deviceName || req?.body?.deviceName || req?.headers['x-device-name'],
+            deviceName: finalDeviceName,
             ipAddress: remoteIp,
             timestamp: new Date()
         });

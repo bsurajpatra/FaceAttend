@@ -70,7 +70,7 @@ export async function sendPasswordResetSuccessEmail(email: string): Promise<void
         <div style="text-align: center; margin: 30px 0;">
           <a href="${env.clientUrl}/login" style="background-color: #0f172a; color: white; padding: 14px 28px; text-decoration: none; font-weight: 900; border-radius: 12px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.1em; display: inline-block;">Go to Login</a>
         </div>
-        <p style="color: #94a3b8; font-size: 12px; margin-top: 20px; border-top: 1px solid #f1f5f9; padding-top: 20px;">SafeAttend Security Protocols Active • Account Monitored</p>
+        <p style="color: #94a3b8; font-size: 12px; margin-top: 20px; border-top: 1px solid #f1f5f9; padding-top: 20px;">FaceAttend Security Protocols Active • Account Monitored</p>
       </div>
     `,
   };

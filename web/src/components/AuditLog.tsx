@@ -164,7 +164,9 @@ export function AuditLog() {
                                     </td>
                                     <td className="px-6 py-6">
                                         <div className="space-y-1">
-                                            <p className="text-xs font-black text-slate-700 uppercase">{log.deviceName || 'Unknown Source'}</p>
+                                            <p className="text-xs font-black text-slate-700 uppercase tracking-tight tabular-nums">
+                                                {log.deviceName || (log.ipAddress ? `IP: ${log.ipAddress}` : 'Unknown Source')}
+                                            </p>
                                             <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-[9px] font-black text-slate-500 uppercase tracking-tight">
                                                 Active Session
                                             </div>
