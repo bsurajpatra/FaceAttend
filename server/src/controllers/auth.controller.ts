@@ -5,7 +5,7 @@ import { env } from '../config/env';
 import redisClient from '../config/redis';
 import { getIO } from '../socket';
 import { createAuditLog } from '../utils/auditLogger';
-import { sendPasswordResetEmail, sendPasswordResetSuccessEmail, sendOTPEmail, sendWelcomeEmail, send2FAEmail } from '../utils/email';
+import { sendPasswordResetEmail, sendPasswordResetSuccessEmail, sendOTPEmail, sendWelcomeEmail, send2FAEmail, send2FAToggleOTPEmail } from '../utils/email';
 import crypto from 'crypto';
 
 function signToken(userId: string): string {
@@ -928,32 +928,44 @@ export async function toggle2FA(req: Request, res: Response): Promise<void> {
       return;
     }
 
+    // 1. Generate OTP and expiry for verification
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    // 2. Perform Atomic Update
     faculty.twoFactorEnabled = !!enabled;
+    faculty.otp = otp;
+    faculty.otpExpires = otpExpires;
+    
     await faculty.save();
 
-    // Audit Log
-    createAuditLog({
+    // 3. Log the security event
+    await createAuditLog({
       action: '2FA Setting Changed',
       details: `Two-factor authentication ${enabled ? 'enabled' : 'disabled'}`,
       req,
       facultyId: faculty.id
     });
 
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
-    faculty.otp = otp;
-    faculty.otpExpires = otpExpires;
-    await faculty.save();
-
-    await sendOTPEmail(faculty.email, otp);
+    // 4. Send the specialized security email template
+    try {
+      await send2FAToggleOTPEmail(faculty.email, otp, !!enabled);
+    } catch (emailErr) {
+      console.error('Failed to send 2FA toggle email:', emailErr);
+      // We don't return 500 here because the DB update was successful. 
+      // User can resend the OTP if needed.
+    }
 
     res.json({
-      message: `Two-factor authentication ${enabled ? 'enabled' : 'disabled'} successfully`,
+      message: `Two-factor authentication ${enabled ? 'enabled' : 'disabled'} successfully. A verification code has been sent to your email.`,
       twoFactorEnabled: faculty.twoFactorEnabled
     });
   } catch (error) {
-    console.error('Toggle 2FA error:', error);
-    res.status(500).json({ message: 'Failed to update 2FA setting' });
+    console.error('CRITICAL Toggle 2FA error:', error);
+    res.status(500).json({ 
+      message: 'Internal server error while updating 2FA settings',
+      error: process.env.NODE_ENV === 'development' ? String(error) : undefined
+    });
   }
 }
 

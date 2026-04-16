@@ -22,7 +22,7 @@ export async function createAuditLog(options: LogOptions) {
         const userPlatform = platform ||
             req?.headers['x-platform'] as 'Web' | 'Mobile' ||
             (req?.body?.deviceId || req?.headers['x-device-id'] ? 'Mobile' : 'Web');
-        const remoteIp = req?.ip || req?.socket.remoteAddress;
+        const remoteIp = req?.ip || req?.socket?.remoteAddress;
 
         const newLog = await AuditLog.create({
             facultyId: fId,

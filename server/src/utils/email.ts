@@ -199,3 +199,51 @@ export async function send2FAEmail(email: string, otp: string): Promise<void> {
     throw error;
   }
 }
+
+export async function send2FAToggleOTPEmail(email: string, otp: string, enabled: boolean): Promise<void> {
+  const transporter = createTransporter();
+
+  const mailOptions = {
+    from: `"FaceAttend Security" <${env.emailUser}>`,
+    to: email,
+    subject: `${otp} - Secure your 2FA settings`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 1rem;">
+        <h2 style="color: #1e293b; font-size: 24px; font-weight: 800; text-transform: uppercase; font-style: italic; margin-bottom: 20px;">
+          Security Setting Change
+        </h2>
+        
+        <p style="color: #64748b; font-size: 16px; line-height: 1.5;">
+          You are currently <b>${enabled ? 'ENABLING' : 'DISABLING'}</b> Multi-Factor Authentication (MFA) on your account. 
+          Please use the following verification code to confirm this change:
+        </p>
+        
+        <div style="text-align: center; margin: 40px 0;">
+          <div style="display: inline-block; background-color: #f0f9ff; color: #0369a1; padding: 20px 40px; border-radius: 16px; font-size: 36px; font-weight: 900; letter-spacing: 0.4em; border: 2px solid #bae6fd;">
+            ${otp}
+          </div>
+        </div>
+
+        <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 16px; margin-bottom: 20px;">
+          <p style="color: #991b1b; font-size: 14px; margin: 0;">
+            <b>Warning:</b> Changing your 2FA settings significantly impacts your account security. 
+            If you did not initiate this change, please lock your account and contact support immediately.
+          </p>
+        </div>
+
+        <p style="color: #94a3b8; font-size: 12px; border-top: 1px solid #f1f5f9; padding-top: 20px;">
+          FaceAttend Autonomic Security • Session Token: ${Math.random().toString(36).substring(7).toUpperCase()}
+        </p>
+      </div>
+    `,
+  };
+
+  try {
+    console.log(`Attempting to send 2FA Toggle Email to: ${email}`);
+    await transporter.sendMail(mailOptions);
+    console.log(`2FA Toggle Email sent successfully to: ${email}`);
+  } catch (error) {
+    console.error(`FAILED to send 2FA Toggle Email to ${email}:`, error);
+    throw error;
+  }
+}
