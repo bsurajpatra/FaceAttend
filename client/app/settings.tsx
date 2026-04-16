@@ -142,6 +142,8 @@ export default function SettingsScreen() {
     isKioskMode,
     enableKioskMode,
     disableKioskMode,
+    isBiometricEnabled,
+    toggleBiometric,
   } = useKiosk();
 
 
@@ -234,6 +236,17 @@ export default function SettingsScreen() {
               } else {
                 Alert.alert('Admin Access', 'Please use the "Exit Kiosk" button on the attendance screen to disable this mode.');
               }
+            }}
+          />
+          <View style={styles.divider} />
+          <PermissionRow
+            icon="finger-print"
+            title="Device Biometric"
+            status={isBiometricEnabled ? 'Enabled' : 'Exit Kiosk with Biometrics'}
+            value={isBiometricEnabled}
+            iconColor="#2563EB"
+            onToggle={async (next) => {
+              await toggleBiometric(next);
             }}
           />
         </View>

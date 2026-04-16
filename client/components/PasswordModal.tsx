@@ -24,7 +24,7 @@ interface PasswordModalProps {
 export const PasswordModal: React.FC<PasswordModalProps> = ({ visible, onClose, onSuccess }) => {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { disableKioskMode } = useKiosk();
+  const { disableKioskMode, isBiometricEnabled } = useKiosk();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
 
@@ -59,6 +59,29 @@ export const PasswordModal: React.FC<PasswordModalProps> = ({ visible, onClose, 
       ]).start();
     }
   }, [visible]);
+
+  // Handle Automatic Biometric Trigger
+  useEffect(() => {
+    if (visible && isBiometricEnabled) {
+      handleBiometric();
+    }
+  }, [visible, isBiometricEnabled]);
+
+  const handleBiometric = async () => {
+    setIsLoading(true);
+    try {
+      // Pass empty string as password; the logic in context handles biometric first
+      const success = await disableKioskMode('');
+      if (success) {
+        onClose();
+        if (onSuccess) onSuccess();
+      }
+    } catch (error) {
+      console.error('Biometric error:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleSubmit = async () => {
     if (!password.trim()) {
@@ -111,7 +134,7 @@ export const PasswordModal: React.FC<PasswordModalProps> = ({ visible, onClose, 
                 <Ionicons name="lock-closed" size={32} color="#2563EB" />
               </View>
               <Text style={styles.title}>Admin Access</Text>
-              <Text style={styles.subtitle}>Enter password to disable Kiosk Mode</Text>
+              <Text style={styles.subtitle}>Enter password {isBiometricEnabled ? 'or use biometric ' : ''}to disable Kiosk Mode</Text>
             </View>
 
             {/* Password Input */}
@@ -131,6 +154,16 @@ export const PasswordModal: React.FC<PasswordModalProps> = ({ visible, onClose, 
                   returnKeyType="done"
                 />
               </View>
+
+              {isBiometricEnabled && (
+                <Pressable
+                  onPress={handleBiometric}
+                  style={({ pressed }) => [styles.biometricBtn, pressed && styles.pressed]}
+                >
+                  <Ionicons name="finger-print" size={32} color="#2563EB" />
+                  <Text style={styles.biometricBtnText}>Tap to use Biometric</Text>
+                </Pressable>
+              )}
 
               {/* Buttons */}
               <View style={styles.footer}>
@@ -285,6 +318,23 @@ const styles = StyleSheet.create({
   pressed: {
     transform: [{ scale: 0.98 }],
     opacity: 0.9,
+  },
+  biometricBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    marginBottom: 24,
+    padding: 12,
+    backgroundColor: '#EFF6FF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+  },
+  biometricBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#2563EB',
   },
 });
 

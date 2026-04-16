@@ -83,6 +83,9 @@ export interface KioskContextType {
   isKioskAvailable: boolean;
   checkKioskStatus: () => Promise<void>;
   requestOverlayPermission: () => Promise<void>;
+  // Biometric fields
+  isBiometricEnabled: boolean;
+  toggleBiometric: (enabled: boolean) => Promise<boolean>;
 }
 
 // Create the context
@@ -103,11 +106,15 @@ export const KioskProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
 
+  // Biometric state
+  const [isBiometricEnabled, setIsBiometricEnabled] = useState(false);
+
   // Load stored password and check status on mount
   useEffect(() => {
     loadStoredPassword();
     checkKioskStatus();
     loadLockoutState();
+    loadBiometricState();
   }, []);
 
   const loadLockoutState = async () => {
@@ -126,6 +133,17 @@ export const KioskProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       }
     } catch (error) {
       console.error('Error loading lockout state:', error);
+    }
+  };
+
+  const loadBiometricState = async () => {
+    try {
+      const storedValue = await AsyncStorage.getItem('isBiometricEnabled');
+      if (storedValue !== null) {
+        setIsBiometricEnabled(storedValue === 'true');
+      }
+    } catch (error) {
+      console.error('Error loading biometric state:', error);
     }
   };
 
@@ -286,72 +304,78 @@ export const KioskProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         await resetLockout();
       }
 
-      // 2. Primary Method: Try Biometric Authentication First
-      // (Bypasses password requirement if successful)
-      const hasHardware = await LocalAuthentication.hasHardwareAsync();
-      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+      // 2. BIOMETRIC METHOD (Only if enabled and hardware is available)
+      if (isBiometricEnabled) {
+        const hasHardware = await LocalAuthentication.hasHardwareAsync();
+        const isEnrolled = await LocalAuthentication.isEnrolledAsync();
 
-      if (hasHardware && isEnrolled) {
-        const biometricResult = await LocalAuthentication.authenticateAsync({
-          promptMessage: 'Authenticate to exit Kiosk Mode',
-          fallbackLabel: 'Use Password',
-          cancelLabel: 'Cancel'
-        });
+        if (hasHardware && isEnrolled) {
+          const biometricResult = await LocalAuthentication.authenticateAsync({
+            promptMessage: 'Authenticate to exit Kiosk Mode',
+            fallbackLabel: 'Use Password',
+            cancelLabel: 'Cancel'
+          });
 
-        if (biometricResult.success) {
-          await resetLockout();
-          await logEvent('Kiosk Mode', 'Native kiosk mode disabled via Biometrics');
-          
-          if (Platform.OS === 'android') {
-            await ExpoKiosk.disableKioskMode();
-            await ExpoKiosk.showSystemUI();
+          if (biometricResult.success) {
+            await resetLockout();
+            await logEvent('Kiosk Mode', 'Native kiosk mode disabled via Biometrics');
+            
+            if (Platform.OS === 'android') {
+              await ExpoKiosk.disableKioskMode();
+              await ExpoKiosk.showSystemUI();
+            }
+            setIsKioskMode(false);
+            setShowPasswordModal(false);
+            return true;
           }
-          setIsKioskMode(false);
-          setShowPasswordModal(false);
-          return true;
+          // If biometric fails or cancelled, it continues to password fallback
         }
       }
 
       // 3. Fallback Method: Password Verification
-      const hashedInput = await Crypto.digestStringAsync(
-        Crypto.CryptoDigestAlgorithm.SHA256,
-        password
-      );
+      if (password) {
+        const hashedInput = await Crypto.digestStringAsync(
+          Crypto.CryptoDigestAlgorithm.SHA256,
+          password
+        );
 
-      // Verify password against stored password (gracefully handle old plain-text passwords for easy migration)
-      if (storedPassword && (hashedInput === storedPassword || password === storedPassword)) {
-        await resetLockout();
+        // Verify password against stored password (gracefully handle old plain-text passwords for easy migration)
+        if (storedPassword && (hashedInput === storedPassword || password === storedPassword)) {
+          await resetLockout();
 
-        // Upgrade legacy plain-text password to hashed format seamlessly
-        if (password === storedPassword && hashedInput !== storedPassword) {
-          await savePassword(password);
-        }
+          // Upgrade legacy plain-text password to hashed format seamlessly
+          if (password === storedPassword && hashedInput !== storedPassword) {
+            await savePassword(password);
+          }
 
-        if (Platform.OS === 'android') {
-          // Disable Expo kiosk mode
-          await ExpoKiosk.disableKioskMode();
+          if (Platform.OS === 'android') {
+            // Disable Expo kiosk mode
+            await ExpoKiosk.disableKioskMode();
 
-          // Show system UI
-          await ExpoKiosk.showSystemUI();
+            // Show system UI
+            await ExpoKiosk.showSystemUI();
 
-          await logEvent('Kiosk Mode', 'Native kiosk mode disabled with correct password');
-          console.log('Kiosk mode disabled');
-        }
+            await logEvent('Kiosk Mode', 'Native kiosk mode disabled with correct password');
+            console.log('Kiosk mode disabled');
+          }
 
-        setIsKioskMode(false);
-        setShowPasswordModal(false);
-        return true;
-      } else {
-        const newAttempts = failedAttempts + 1;
-        await incrementFailedAttempts();
-        await logEvent('Security Alert', `Failed kiosk exit attempt #${newAttempts}. Password incorrect.`);
-        if (newAttempts >= 5) {
-          Alert.alert('Too Many Attempts', 'Please try again in 5 minute(s).');
+          setIsKioskMode(false);
+          setShowPasswordModal(false);
+          return true;
         } else {
-          Alert.alert('Invalid Password', `The password you entered is incorrect. ${5 - newAttempts} attempt(s) remaining.`);
+          const newAttempts = failedAttempts + 1;
+          await incrementFailedAttempts();
+          await logEvent('Security Alert', `Failed kiosk exit attempt #${newAttempts}. Password incorrect.`);
+          if (newAttempts >= 5) {
+            Alert.alert('Too Many Attempts', 'Please try again in 5 minute(s).');
+          } else {
+            Alert.alert('Invalid Password', `The password you entered is incorrect. ${5 - newAttempts} attempt(s) remaining.`);
+          }
+          return false;
         }
-        return false;
       }
+
+      return false;
     } catch (error) {
       console.error('Error disabling kiosk mode:', error);
       Alert.alert('Error', 'Failed to disable kiosk mode');
@@ -359,9 +383,39 @@ export const KioskProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   };
 
-  // Store password when user logs in
   const storeUserPassword = async (password: string) => {
     await savePassword(password);
+  };
+
+  const toggleBiometric = async (enabled: boolean): Promise<boolean> => {
+    try {
+      // REQUIRE biometric authentication for ANY change to this setting
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+
+      if (!hasHardware || !isEnrolled) {
+        Alert.alert('Not Supported', 'Biometric authentication is not set up on this device.');
+        return false;
+      }
+
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: enabled 
+          ? 'Verify biometric to enable this feature' 
+          : 'Verify biometric to disable this feature',
+      });
+
+      if (!result.success) {
+        return false;
+      }
+
+      // If authentication succeeded
+      setIsBiometricEnabled(enabled);
+      await AsyncStorage.setItem('isBiometricEnabled', enabled.toString());
+      return true;
+    } catch (error) {
+      console.error('Error toggling biometric:', error);
+      return false;
+    }
   };
 
   const contextValue: KioskContextType = {
@@ -377,6 +431,8 @@ export const KioskProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     isKioskAvailable,
     checkKioskStatus,
     requestOverlayPermission,
+    isBiometricEnabled,
+    toggleBiometric,
   };
 
   return (
