@@ -244,14 +244,14 @@ export const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   sessionTypeBadge: {
-    backgroundColor: '#2563EB',
+    backgroundColor: '#EFF6FF',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 10,
     marginRight: 12,
   },
   sessionTypeText: {
-    color: '#FFFFFF',
+    color: '#2563EB',
     fontSize: 12,
     fontWeight: '800',
     textTransform: 'uppercase',

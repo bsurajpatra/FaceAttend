@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { Faculty } from '../models/Faculty';
 import { getIO } from '../socket';
 import { createAuditLog } from '../utils/auditLogger';
+import redisClient from '../config/redis';
 
 // Check for overlapping hours within the same day
 function hasOverlappingHours(timetable: any[]): { hasOverlap: boolean; conflictDetails?: string } {
@@ -141,6 +142,13 @@ export async function updateTimetable(req: Request, res: Response): Promise<void
       facultyId
     });
 
+    // Invalidate Redis Cache
+    try {
+      await redisClient.del(`timetable:${facultyId}`);
+    } catch (redisErr) {
+      console.warn('Redis cache invalidation failed:', redisErr);
+    }
+
     res.json({
       message: 'Timetable updated successfully',
       timetable: faculty.timetable
@@ -167,6 +175,19 @@ export async function getTimetable(req: Request, res: Response): Promise<void> {
   try {
     const { facultyId } = req.params;
 
+    // 1. Try to fetch from Redis first
+    try {
+      const cachedTimetable = await redisClient.get(`timetable:${facultyId}`);
+      if (cachedTimetable) {
+        console.log(`Redis: Cache hit for timetable:${facultyId}`);
+        res.json({ timetable: JSON.parse(cachedTimetable) });
+        return;
+      }
+    } catch (redisErr) {
+      console.warn('Redis fetch failed, falling back to database:', redisErr);
+    }
+
+    // 2. Cache miss: Fetch from Database
     const faculty = await Faculty.findById(facultyId).select('timetable');
 
     if (!faculty) {
@@ -185,10 +206,15 @@ export async function getTimetable(req: Request, res: Response): Promise<void> {
       { day: 'Sunday', sessions: [] }
     ];
 
-    // Check if timetable is undefined, null, or empty array
     const timetableData = (!faculty.timetable || faculty.timetable.length === 0) ? emptyTimetable : faculty.timetable;
-    console.log('Server: faculty.timetable:', faculty.timetable);
-    console.log('Server: returning timetableData:', timetableData);
+
+    // 3. Store in Redis for future requests (expire in 24 hours)
+    try {
+      await redisClient.setEx(`timetable:${facultyId}`, 86400, JSON.stringify(timetableData));
+      console.log(`Redis: Cached timetable for faculty:${facultyId}`);
+    } catch (redisErr) {
+      console.warn('Redis storage failed:', redisErr);
+    }
 
     res.json({ timetable: timetableData });
   } catch (error) {

@@ -99,11 +99,11 @@ export default function TimetableView({ timetable, onBack, onLogout }: Timetable
 
                       <View style={{ flexDirection: 'row', gap: 16, marginBottom: 16 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                          <Ionicons name="people-outline" size={14} color="#64748B" />
+                          <Ionicons name="people-outline" size={14} color="#2563EB" />
                           <Text style={styles.sectionText}>{session.section}</Text>
                         </View>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                          <Ionicons name="location-outline" size={14} color="#64748B" />
+                          <Ionicons name="location-outline" size={14} color="#2563EB" />
                           <Text style={styles.roomText}>Room {session.roomNumber}</Text>
                         </View>
                       </View>
