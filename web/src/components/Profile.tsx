@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { User, ShieldCheck, KeyRound, Save, ShieldAlert, Loader2, X, CheckCircle2 } from 'lucide-react';
-import { toggle2faApi, verify2faApi, verify2faToggleApi, resend2faApi, updateProfileApi, verifyEmailChangeApi, changePasswordApi, resendEmailChangeOtpApi } from '../api/auth';
+import { toggle2faApi, verify2faToggleApi, resend2faApi, updateProfileApi, verifyEmailChangeApi, changePasswordApi, resendEmailChangeOtpApi } from '../api/auth';
 import { cn } from '../lib/utils';
 
 interface ProfileProps {
