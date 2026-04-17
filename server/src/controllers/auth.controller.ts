@@ -217,19 +217,26 @@ export async function login(req: Request, res: Response): Promise<void> {
 
     const token = signToken(faculty.id);
     // Store session in Redis (Set structure to allow multiple devices, 7 days TTL)
-    try {
-      await redisClient.sAdd(`session:${faculty.id}`, token);
-    } catch (e: any) {
-      if (e.message && e.message.includes('WRONGTYPE')) {
-        await redisClient.del(`session:${faculty.id}`);
+    if (redisClient.isOpen) {
+      try {
         await redisClient.sAdd(`session:${faculty.id}`, token);
-      } else {
-        throw e;
+        // 30 days for mobile devices, 7 days for web
+        const ttl = deviceId ? 2592000 : 604800;
+        await redisClient.expire(`session:${faculty.id}`, ttl);
+      } catch (e: any) {
+        if (e.message && e.message.includes('WRONGTYPE')) {
+          await redisClient.del(`session:${faculty.id}`);
+          await redisClient.sAdd(`session:${faculty.id}`, token);
+          const ttl = deviceId ? 2592000 : 604800;
+          await redisClient.expire(`session:${faculty.id}`, ttl);
+        } else {
+          console.error('⚠️ Redis session storage failed:', e.message);
+          // Don't throw - allow login to proceed; auth middleware will fallback to JWT only
+        }
       }
+    } else {
+      console.warn('⚠️ Redis offline: Session not persisted (JWT-only mode active)');
     }
-    // 30 days for mobile devices, 7 days for web
-    const ttl = deviceId ? 2592000 : 604800;
-    await redisClient.expire(`session:${faculty.id}`, ttl);
 
     const isFirstLogin = faculty.isFirstLogin;
 

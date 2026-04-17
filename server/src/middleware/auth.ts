@@ -30,32 +30,40 @@ export async function verifyFacultyToken(req: Request, res: Response, next: Next
 
     const userId = payload.sub;
 
-    // 2. Check Redis for active session
+    // 2. Check Redis for active session (only if Redis is available)
     // This allows for immediate logout/invalidation without DB hit
-    let isMember = false;
-    try {
-      const isMemberResult = await redisClient.sIsMember(`session:${userId}`, token);
-      isMember = Boolean(isMemberResult);
-    } catch (e: any) {
-      if (e.message && e.message.includes('WRONGTYPE')) {
-        // Fallback for legacy string session
-        const legacyToken = await redisClient.get(`session:${userId}`);
-        if (legacyToken) {
-          if (legacyToken === token) {
-            isMember = true;
-            // Migrate string to set
-            await redisClient.del(`session:${userId}`);
-            await redisClient.sAdd(`session:${userId}`, token);
-            await redisClient.expire(`session:${userId}`, 604800);
-            console.log(`🔄 Seamlessly migrated legacy string session to set for user: ${userId}`);
+    let isMember = true; // Assume true if Redis is down (graceful degradation)
+    
+    if (redisClient.isOpen) {
+      try {
+        const isMemberResult = await redisClient.sIsMember(`session:${userId}`, token);
+        isMember = Boolean(isMemberResult);
+      } catch (e: any) {
+        if (e.message && e.message.includes('WRONGTYPE')) {
+          // Fallback for legacy string session
+          const legacyToken = await redisClient.get(`session:${userId}`);
+          if (legacyToken) {
+            if (legacyToken === token) {
+              isMember = true;
+              // Migrate string to set
+              await redisClient.del(`session:${userId}`);
+              await redisClient.sAdd(`session:${userId}`, token);
+              await redisClient.expire(`session:${userId}`, 604800);
+              console.log(`🔄 Seamlessly migrated legacy string session to set for user: ${userId}`);
+            } else {
+              isMember = false;
+              console.log(`❌ Legacy session token mismatch for user: ${userId}`);
+            }
           } else {
-             // Mismatched token
-             console.log(`❌ Legacy session token mismatch for user: ${userId}`);
+            isMember = false;
           }
+        } else {
+          console.warn('⚠️ Redis session check failed, falling back to JWT only:', e.message);
+          isMember = true; // Fallback
         }
-      } else {
-        throw e;
       }
+    } else {
+      console.warn('⚠️ Redis unavailable, proceeding with JWT-only auth for user:', userId);
     }
     
     if (!isMember) {

@@ -25,9 +25,9 @@ export const env = {
   jwtSecret: requireEnv('JWT_SECRET'),
   jwtExpiresIn: requireEnv('JWT_EXPIRES_IN'),
   allowLan8081: process.env.ALLOW_LAN_8081 === 'true',
-  emailUser: process.env.EMAIL_USER,
-  emailPass: process.env.EMAIL_PASS,
-  clientUrl: process.env.CLIENT_URL,
+  emailUser: requireEnv('EMAIL_USER'),
+  emailPass: requireEnv('EMAIL_PASS'),
+  clientUrl: requireEnv('CLIENT_URL'),
   redisUrl: requireEnv('REDIS_URL'),
 } as const;
 

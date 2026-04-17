@@ -6,6 +6,7 @@ import { Student } from '../models/Student';
 import { getFaceEmbedding } from '../services/facenet.service';
 import { getIO } from '../socket';
 import { cosineSimilarity } from '../utils/math';
+import { env } from '../config/env';
 import redisClient from '../config/redis';
 
 // Thresholds same as controller
@@ -142,10 +143,13 @@ export const attendanceWorker = new Worker('attendance-processing', async (job: 
   }
 }, {
   connection: {
-    host: '127.0.0.1',
-    port: 6379
+    url: env.redisUrl
   },
   concurrency: 20 // Process 20 faces in parallel!
+});
+
+attendanceWorker.on('error', (err) => {
+  console.error('👷 BullMQ: Worker Error:', err.message);
 });
 
 console.log('👷 BullMQ: Attendance Worker started');

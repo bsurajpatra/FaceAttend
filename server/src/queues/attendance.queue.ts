@@ -9,8 +9,7 @@ const connection = {
 // Create the attendance processing queue
 export const attendanceQueue = new Queue('attendance-processing', { 
   connection: {
-    host: '127.0.0.1', // BullMQ usually prefers host/port for internal reasons in some configs
-    port: 6379
+    url: env.redisUrl
   },
   defaultJobOptions: {
     attempts: 3,
@@ -21,6 +20,10 @@ export const attendanceQueue = new Queue('attendance-processing', {
     removeOnComplete: true,
     removeOnFail: false
   }
+});
+
+attendanceQueue.on('error', (err) => {
+  console.error('📦 BullMQ: Queue Error:', err.message);
 });
 
 console.log('📦 BullMQ: Attendance Queue initialized');

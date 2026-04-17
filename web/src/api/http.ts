@@ -1,6 +1,9 @@
 import axios from 'axios';
 
-const rawApiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4010';
+const rawApiUrl = import.meta.env.VITE_API_URL;
+if (!rawApiUrl) {
+    throw new Error('VITE_API_URL is not defined in the environment');
+}
 const API_URL = rawApiUrl.split(',')[0].trim();
 
 export const http = axios.create({

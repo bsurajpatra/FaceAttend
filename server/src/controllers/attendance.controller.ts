@@ -11,6 +11,9 @@ import redisClient from '../config/redis';
 import crypto from 'crypto';
 import { attendanceQueue } from '../queues/attendance.queue';
 
+// Resiliency Helper: Check if Redis is functionally available
+const isRedisReady = () => redisClient.isOpen;
+
 // Face matching threshold (cosine similarity) - higher threshold for FaceNet embeddings
 const FACE_MATCH_THRESHOLD = 0.6;
 
@@ -236,7 +239,15 @@ export async function markAttendance(req: Request, res: Response): Promise<void>
     // --- 🧩 5. Face Recognition Cache ---
     const imageHash = crypto.createHash('md5').update(faceImageBase64).digest('hex');
     const cacheKey = `face:cache:${imageHash}`;
-    let cachedMatch = await redisClient.get(cacheKey);
+    let cachedMatch = null;
+    if (isRedisReady()) {
+      try {
+        cachedMatch = await redisClient.get(cacheKey);
+      } catch (e: any) {
+        console.warn('⚠️ Redis Cache Read Failed:', e.message);
+      }
+    }
+
     let match: any = null;
 
     if (cachedMatch) {
@@ -269,9 +280,11 @@ export async function markAttendance(req: Request, res: Response): Promise<void>
       // Find matching student
       match = await findMatchingStudent(faceEmbedding, enrolledStudents);
 
-      if (match) {
-        // Cache the result for 10 seconds (exact frame matches)
-        await redisClient.setEx(cacheKey, 10, JSON.stringify(match));
+      if (match && isRedisReady()) {
+        try {
+          // Cache the result for 10 seconds (exact frame matches)
+          await redisClient.setEx(cacheKey, 10, JSON.stringify(match));
+        } catch (e) {}
       }
     }
 
@@ -287,7 +300,15 @@ export async function markAttendance(req: Request, res: Response): Promise<void>
 
     // --- 🧩 1. Check Redis for already marked status (Fast Exit) ---
     const liveSetKey = `attendance:live:${sessionId}`;
-    const isAlreadyMarkedInRedis = await redisClient.sIsMember(liveSetKey, studentId);
+    let isAlreadyMarkedInRedis = false;
+    
+    if (isRedisReady()) {
+      try {
+        isAlreadyMarkedInRedis = Boolean(await redisClient.sIsMember(liveSetKey, studentId));
+      } catch (e: any) {
+        console.warn('⚠️ Redis Set Check Failed:', e.message);
+      }
+    }
     
     if (isAlreadyMarkedInRedis) {
       console.log(`⏩ Student ${match.student.name} already marked in Redis. Skipping processing.`);
@@ -301,14 +322,25 @@ export async function markAttendance(req: Request, res: Response): Promise<void>
 
     // --- 🧩 6. Confidence Window Counter ---
     const detectKey = `detect:${sessionId}:${studentId}`;
-    const detectionCount = await redisClient.incr(detectKey);
-    
-    // Set 5-second window on first detection
-    if (detectionCount === 1) {
-      await redisClient.expire(detectKey, 5);
+    let detectionCount = 0;
+    const DETECTION_THRESHOLD = 3;
+
+    if (isRedisReady()) {
+      try {
+        detectionCount = await redisClient.incr(detectKey);
+        // Set 5-second window on first detection
+        if (detectionCount === 1) {
+          await redisClient.expire(detectKey, 5);
+        }
+      } catch (e: any) {
+        console.warn('⚠️ Redis Counter Failed. Falling back to immediate mark.');
+        detectionCount = DETECTION_THRESHOLD; // Force bypass if Redis is down
+      }
+    } else {
+      // Redis is down: Graceful degradation - bypass confidence window to keep system usable
+      detectionCount = DETECTION_THRESHOLD;
     }
 
-    const DETECTION_THRESHOLD = 3;
     if (detectionCount < DETECTION_THRESHOLD) {
       console.log(`⏳ Confidence building: ${detectionCount}/${DETECTION_THRESHOLD} for ${match.student.name}`);
       res.json({
@@ -325,7 +357,11 @@ export async function markAttendance(req: Request, res: Response): Promise<void>
     console.log(`✅ Confidence satisfied for ${match.student.name}! Proceeding to mark attendance.`);
 
     // Add to Redis Live Set (Solution #1)
-    await redisClient.sAdd(liveSetKey, studentId);
+    if (isRedisReady()) {
+      try {
+        await redisClient.sAdd(liveSetKey, studentId);
+      } catch (e) {}
+    }
 
     // Update attendance record in MongoDB (to be batched later, but for now we keep it atomic or semi-atomic)
     console.log('🔍 Looking for student in session records...');
@@ -511,15 +547,30 @@ export async function markAttendanceBatch(req: Request, res: Response): Promise<
       try {
         const imageHash = crypto.createHash('md5').update(base64).digest('hex');
         const cacheKey = `face:cache:${imageHash}`;
-        let cachedMatch = await redisClient.get(cacheKey);
+        let cachedMatch = null;
+        
+        if (isRedisReady()) {
+          try {
+            cachedMatch = await redisClient.get(cacheKey);
+          } catch (e: any) {
+            console.warn('⚠️ Batch Redis Cache Read Failed:', e.message);
+          }
+        }
+
         let match: any = null;
 
         if (cachedMatch) {
           match = JSON.parse(cachedMatch);
         } else {
-          const faceEmbedding = await getFaceEmbedding(base64);
-          match = await findMatchingStudent(faceEmbedding, enrolledStudents);
-          if (match) await redisClient.setEx(cacheKey, 10, JSON.stringify(match));
+          try {
+            const faceEmbedding = await getFaceEmbedding(base64);
+            match = await findMatchingStudent(faceEmbedding, enrolledStudents);
+            if (match && isRedisReady()) {
+              await redisClient.setEx(cacheKey, 10, JSON.stringify(match));
+            }
+          } catch (e) {
+            console.error('Batch frame face recognition error:', e);
+          }
         }
 
         if (!match) {
@@ -531,7 +582,15 @@ export async function markAttendanceBatch(req: Request, res: Response): Promise<
         const liveSetKey = `attendance:live:${sessionId}`;
         
         // 1. Fast check Redis live set
-        const alreadyMarked = await redisClient.sIsMember(liveSetKey, studentId);
+        let alreadyMarked = false;
+        if (isRedisReady()) {
+          try {
+            alreadyMarked = Boolean(await redisClient.sIsMember(liveSetKey, studentId));
+          } catch (e) {
+            console.warn('⚠️ Batch Redis Set Check Failed:', e);
+          }
+        }
+
         if (alreadyMarked) {
           results.push({ status: 'already_marked', student: match.student.name, studentId });
           continue;
@@ -539,16 +598,31 @@ export async function markAttendanceBatch(req: Request, res: Response): Promise<
 
         // 2. Confidence window
         const detectKey = `detect:${sessionId}:${studentId}`;
-        const count = await redisClient.incr(detectKey);
-        if (count === 1) await redisClient.expire(detectKey, 5);
+        let count = 0;
+        const BATCH_DETECTION_THRESHOLD = 3;
 
-        if (count < 3) {
+        if (isRedisReady()) {
+          try {
+            count = await redisClient.incr(detectKey);
+            if (count === 1) await redisClient.expire(detectKey, 5);
+          } catch (e) {
+            count = BATCH_DETECTION_THRESHOLD; // Bypass if Redis down
+          }
+        } else {
+          count = BATCH_DETECTION_THRESHOLD;
+        }
+
+        if (count < BATCH_DETECTION_THRESHOLD) {
           results.push({ status: 'recognizing', student: match.student.name, count });
           continue;
         }
 
         // 3. Mark in Redis
-        await redisClient.sAdd(liveSetKey, studentId);
+        if (isRedisReady()) {
+          try {
+            await redisClient.sAdd(liveSetKey, studentId);
+          } catch (e) {}
+        }
         
         // 4. Update MongoDB (or leave for sync job)
         const recordIndex = session.records.findIndex(r => String(r.studentId) === studentId);
@@ -623,9 +697,10 @@ export async function markAttendanceAsync(req: Request, res: Response): Promise<
       jobId: job.id
     });
 
-  } catch (error) {
-    console.error('Mark attendance async error:', error);
-    res.status(500).json({ message: 'Failed to queue attendance task' });
+  } catch (error: any) {
+    console.error('Mark attendance async error (falling back):', error.message);
+    // Fallback to synchronous mark if queue/redis is unavailable
+    return markAttendance(req, res);
   }
 }
 
@@ -750,7 +825,14 @@ export async function getAttendanceSession(req: Request, res: Response): Promise
 
     // --- 🧩 1. Reconcile with Redis Live Data ---
     // Merge students marked in Redis (not yet synced to MongoDB)
-    const redisLiveStudents = await redisClient.sMembers(`attendance:live:${sessionId}`);
+    let redisLiveStudents: string[] = [];
+    if (isRedisReady()) {
+      try {
+        redisLiveStudents = await redisClient.sMembers(`attendance:live:${sessionId}`);
+      } catch (e: any) {
+        console.warn('⚠️ Redis sMembers failed:', e.message);
+      }
+    }
     
     // Create a map of present student IDs from records
     const presentStudentIds = new Set([
