@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import {
     User,
     Lock,
@@ -18,6 +19,7 @@ import { cn } from '../lib/utils';
 import logoImg from '../assets/logo.png';
 
 export default function SignupPage() {
+    const navigate = useNavigate();
     // Basic Form State
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
@@ -94,7 +96,7 @@ export default function SignupPage() {
             setSuccess(true);
 
             setTimeout(() => {
-                window.location.href = '/dashboard';
+                navigate('/dashboard');
             }, 1500);
         } catch (err: any) {
             setError(err?.response?.data?.message || 'Invalid or expired OTP. Please try again.');
@@ -319,9 +321,9 @@ export default function SignupPage() {
                                     <div className="text-center mt-4">
                                         <p className="text-slate-500 text-sm">
                                             Already have an account?{' '}
-                                            <a href="/login" className="text-blue-600 font-bold hover:underline">
+                                            <Link to="/login" title="Login" className="text-blue-600 font-bold hover:underline">
                                                 Log in here
-                                            </a>
+                                            </Link>
                                         </p>
                                     </div>
                                 </form>

@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useLocation, Routes, Route, Navigate } from 'react-router-dom';
 import {
     LayoutDashboard,
     User,
@@ -40,8 +41,11 @@ import { AuditLog } from './AuditLog';
 
 
 export default function Dashboard() {
-    const [activeTab, setActiveTab] = useState(() => {
-        const path = window.location.pathname;
+    const navigate = useNavigate();
+    const location = useLocation();
+
+    const getActiveTab = () => {
+        const path = location.pathname;
         if (path.includes('/dashboard/registration')) return 'registration';
         if (path.includes('/dashboard/students')) return 'students';
         if (path.includes('/dashboard/timetable')) return 'timetable';
@@ -50,7 +54,9 @@ export default function Dashboard() {
         if (path.includes('/dashboard/profile')) return 'profile';
         if (path.includes('/dashboard/devices')) return 'devices';
         return 'overview';
-    });
+    };
+
+    const activeTab = getActiveTab();
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [user, setUser] = useState<any>(null);
     const [notifications, setNotifications] = useState<any[]>([]);
@@ -85,8 +91,9 @@ export default function Dashboard() {
                         localStorage.setItem('isFirstLogin', String(res.user.isFirstLogin));
                     }
 
-                    // Check for MFA and warn
-                    if (!res.user.twoFactorEnabled) {
+                    // Check for MFA and warn (only once per session)
+                    const mfaShown = sessionStorage.getItem('mfaModalShown');
+                    if (!res.user.twoFactorEnabled && !mfaShown) {
                         const mfaNotif = {
                             id: 'mfa-warning-' + Date.now(),
                             type: 'security_advisory',
@@ -95,10 +102,11 @@ export default function Dashboard() {
                             time: 'Recommended',
                             icon: <ShieldCheck className="text-orange-500" size={18} />,
                             isNew: true,
-                            action: () => setActiveTab('profile')
+                            action: () => navigate('/dashboard/profile')
                         };
                         setNotifications(prev => [mfaNotif, ...prev]);
                         setShowMfaModal(true);
+                        sessionStorage.setItem('mfaModalShown', 'true');
                     }
                 })
                 .catch(err => console.error('Failed to fetch profile', err));
@@ -106,9 +114,9 @@ export default function Dashboard() {
             // Fetch timetable
             fetchTimetable(parsedUser.id);
         } else {
-            window.location.href = '/login';
+            navigate('/login');
         }
-    }, []);
+    }, [navigate]);
 
     const notifiedSessions = useRef<Set<string>>(new Set());
     const searchInputRef = useRef<HTMLInputElement>(null);
@@ -261,7 +269,7 @@ export default function Dashboard() {
                         time: '20m early',
                         icon: <Calendar className="text-orange-500" size={18} />,
                         isNew: true,
-                        action: () => setActiveTab('timetable')
+                        action: () => navigate('/dashboard/timetable')
                     });
                 }
             }
@@ -289,7 +297,8 @@ export default function Dashboard() {
             localStorage.removeItem('token');
             localStorage.removeItem('user');
             localStorage.removeItem('isFirstLogin');
-            window.location.href = '/login';
+            sessionStorage.removeItem('mfaModalShown');
+            navigate('/login');
         }
     };
 
@@ -303,7 +312,7 @@ export default function Dashboard() {
                 isSidebarOpen ? "w-72" : "w-20"
             )}>
                 {/* Sidebar Header */}
-                <div className="p-6 flex items-center gap-4 border-b border-slate-800 hover:bg-slate-800/50 transition-colors cursor-pointer" onClick={() => setActiveTab('overview')}>
+                <div className="p-6 flex items-center gap-4 border-b border-slate-800 hover:bg-slate-800/50 transition-colors cursor-pointer" onClick={() => navigate('/dashboard')}>
                     <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center p-1 flex-shrink-0">
                         <img src={logoImg} alt="Logo" className="w-full h-full object-contain" />
                     </div>
@@ -317,60 +326,42 @@ export default function Dashboard() {
                         label="Overview"
                         active={activeTab === 'overview'}
                         isOpen={isSidebarOpen}
-                        onClick={() => {
-                            setActiveTab('overview');
-                            window.history.pushState({}, '', '/dashboard');
-                        }}
+                        onClick={() => navigate('/dashboard')}
                     />
                     <SidebarItem
                         icon={<UserPlus />}
                         label="Registration"
                         active={activeTab === 'registration'}
                         isOpen={isSidebarOpen}
-                        onClick={() => {
-                            setActiveTab('registration');
-                            window.history.pushState({}, '', '/dashboard/registration');
-                        }}
+                        onClick={() => navigate('/dashboard/registration')}
                     />
                     <SidebarItem
                         icon={<Users />}
                         label="Students"
                         active={activeTab === 'students'}
                         isOpen={isSidebarOpen}
-                        onClick={() => {
-                            setActiveTab('students');
-                            window.history.pushState({}, '', '/dashboard/students');
-                        }}
+                        onClick={() => navigate('/dashboard/students')}
                     />
                     <SidebarItem
                         icon={<BookOpen />}
                         label="Timetable"
                         active={activeTab === 'timetable'}
                         isOpen={isSidebarOpen}
-                        onClick={() => {
-                            setActiveTab('timetable');
-                            window.history.pushState({}, '', '/dashboard/timetable');
-                        }}
+                        onClick={() => navigate('/dashboard/timetable')}
                     />
                     <SidebarItem
                         icon={<History />}
                         label="Attendance Reports"
                         active={activeTab === 'reports'}
                         isOpen={isSidebarOpen}
-                        onClick={() => {
-                            setActiveTab('reports');
-                            window.history.pushState({}, '', '/dashboard/reports');
-                        }}
+                        onClick={() => navigate('/dashboard/reports')}
                     />
                     <SidebarItem
                         icon={<Activity />}
                         label="Security Logs"
                         active={activeTab === 'audit'}
                         isOpen={isSidebarOpen}
-                        onClick={() => {
-                            setActiveTab('audit');
-                            window.history.pushState({}, '', '/dashboard/audit');
-                        }}
+                        onClick={() => navigate('/dashboard/audit')}
                     />
                     <div className="my-2 border-t border-slate-800/50 mx-4" />
                     <SidebarItem
@@ -378,20 +369,14 @@ export default function Dashboard() {
                         label="My Profile"
                         active={activeTab === 'profile'}
                         isOpen={isSidebarOpen}
-                        onClick={() => {
-                            setActiveTab('profile');
-                            window.history.pushState({}, '', '/dashboard/profile');
-                        }}
+                        onClick={() => navigate('/dashboard/profile')}
                     />
                     <SidebarItem
                         icon={<ShieldCheck />}
                         label="My Devices"
                         active={activeTab === 'devices'}
                         isOpen={isSidebarOpen}
-                        onClick={() => {
-                            setActiveTab('devices');
-                            window.history.pushState({}, '', '/dashboard/devices');
-                        }}
+                        onClick={() => navigate('/dashboard/devices')}
                     />
                 </nav>
 
@@ -443,7 +428,7 @@ export default function Dashboard() {
                                             <button
                                                 key={result.id}
                                                 onClick={() => {
-                                                    setActiveTab(result.id);
+                                                    navigate(`/dashboard/${result.id === 'overview' ? '' : result.id}`);
                                                     setSearchQuery('');
                                                     setShowSearchResults(false);
                                                 }}
@@ -561,14 +546,18 @@ export default function Dashboard() {
                 {/* Dashboard Content - Flexible scrolling area */}
                 <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 lg:p-10 scrollbar-hide">
                     <div className="max-w-6xl mx-auto">
-                        {activeTab === 'overview' && <OverviewSection user={user} timetable={timetable} setNotifications={setNotifications} />}
-                        {activeTab === 'registration' && <StudentRegistration user={user} timetable={timetable} />}
-                        {activeTab === 'students' && <StudentManagement user={user} timetable={timetable} />}
-                        {activeTab === 'timetable' && <TimetableManager />}
-                        {activeTab === 'reports' && <AttendanceReports />}
-                        {activeTab === 'profile' && <Profile user={user} />}
-                        {activeTab === 'devices' && <MyDevices user={user} />}
-                        {activeTab === 'audit' && <AuditLog />}
+                        <Routes>
+                            <Route index element={<OverviewSection user={user} timetable={timetable} setNotifications={setNotifications} />} />
+                            <Route path="registration" element={<StudentRegistration user={user} timetable={timetable} />} />
+                            <Route path="students" element={<StudentManagement user={user} timetable={timetable} />} />
+                            <Route path="timetable" element={<TimetableManager />} />
+                            <Route path="reports" element={<AttendanceReports />} />
+                            <Route path="profile" element={<Profile user={user} />} />
+                            <Route path="devices" element={<MyDevices user={user} />} />
+                            <Route path="audit" element={<AuditLog />} />
+                            {/* Fallback to Overview */}
+                            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                        </Routes>
                     </div>
                 </div>
             </main>
@@ -595,7 +584,7 @@ export default function Dashboard() {
                             <button
                                 onClick={() => {
                                     setShowMfaModal(false);
-                                    setActiveTab('profile');
+                                    navigate('/dashboard/profile');
                                 }}
                                 className="w-full py-4 bg-slate-900 text-white rounded-xl font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg shadow-slate-200 active:scale-95 flex items-center justify-center gap-2"
                             >

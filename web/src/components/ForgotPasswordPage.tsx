@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
     ArrowLeft,
     Mail,
@@ -12,6 +13,7 @@ import logoImg from '../assets/logo.png';
 import { forgotPasswordApi } from '../api/auth';
 
 export default function ForgotPasswordPage() {
+    const navigate = useNavigate();
     const [email, setEmail] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [success, setSuccess] = useState(false);
@@ -67,7 +69,7 @@ export default function ForgotPasswordPage() {
                                         <p className="text-slate-500 font-medium">We've sent recovery instructions to <br /><span className="text-slate-900 font-bold">{email}</span></p>
                                     </div>
                                     <button
-                                        onClick={() => window.location.href = '/login'}
+                                        onClick={() => navigate('/login')}
                                         className="w-full py-4 px-8 bg-slate-900 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-slate-800 transition-all active:scale-95"
                                     >
                                         Back to Login
@@ -125,7 +127,7 @@ export default function ForgotPasswordPage() {
 
                                         <button
                                             type="button"
-                                            onClick={() => window.location.href = '/login'}
+                                            onClick={() => navigate('/login')}
                                             className="w-full flex items-center justify-center gap-2 py-4 text-slate-400 hover:text-slate-600 font-black text-xs uppercase tracking-widest transition-all group"
                                         >
                                             <ArrowLeft size={14} className="group-hover:-translate-x-1 transition-transform" />

@@ -131,6 +131,7 @@ export function Profile({ user }: ProfileProps) {
             }
             setShowOtpModal(false);
             setOtp('');
+            sessionStorage.setItem('mfaModalShown', 'true');
             window.location.reload();
         } catch (err: any) {
             setError(err?.response?.data?.message || 'Invalid or expired code.');

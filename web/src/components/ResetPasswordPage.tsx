@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-    Lock,
+     Lock,
     Eye,
     EyeOff,
     CheckCircle2,
@@ -12,6 +13,8 @@ import { resetPasswordApi } from '../api/auth';
 import logoImg from '../assets/logo.png';
 
 export default function ResetPasswordPage() {
+    const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -21,13 +24,12 @@ export default function ResetPasswordPage() {
     const [token, setToken] = useState<string | null>(null);
 
     useEffect(() => {
-        const urlParams = new URLSearchParams(window.location.search);
-        const t = urlParams.get('token');
+        const t = searchParams.get('token');
         setToken(t);
         if (!t) {
             setError('Invalid or missing reset token.');
         }
-    }, []);
+    }, [searchParams]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -54,7 +56,7 @@ export default function ResetPasswordPage() {
             await resetPasswordApi({ token, password });
             setSuccess(true);
             setTimeout(() => {
-                window.location.href = '/login';
+                navigate('/login');
             }, 3000);
         } catch (err: any) {
             setError(err?.response?.data?.message || 'Failed to reset password. The link may have expired.');

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import {
     User,
     Lock,
@@ -16,6 +17,7 @@ import { cn } from '../lib/utils';
 import logoImg from '../assets/logo.png';
 
 export default function LoginPage() {
+    const navigate = useNavigate();
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [captchaInput, setCaptchaInput] = useState('');
@@ -84,7 +86,7 @@ export default function LoginPage() {
             setSuccess(true);
 
             setTimeout(() => {
-                window.location.href = '/dashboard';
+                navigate('/dashboard');
             }, 1500);
         } catch (err: any) {
             if (err?.response?.data?.needsVerification) {
@@ -113,7 +115,7 @@ export default function LoginPage() {
             setSuccess(true);
 
             setTimeout(() => {
-                window.location.href = '/dashboard';
+                navigate('/dashboard');
             }, 1500);
         } catch (err: any) {
             setError(err?.response?.data?.message || 'Invalid or expired security code. Please try again.');
@@ -134,7 +136,7 @@ export default function LoginPage() {
             setSuccess(true);
 
             setTimeout(() => {
-                window.location.href = '/dashboard';
+                navigate('/dashboard');
             }, 1500);
         } catch (err: any) {
             setError(err?.response?.data?.message || 'Invalid or expired OTP. Please try again.');
@@ -263,9 +265,9 @@ export default function LoginPage() {
                                             />
                                         </div>
                                         <div className="flex justify-end pr-2">
-                                            <a href="/forgot-password" className="text-xs font-black text-blue-600 hover:text-blue-800 uppercase tracking-widest transition-colors">
+                                            <Link to="/forgot-password" title="Forgot Password" className="text-xs font-black text-blue-600 hover:text-blue-800 uppercase tracking-widest transition-colors">
                                                 Forgot Password?
-                                            </a>
+                                            </Link>
                                         </div>
                                     </div>
 
@@ -337,9 +339,9 @@ export default function LoginPage() {
                                     <div className="text-center mt-6">
                                         <p className="text-slate-500 text-sm">
                                             Don't have an account?{' '}
-                                            <a href="/signup" className="text-blue-600 font-bold hover:underline">
+                                            <Link to="/signup" title="Register" className="text-blue-600 font-bold hover:underline">
                                                 Register here
-                                            </a>
+                                            </Link>
                                         </p>
                                     </div>
                                 </form>
