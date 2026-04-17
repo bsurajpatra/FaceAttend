@@ -11,7 +11,7 @@ import redisClient from '../config/redis';
 
 // Thresholds same as controller
 const FACE_MATCH_THRESHOLD = 0.6;
-const DETECTION_THRESHOLD = 2; // Tuned for faster detection
+const DETECTION_THRESHOLD = env.detectionThreshold; // Tuned via environment
 
 // Helper function from controller
 async function findMatchingStudent(faceEmbedding: number[], enrolledStudents: any[]) {
@@ -92,7 +92,7 @@ export const attendanceWorker = new Worker('attendance-processing', async (job: 
     // 4. Confidence Window
     const detectKey = `detect:${sessionId}:${studentId}`;
     const count = await redisClient.incr(detectKey);
-    if (count === 1) await redisClient.expire(detectKey, 3); // Reduced TTL to 3 seconds for speed
+    if (count === 1) await redisClient.expire(detectKey, env.detectionWindow); // Configureable window
 
     if (count < DETECTION_THRESHOLD) {
       getIO().to(`faculty_${facultyId}`).emit('attendance_recognizing', {

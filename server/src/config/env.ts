@@ -19,6 +19,13 @@ function requireNumberEnv(name: string): number {
   return num;
 }
 
+function optionalNumberEnv(name: string, defaultValue: number): number {
+  const value = process.env[name];
+  if (!value || value.trim() === '') return defaultValue;
+  const num = Number(value);
+  return Number.isNaN(num) ? defaultValue : num;
+}
+
 export const env = {
   port: requireNumberEnv('PORT'),
   mongoUri: requireEnv('MONGODB_URI'),
@@ -29,6 +36,8 @@ export const env = {
   emailPass: requireEnv('EMAIL_PASS'),
   clientUrl: requireEnv('CLIENT_URL'),
   redisUrl: requireEnv('REDIS_URL'),
+  detectionThreshold: optionalNumberEnv('DETECTION_THRESHOLD', 2),
+  detectionWindow: optionalNumberEnv('DETECTION_WINDOW_SECONDS', 3),
 } as const;
 
 

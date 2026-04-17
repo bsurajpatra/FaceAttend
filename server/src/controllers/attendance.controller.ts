@@ -8,6 +8,7 @@ import { getIO } from '../socket';
 import { cosineSimilarity } from '../utils/math';
 import { createAuditLog } from '../utils/auditLogger';
 import redisClient from '../config/redis';
+import { env } from '../config/env';
 import crypto from 'crypto';
 import { attendanceQueue } from '../queues/attendance.queue';
 
@@ -323,14 +324,14 @@ export async function markAttendance(req: Request, res: Response): Promise<void>
     // --- 🧩 6. Confidence Window Counter ---
     const detectKey = `detect:${sessionId}:${studentId}`;
     let detectionCount = 0;
-    const DETECTION_THRESHOLD = 3;
+    const DETECTION_THRESHOLD = env.detectionThreshold;
 
     if (isRedisReady()) {
       try {
         detectionCount = await redisClient.incr(detectKey);
-        // Set 5-second window on first detection
+        // Set window on first detection
         if (detectionCount === 1) {
-          await redisClient.expire(detectKey, 5);
+          await redisClient.expire(detectKey, env.detectionWindow);
         }
       } catch (e: any) {
         console.warn('⚠️ Redis Counter Failed. Falling back to immediate mark.');
@@ -599,12 +600,12 @@ export async function markAttendanceBatch(req: Request, res: Response): Promise<
         // 2. Confidence window
         const detectKey = `detect:${sessionId}:${studentId}`;
         let count = 0;
-        const BATCH_DETECTION_THRESHOLD = 3;
+        const BATCH_DETECTION_THRESHOLD = env.detectionThreshold;
 
         if (isRedisReady()) {
           try {
             count = await redisClient.incr(detectKey);
-            if (count === 1) await redisClient.expire(detectKey, 5);
+            if (count === 1) await redisClient.expire(detectKey, env.detectionWindow);
           } catch (e) {
             count = BATCH_DETECTION_THRESHOLD; // Bypass if Redis down
           }
