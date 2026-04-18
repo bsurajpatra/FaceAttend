@@ -37,6 +37,8 @@ export interface FacultyDocument extends Document {
   otpExpires?: Date;
   tempEmail?: string;
   comparePassword(candidate: string): Promise<boolean>;
+  compareOTP(candidate: string): Promise<boolean>;
+  compareResetToken(candidate: string): Promise<boolean>;
 }
 
 const DeviceInfoSchema = new Schema<DeviceInfo>({
@@ -68,7 +70,7 @@ const FacultySchema = new Schema<FacultyDocument>(
     name: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     username: { type: String, required: true, unique: true, lowercase: true, trim: true },
-    password: { type: String, required: true, minlength: 6 },
+    password: { type: String, required: true, minlength: 8 },
     timetable: [TimetableDaySchema],
     devices: [DeviceInfoSchema],
     resetPasswordToken: { type: String },
@@ -83,15 +85,40 @@ const FacultySchema = new Schema<FacultyDocument>(
   { timestamps: true }
 );
 
-FacultySchema.pre('save', async function hashPassword(next) {
-  if (!this.isModified('password')) return next();
-  const salt = await bcrypt.genSalt(10);
-  this.password = await bcrypt.hash(this.password, salt);
+FacultySchema.pre('save', async function (next) {
+  // Hash password
+  if (this.isModified('password')) {
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+  }
+
+  // Hash OTP if modified
+  if (this.isModified('otp') && this.otp) {
+    const salt = await bcrypt.genSalt(10);
+    this.otp = await bcrypt.hash(this.otp, salt);
+  }
+
+  // Hash Reset Token if modified
+  if (this.isModified('resetPasswordToken') && this.resetPasswordToken) {
+    const salt = await bcrypt.genSalt(10);
+    this.resetPasswordToken = await bcrypt.hash(this.resetPasswordToken, salt);
+  }
+
   next();
 });
 
 FacultySchema.methods.comparePassword = function (candidate: string): Promise<boolean> {
   return bcrypt.compare(candidate, this.password);
+};
+
+FacultySchema.methods.compareOTP = function (candidate: string): Promise<boolean> {
+  if (!this.otp) return Promise.resolve(false);
+  return bcrypt.compare(candidate, this.otp);
+};
+
+FacultySchema.methods.compareResetToken = function (candidate: string): Promise<boolean> {
+  if (!this.resetPasswordToken) return Promise.resolve(false);
+  return bcrypt.compare(candidate, this.resetPasswordToken);
 };
 
 export const Faculty: Model<FacultyDocument> = mongoose.models.Faculty || mongoose.model<FacultyDocument>('Faculty', FacultySchema);

@@ -682,10 +682,18 @@ export async function resetPassword(req: Request, res: Response): Promise<void> 
       return;
     }
 
-    const faculty = await Faculty.findOne({
-      resetPasswordToken: token,
+    // Search for all users with active reset tokens (usually very few)
+    const faculties = await Faculty.find({
       resetPasswordExpires: { $gt: Date.now() }
     });
+
+    let faculty;
+    for (const f of faculties) {
+      if (await f.compareResetToken(token)) {
+        faculty = f;
+        break;
+      }
+    }
 
     if (!faculty) {
       res.status(400).json({ message: 'Password reset token is invalid or has expired' });
@@ -727,11 +735,10 @@ export async function verifyOTP(req: Request, res: Response): Promise<void> {
     const normalizedEmail = email.trim().toLowerCase();
     const faculty = await Faculty.findOne({
       email: normalizedEmail,
-      otp,
       otpExpires: { $gt: Date.now() }
     });
 
-    if (!faculty) {
+    if (!faculty || !(await faculty.compareOTP(otp))) {
       res.status(400).json({ message: 'Invalid or expired OTP' });
       return;
     }
@@ -838,11 +845,10 @@ export async function verify2FA(req: Request, res: Response): Promise<void> {
     const normalizedEmail = email.trim().toLowerCase();
     const faculty = await Faculty.findOne({
       email: normalizedEmail,
-      otp,
       otpExpires: { $gt: Date.now() }
     });
 
-    if (!faculty) {
+    if (!faculty || !(await faculty.compareOTP(otp))) {
       res.status(400).json({ message: 'Invalid or expired security code' });
       return;
     }
@@ -986,7 +992,10 @@ export async function verify2FAToggle(req: Request, res: Response): Promise<void
       return;
     }
 
-    if (!faculty.otp || !faculty.otpExpires || faculty.otp !== otp || faculty.otpExpires < new Date()) {
+    const isOTPValid = await faculty.compareOTP(otp);
+    const isOTPExpired = faculty.otpExpires ? faculty.otpExpires < new Date() : true;
+
+    if (!isOTPValid || isOTPExpired) {
       res.status(400).json({ message: 'Invalid or expired security code' });
       return;
     }
@@ -1075,13 +1084,11 @@ export async function verifyEmailChangeOTP(req: Request, res: Response): Promise
       return;
     }
 
-    if (faculty.otp !== otp) {
-      res.status(400).json({ message: 'Invalid OTP' });
-      return;
-    }
+    const isOTPValid = await faculty.compareOTP(otp);
+    const isOTPExpired = faculty.otpExpires ? faculty.otpExpires < new Date() : true;
 
-    if (faculty.otpExpires < new Date()) {
-      res.status(400).json({ message: 'OTP has expired' });
+    if (!isOTPValid || isOTPExpired) {
+      res.status(400).json({ message: 'Invalid or expired OTP' });
       return;
     }
 

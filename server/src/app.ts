@@ -8,10 +8,21 @@ import { timetableRouter } from './routes/timetable.routes';
 import { env } from './config/env';
 import { studentRouter } from './routes/student.routes';
 import { attendanceRouter } from './routes/attendance.routes';
+import { rateLimit } from 'express-rate-limit';
 
 export function createApp(): Application {
   const app = express();
 
+  // Global rate limiting: 100 requests per 15 minutes
+  const globalLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    message: { message: 'Too many requests, please try again after 15 minutes' },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  app.use(globalLimiter);
   app.use(helmet());
   app.use(cors({
     origin: '*', // Allow all origins

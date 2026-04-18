@@ -26,6 +26,15 @@ import { getAuditLogs } from '../controllers/audit.controller';
 import { verifyFacultyToken } from '../middleware/auth';
 
 import { rateLimit } from 'express-rate-limit';
+import { validateRequest } from '../middleware/validateRequest';
+import {
+    registerSchema,
+    loginSchema,
+    forgotPasswordSchema,
+    resetPasswordSchema,
+    verifyOTPSchema,
+    changePasswordSchema
+} from '../utils/schemas';
 
 export const authRouter = Router();
 
@@ -38,12 +47,12 @@ const authLimiter = rateLimit({
     legacyHeaders: false,
 });
 
-authRouter.post('/register', authLimiter, register);
-authRouter.post('/login', authLimiter, login);
+authRouter.post('/register', validateRequest(registerSchema), authLimiter, register);
+authRouter.post('/login', validateRequest(loginSchema), authLimiter, login);
 authRouter.post('/logout', verifyFacultyToken, logout);
 authRouter.get('/profile', verifyFacultyToken, getProfile);
 authRouter.put('/profile', verifyFacultyToken, updateProfile);
-authRouter.post('/change-password', verifyFacultyToken, authLimiter, changePassword);
+authRouter.post('/change-password', verifyFacultyToken, validateRequest(changePasswordSchema), authLimiter, changePassword);
 authRouter.get('/subjects', verifyFacultyToken, getFacultySubjects);
 
 // Device management
@@ -52,9 +61,9 @@ authRouter.delete('/devices/:deviceId', verifyFacultyToken, revokeDevice);
 authRouter.post('/devices/trust', verifyFacultyToken, trustDevice);
 authRouter.post('/devices/logout', verifyFacultyToken, logoutDevice);
 authRouter.get('/audit-logs', verifyFacultyToken, getAuditLogs);
-authRouter.post('/forgot-password', authLimiter, forgotPassword);
-authRouter.post('/reset-password', authLimiter, resetPassword);
-authRouter.post('/verify-otp', authLimiter, verifyOTP);
+authRouter.post('/forgot-password', validateRequest(forgotPasswordSchema), authLimiter, forgotPassword);
+authRouter.post('/reset-password', validateRequest(resetPasswordSchema), authLimiter, resetPassword);
+authRouter.post('/verify-otp', validateRequest(verifyOTPSchema), authLimiter, verifyOTP);
 authRouter.post('/resend-otp', authLimiter, resendOTP);
 authRouter.post('/verify-2fa', authLimiter, verify2FA);
 authRouter.post('/toggle-2fa', verifyFacultyToken, toggle2FA);
