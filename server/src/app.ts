@@ -13,21 +13,23 @@ import { rateLimit } from 'express-rate-limit';
 export function createApp(): Application {
   const app = express();
 
-  // Global rate limiting: 100 requests per 15 minutes
+  // Global rate limiting: 1000 requests per 15 minutes
   const globalLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 100,
+    max: 1000,
     message: { message: 'Too many requests, please try again after 15 minutes' },
     standardHeaders: true,
     legacyHeaders: false,
   });
 
   app.use(globalLimiter);
-  app.use(helmet());
+  app.use(helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  }));
   app.use(cors({
     origin: '*', // Allow all origins
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: '*', // Allow all request headers (x-platform, x-device-id, x-device-name, Authorization, etc.)
     credentials: false, // Set to false when using origin: '*'
   }));
   app.use(express.json({ limit: '10mb' }));

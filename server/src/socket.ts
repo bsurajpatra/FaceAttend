@@ -10,8 +10,8 @@ export const initSocket = (httpServer: HttpServer): SocketIOServer => {
         cors: {
             origin: '*', // Allow all origins for now
             methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-            allowedHeaders: ['Authorization'],
-            credentials: true
+            allowedHeaders: '*',
+            credentials: false
         },
         transports: ['websocket', 'polling']
     });
