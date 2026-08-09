@@ -13,16 +13,17 @@ import {
 } from '../controllers/attendance.controller';
 import { verifyFacultyToken } from '../middleware/auth';
 import { verifyTrustedDevice } from '../middleware/trustedDevice';
+import { attendanceFrameLimiter } from '../middleware/rateLimiter';
 
 export const attendanceRouter = Router();
 
 // Start new attendance session
 attendanceRouter.post('/start', verifyFacultyToken, verifyTrustedDevice, startAttendanceSession);
 
-// Mark attendance using face detection
-attendanceRouter.post('/mark', verifyFacultyToken, verifyTrustedDevice, markAttendance);
-attendanceRouter.post('/mark-batch', verifyFacultyToken, verifyTrustedDevice, markAttendanceBatch);
-attendanceRouter.post('/mark-async', verifyFacultyToken, verifyTrustedDevice, markAttendanceAsync);
+// Mark attendance using face detection (authenticated, device-trusted, tiered rate limiting)
+attendanceRouter.post('/mark', verifyFacultyToken, verifyTrustedDevice, attendanceFrameLimiter, markAttendance);
+attendanceRouter.post('/mark-batch', verifyFacultyToken, verifyTrustedDevice, attendanceFrameLimiter, markAttendanceBatch);
+attendanceRouter.post('/mark-async', verifyFacultyToken, verifyTrustedDevice, attendanceFrameLimiter, markAttendanceAsync);
 
 // Mark session as missed (Post-Lock)
 attendanceRouter.post('/missed', verifyFacultyToken, markSessionMissed);

@@ -8,21 +8,13 @@ import { timetableRouter } from './routes/timetable.routes';
 import { env } from './config/env';
 import { studentRouter } from './routes/student.routes';
 import { attendanceRouter } from './routes/attendance.routes';
-import { rateLimit } from 'express-rate-limit';
+import { apiRateLimiter } from './middleware/rateLimiter';
 
 export function createApp(): Application {
   const app = express();
 
-  // Global rate limiting: 1000 requests per 15 minutes
-  const globalLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 1000,
-    message: { message: 'Too many requests, please try again after 15 minutes' },
-    standardHeaders: true,
-    legacyHeaders: false,
-  });
-
-  app.use(globalLimiter);
+  // Apply General API Rate Limiting (exempts high-frequency attendance frame endpoints)
+  app.use(apiRateLimiter);
   app.use(helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
   }));
