@@ -11,59 +11,14 @@ import redisClient from '../config/redis';
 import { env } from '../config/env';
 import crypto from 'crypto';
 import { attendanceQueue } from '../queues/attendance.queue';
+import { findMatchingStudent } from '../services/faceMatcher.service';
 
 // Resiliency Helper: Check if Redis is functionally available
 const isRedisReady = () => redisClient.isOpen;
 
-// Face matching threshold (cosine similarity) - higher threshold for FaceNet embeddings
-const FACE_MATCH_THRESHOLD = 0.6;
-
 // Rate limiting for session creation
 const sessionCreationTimes = new Map<string, number>();
 const SESSION_CREATION_COOLDOWN = 1000; // 1 second
-
-// Find best matching student for a face embedding
-async function findMatchingStudent(
-  faceEmbedding: number[],
-  enrolledStudents: any[]
-): Promise<{ student: any; confidence: number } | null> {
-  let bestMatch = null;
-  let bestConfidence = 0;
-
-  console.log('🔍 Finding matching student using FaceNet embeddings...');
-  console.log('Input embedding length:', faceEmbedding.length);
-  console.log('Enrolled students count:', enrolledStudents.length);
-
-  for (const student of enrolledStudents) {
-    // Check both embeddings and legacy faceDescriptor
-    const embeddings = student.embeddings || [];
-    const legacyDescriptor = student.faceDescriptor || [];
-
-    if (embeddings.length === 0 && legacyDescriptor.length === 0) {
-      console.log(`⚠️ Student ${student.name} has no face data`);
-      continue;
-    }
-
-    // Try FaceNet embeddings first, then fall back to legacy descriptor
-    const faceDataArray = embeddings.length > 0 ? embeddings : [legacyDescriptor];
-
-    for (const storedEmbedding of faceDataArray) {
-      if (!storedEmbedding || storedEmbedding.length === 0) continue;
-
-      const similarity = cosineSimilarity(faceEmbedding, storedEmbedding);
-      console.log(`📊 Comparing with ${student.name}: similarity = ${similarity.toFixed(4)}`);
-
-      if (similarity > bestConfidence && similarity >= FACE_MATCH_THRESHOLD) {
-        bestConfidence = similarity;
-        bestMatch = student;
-        console.log(`✅ New best match: ${student.name} with confidence ${similarity.toFixed(4)}`);
-      }
-    }
-  }
-
-  console.log(`🎯 Final result: ${bestMatch ? `Match found: ${bestMatch.name} (${bestConfidence.toFixed(4)})` : 'No match found'}`);
-  return bestMatch ? { student: bestMatch, confidence: bestConfidence } : null;
-}
 
 // Start attendance session
 export async function startAttendanceSession(req: Request, res: Response): Promise<void> {

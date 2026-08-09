@@ -38,6 +38,7 @@ export const env = {
   redisUrl: requireEnv('REDIS_URL'),
   detectionThreshold: optionalNumberEnv('DETECTION_THRESHOLD', 2),
   detectionWindow: optionalNumberEnv('DETECTION_WINDOW_SECONDS', 3),
+  faceMatchThreshold: optionalNumberEnv('FACE_MATCH_THRESHOLD', 0.6),
 } as const;
 
 /**

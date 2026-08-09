@@ -8,29 +8,9 @@ import { getIO } from '../socket';
 import { cosineSimilarity } from '../utils/math';
 import { env } from '../config/env';
 import redisClient from '../config/redis';
+import { findMatchingStudent } from '../services/faceMatcher.service';
 
-// Thresholds same as controller
-const FACE_MATCH_THRESHOLD = 0.6;
 const DETECTION_THRESHOLD = env.detectionThreshold; // Tuned via environment
-
-// Helper function from controller
-async function findMatchingStudent(faceEmbedding: number[], enrolledStudents: any[]) {
-  let bestMatch = null;
-  let bestConfidence = 0;
-  for (const student of enrolledStudents) {
-    const embeddings = student.embeddings || [];
-    const faceDataArray = embeddings.length > 0 ? embeddings : [student.faceDescriptor];
-    for (const storedEmbedding of faceDataArray) {
-      if (!storedEmbedding || storedEmbedding.length === 0) continue;
-      const similarity = cosineSimilarity(faceEmbedding, storedEmbedding);
-      if (similarity > bestConfidence && similarity >= FACE_MATCH_THRESHOLD) {
-        bestConfidence = similarity;
-        bestMatch = student;
-      }
-    }
-  }
-  return bestMatch ? { student: bestMatch, confidence: bestConfidence } : null;
-}
 
 export const attendanceWorker = new Worker('attendance-processing', async (job: Job) => {
   const { sessionId, faceImageBase64, facultyId } = job.data;
