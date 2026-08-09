@@ -27,23 +27,25 @@ android/build/
 *.xcodeproj/xcuserdata/
 
 # =======================
-# Build outputs
+# Build outputs & Logs
 # =======================
 dist/
 build/
 tmp/
 temp/
+coverage/
+.nyc_output/
+.vite/
+.cache/
+*.tsbuildinfo
+.turbo/
 
-# =======================
-# Metro bundler cache
-# =======================
-metro-cache/
-
-# =======================
-# Logs
-# =======================
 logs
 *.log
+*_output.txt
+build_output*
+*.out
+*.output
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
