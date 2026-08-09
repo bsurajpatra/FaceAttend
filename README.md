@@ -115,6 +115,7 @@ npm run dev
 ```bash
 cd web
 npm install
+cp .env.example .env  # Configure VITE_API_URL
 npm run dev
 ```
 
@@ -122,6 +123,7 @@ npm run dev
 ```bash
 cd client
 npm install
+cp .env.example .env  # Configure EXPO_PUBLIC_API_URL
 npx expo start
 ```
 
