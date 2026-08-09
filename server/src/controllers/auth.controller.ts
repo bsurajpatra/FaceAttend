@@ -9,7 +9,7 @@ import { sendPasswordResetEmail, sendPasswordResetSuccessEmail, sendOTPEmail, se
 import crypto from 'crypto';
 
 function signToken(userId: string): string {
-  return jwt.sign({ sub: userId }, env.jwtSecret, { expiresIn: '7d' });
+  return jwt.sign({ sub: userId }, env.jwtSecret, { expiresIn: env.jwtExpiresIn as jwt.SignOptions['expiresIn'] });
 }
 
 export async function register(req: Request, res: Response): Promise<void> {

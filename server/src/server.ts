@@ -1,11 +1,12 @@
 import { createApp } from './app';
 import { connectToDatabase } from './config/db';
-import { env } from './config/env';
+import { env, verifyEnvIntegrity } from './config/env';
 
 import { createServer } from 'http';
 import { initSocket } from './socket';
 
 async function bootstrap(): Promise<void> {
+  verifyEnvIntegrity();
   await connectToDatabase();
   const app = createApp();
   const httpServer = createServer(app);

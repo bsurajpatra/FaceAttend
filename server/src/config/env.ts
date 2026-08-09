@@ -40,4 +40,18 @@ export const env = {
   detectionWindow: optionalNumberEnv('DETECTION_WINDOW_SECONDS', 3),
 } as const;
 
+/**
+ * Startup sanity check ensuring all required env vars are bound and valid
+ */
+export function verifyEnvIntegrity(): void {
+  const missingKeys = Object.entries(env)
+    .filter(([_, val]) => val === undefined || val === null || val === '')
+    .map(([key]) => key);
+
+  if (missingKeys.length > 0) {
+    throw new Error(`Environment config integrity check failed for keys: ${missingKeys.join(', ')}`);
+  }
+}
+
+
 
