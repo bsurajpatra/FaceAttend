@@ -79,8 +79,8 @@ client/
 ```
 
 ### Backend Services
-*   **`server/` (Node.js):** REST API, BullMQ worker configuration, WebSocket emitters, and Background Sync services.
-*   **`facenet_service/` (Python):** Flask API exposing `/recognize` and `/train` endpoints.
+*   **`server/` (Node.js):** Tiered REST API, BullMQ worker configuration, WebSocket emitters, and Background Sync services.
+*   **`facenet_service/` (Python):** Inference-only Flask microservice exposing `POST /api/recognize` (512-dim embedding extraction via frozen InceptionResnetV1) and `GET /health`.
 *   **`redis` (In-Memory Datastore):** Holds JWT session sets, Read-through caches for timetables, message brokerage queues, and ML face-caching hashes.
 
 ---
@@ -107,7 +107,7 @@ python face_recognition_service.py
 ```bash
 cd server
 npm install
-# Create .env file with your configs
+cp .env.example .env  # Configure environment variables
 npm run dev
 ```
 
