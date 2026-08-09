@@ -12,6 +12,7 @@ import { env } from '../config/env';
 import crypto from 'crypto';
 import { attendanceQueue } from '../queues/attendance.queue';
 import { findMatchingStudent } from '../services/faceMatcher.service';
+import { logger } from '../utils/logger';
 
 // Resiliency Helper: Check if Redis is functionally available
 const isRedisReady = () => redisClient.isOpen;
@@ -621,7 +622,15 @@ export async function markAttendanceBatch(req: Request, res: Response): Promise<
   }
 }
 
-// Mark attendance asynchronously using BullMQ (Solution #2)
+/**
+ * Asynchronous Attendance Marking Flow (Primary Route)
+ * Enqueues incoming face recognition jobs into BullMQ for high-concurrency background processing.
+ *
+ * RESILIENCE FALLBACK CONTRACT:
+ * If Redis or BullMQ is unreachable/degraded, this function catches the error,
+ * logs a structured DEGRADED_MODE_FALLBACK warning, attaches an `X-System-Degraded: true` header,
+ * and delegates execution directly to the synchronous `markAttendance` fallback handler.
+ */
 export async function markAttendanceAsync(req: Request, res: Response): Promise<void> {
   try {
     const facultyId = req.userId;
@@ -635,7 +644,7 @@ export async function markAttendanceAsync(req: Request, res: Response): Promise<
     // Drop or debounce incoming jobs when queue exceeds threshold (Queue Optimization)
     const waitingCount = await attendanceQueue.getWaitingCount();
     if (waitingCount > 50) {
-      console.warn(`⚠️ BullMQ Queue overloaded (${waitingCount} waiting). Dropping request.`);
+      logger.warn(`BullMQ Queue overloaded (${waitingCount} waiting). Dropping request.`);
       res.status(429).json({ message: 'Server overloaded, request dropped.' });
       return;
     }
@@ -654,8 +663,14 @@ export async function markAttendanceAsync(req: Request, res: Response): Promise<
     });
 
   } catch (error: any) {
-    console.error('Mark attendance async error (falling back):', error.message);
-    // Fallback to synchronous mark if queue/redis is unavailable
+    logger.warn('DEGRADED_MODE_FALLBACK: Redis/BullMQ queue unavailable. Falling back to synchronous markAttendance.', {
+      error: error.message,
+      sessionId: req.body?.sessionId,
+      facultyId: req.userId
+    });
+
+    // Mark system as degraded in response header so clients and monitoring systems can observe fallback
+    res.setHeader('X-System-Degraded', 'true');
     return markAttendance(req, res);
   }
 }
