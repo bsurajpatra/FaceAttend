@@ -1,7 +1,8 @@
 import axios from "axios";
 import FormData from "form-data";
+import { env } from "../config/env";
 
-const FACENET_SERVICE_URL = process.env.FACENET_SERVICE_URL;
+const getFacenetUrl = () => env.facenetServiceUrl;
 
 export interface FaceRecognitionResult {
   success: boolean;
@@ -26,7 +27,7 @@ export async function getFaceEmbedding(base64Image: string): Promise<number[]> {
     });
 
     const response = await axios.post<FaceRecognitionResult>(
-      `${FACENET_SERVICE_URL}/api/recognize`, 
+      `${getFacenetUrl()}/api/recognize`, 
       formData, 
       {
         headers: {
@@ -61,7 +62,7 @@ export async function getFaceEmbedding(base64Image: string): Promise<number[]> {
  */
 export async function checkFaceNetHealth(): Promise<boolean> {
   try {
-    const response = await axios.get(`${FACENET_SERVICE_URL}/health`, {
+    const response = await axios.get(`${getFacenetUrl()}/health`, {
       timeout: 5000,
     });
     return response.status === 200;

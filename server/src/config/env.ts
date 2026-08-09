@@ -39,6 +39,7 @@ export const env = {
   detectionThreshold: optionalNumberEnv('DETECTION_THRESHOLD', 2),
   detectionWindow: optionalNumberEnv('DETECTION_WINDOW_SECONDS', 3),
   faceMatchThreshold: optionalNumberEnv('FACE_MATCH_THRESHOLD', 0.6),
+  facenetServiceUrl: process.env.FACENET_SERVICE_URL || 'http://127.0.0.1:5000',
 } as const;
 
 /**
