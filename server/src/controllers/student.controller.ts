@@ -6,12 +6,10 @@ import { getFaceEmbedding, checkFaceNetHealth } from '../services/facenet.servic
 
 import { cosineSimilarity } from '../utils/math';
 import { getIO } from '../socket';
+import { logger } from '../utils/logger';
 
 export async function registerStudent(req: Request, res: Response): Promise<void> {
-  console.log('=== STUDENT REGISTRATION REQUEST ===');
-  console.log('Headers:', req.headers);
-  console.log('Body:', JSON.stringify(req.body, null, 2));
-  console.log('Faculty ID:', req.userId);
+  logger.logRequest('STUDENT REGISTRATION', req);
 
   try {
     const facultyId = req.userId;
